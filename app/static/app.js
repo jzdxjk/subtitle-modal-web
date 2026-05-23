@@ -55,6 +55,15 @@ function fmtClock(ts) {
   return new Date(ts * 1000).toLocaleTimeString("zh-CN", { hour12: false });
 }
 
+function fmtDate(ts) {
+  if (!ts || ts === 0) return "";
+  const d = new Date(ts * 1000);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 
 async function loadConfig() {
   const config = await api("/api/config");
@@ -118,7 +127,7 @@ function renderJobCard(job) {
   let completedHtml = "";
   if ((job.status === "done" || job.status === "failed" || job.status === "cancelled") && job.completed_at) {
     const label = job.status === "cancelled" ? "取消时间" : "完成时间";
-    completedHtml = `<span class="completed-time">${label} ${fmtClock(job.completed_at)}</span>`;
+    completedHtml = `<span class="completed-time">${label} ${fmtDate(job.completed_at)} ${fmtClock(job.completed_at)}</span>`;
   }
 
   let progressHtml = "";

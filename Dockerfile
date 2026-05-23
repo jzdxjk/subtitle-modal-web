@@ -2,6 +2,7 @@ FROM python:3.10-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
+    TZ=Asia/Shanghai \
     APP_PORT=8898 \
     CONFIG_DIR=/config \
     CACHE_DIR=/cache \
@@ -9,7 +10,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     OUTPUT_DIR=/output
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ffmpeg git ca-certificates \
+    && apt-get install -y --no-install-recommends ffmpeg git ca-certificates tzdata \
+    && ln -snf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime \
+    && echo Asia/Shanghai > /etc/timezone \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

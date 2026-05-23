@@ -251,7 +251,7 @@ class JobRunner:
             timing_msg = f"✅ 完成  总耗时{_fmt_mmss(total_dur)}"
             if local_str or cloud_str:
                 timing_msg += f"（{local_str} / {cloud_str}）"
-            timing_msg += f"  ·  完成时间{datetime.fromtimestamp(t_end).strftime('%H:%M:%S')}"
+            # 前端通过 completed_at 时间戳渲染完成时间，消息只保留耗时
 
             self.store.update_job(job.id, status="done", message=timing_msg,
                                   output_files=output_files, completed_at=t_end, progress=100)
