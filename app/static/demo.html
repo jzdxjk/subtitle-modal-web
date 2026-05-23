@@ -1,0 +1,154 @@
+﻿<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>任务队列演示 - Subtitle Modal Web</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+  <style>
+    body { padding: 40px; }
+    h1 { font-size: clamp(28px, 5vw, 52px); margin-bottom: 8px; }
+    body { padding: 40px; }
+    h1 { font-size: clamp(28px, 5vw, 52px); margin-bottom: 8px; }
+    .tab-pane { padding-top: 14px; }
+    .jobs { display: grid; gap: 10px; }
+    .empty { color: var(--muted); padding: 20px 0; text-align: center; }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <p class="eyebrow">UI 状态演示</p>
+    <h1>任务队列 - 标签页 & 分页</h1>
+
+    <section class="card jobs-card" style="max-width:780px">
+      <div class="tabs">
+        <button class="tab-btn active" data-tab="running">运行中 (9)</button>
+        <button class="tab-btn" data-tab="queued">排队中 (7)</button>
+        <button class="tab-btn" data-tab="completed">已完成 (11)</button>
+      </div>
+
+      <!-- Running tab -->
+      <div id="tab-running" class="tab-pane active">
+        <div class="jobs">
+          <article class="job running">
+            <div class="job-head"><strong>运行中</strong><span>a1b2c3d4</span><span class="timing">已运行 3m42s</span></div>
+            <div class="progress-bar"><div class="progress-fill progress-local" style="width:28%"></div></div>
+            <p class="job-path">/mnt/115/中字制作区/ABW-001/ABW-001.mp4</p>
+            <p class="job-msg">本地处理: 提取音频中...</p>
+          </article>
+          <article class="job running">
+            <div class="job-head"><strong>运行中</strong><span>b2c3d4e5</span><span class="timing">已运行 1m18s</span></div>
+            <div class="progress-bar"><div class="progress-fill progress-local" style="width:12%"></div></div>
+            <p class="job-path">/mnt/115/中字制作区/STARS-789/STARS-789.mkv</p>
+            <p class="job-msg">上传至 Modal 云 GPU...</p>
+          </article>
+          <article class="job running">
+            <div class="job-head"><strong>运行中</strong><span>c3d4e5f6</span><span class="timing">已运行 8m05s</span></div>
+            <div class="progress-bar"><div class="progress-fill progress-cloud" style="width:65%"></div></div>
+            <p class="job-path">/mnt/115/中字制作区/MIDV-456/MIDV-456.mp4</p>
+            <p class="job-msg">GPU 推理中 - ChickenRice 模型</p>
+          </article>
+          <article class="job running">
+            <div class="job-head"><strong>运行中</strong><span>d4e5f6a7</span><span class="timing">已运行 12m33s</span></div>
+            <div class="progress-bar"><div class="progress-fill progress-final" style="width:94%"></div></div>
+            <p class="job-path">/mnt/115/中字制作区/SSIS-012/SSIS-012.mp4</p>
+            <p class="job-msg">合并字幕文件，写入输出目录...</p>
+          </article>
+          <article class="job running">
+            <div class="job-head"><strong>运行中</strong><span>e5f6a7b8</span><span class="timing">已运行 0m14s</span></div>
+            <div class="progress-bar"><div class="progress-fill progress-local" style="width:3%"></div></div>
+            <p class="job-path">/mnt/115/中字制作区/IPX-999/IPX-999.mp4</p>
+            <p class="job-msg">初始化中...</p>
+          </article>
+        </div>
+        <div class="pager"><button disabled>上一页</button><span>1 / 2</span><button>下一页</button></div>
+      </div>
+
+      <!-- Queued tab -->
+      <div id="tab-queued" class="tab-pane">
+        <div class="jobs">
+          <article class="job queued"><div class="job-head"><strong>排队中</strong><span>f6a7b8c9</span></div><p class="job-path">/mnt/115/中字制作区/JUQ-234/JUQ-234.mp4</p><p class="job-msg">队列位置: 1</p></article>
+          <article class="job queued"><div class="job-head"><strong>排队中</strong><span>a7b8c9d0</span></div><p class="job-path">/mnt/115/中字制作区/FSDSS-567/FSDSS-567.mp4</p><p class="job-msg">队列位置: 2</p></article>
+          <article class="job queued"><div class="job-head"><strong>排队中</strong><span>b8c9d0e1</span></div><p class="job-path">/mnt/115/中字制作区/CAWD-345/CAWD-345.mp4</p><p class="job-msg">队列位置: 3</p></article>
+          <article class="job queued"><div class="job-head"><strong>排队中</strong><span>c9d0e1f2</span></div><p class="job-path">/mnt/115/中字制作区/MIRD-111/MIRD-111.mp4</p><p class="job-msg">队列位置: 4</p></article>
+          <article class="job queued"><div class="job-head"><strong>排队中</strong><span>d0e1f2a3</span></div><p class="job-path">/mnt/115/中字制作区/PRED-888/PRED-888.mp4</p><p class="job-msg">队列位置: 5</p></article>
+          <article class="job queued"><div class="job-head"><strong>排队中</strong><span>e1f2a3b4</span></div><p class="job-path">/mnt/115/中字制作区/SONE-111/SONE-111.mp4</p><p class="job-msg">队列位置: 6</p></article>
+          <article class="job queued"><div class="job-head"><strong>排队中</strong><span>f2a3b4c5</span></div><p class="job-path">/mnt/115/中字制作区/SONE-222/SONE-222.mp4</p><p class="job-msg">队列位置: 7</p></article>
+        </div>
+        <div class="pager"><button disabled>上一页</button><span>1 / 2</span><button>下一页</button></div>
+      </div>
+
+      <!-- Completed tab -->
+      <div id="tab-completed" class="tab-pane">
+        <div class="jobs">
+          <article class="job done"><div class="job-head"><strong>已完成</strong><span>e1f2a3b4</span></div><p class="job-path">/mnt/115/中字制作区/SONE-111/SONE-111.mp4</p><p class="job-msg">翻译完成，耗时 6m42s</p><small>/output/SONE-111/SONE-111.srt</small></article>
+          <article class="job done"><div class="job-head"><strong>已完成</strong><span>f2a3b4c5</span></div><p class="job-path">/mnt/115/中字制作区/SONE-222/SONE-222.mp4</p><p class="job-msg">翻译完成，耗时 4m18s</p><small>/output/SONE-222/SONE-222.srt</small></article>
+          <article class="job failed"><div class="job-head"><strong>失败</strong><span>a3b4c5d6</span></div><p class="job-path">/mnt/115/中字制作区/BAD-FILE/bad.mp4</p><p class="job-msg">ffmpeg 无法提取音轨 - 文件可能已损坏</p></article>
+          <article class="job done"><div class="job-head"><strong>已完成</strong><span>b4c5d6e7</span></div><p class="job-path">/mnt/115/中字制作区/SONE-333/SONE-333.mp4</p><p class="job-msg">翻译完成，耗时 8m01s</p><small>/output/SONE-333/SONE-333.srt</small></article>
+          <article class="job cancelled"><div class="job-head"><strong>已取消</strong><span>c5d6e7f8</span></div><p class="job-path">/mnt/115/中字制作区/MIDV-999/MIDV-999.mp4</p><p class="job-msg">用户手动取消</p></article>
+          <article class="job done"><div class="job-head"><strong>已完成</strong><span>d6e7f8a9</span></div><p class="job-path">/mnt/115/中字制作区/MIDV-555/MIDV-555.mp4</p><p class="job-msg">翻译完成，耗时 5m12s</p><small>/output/MIDV-555/MIDV-555.srt</small></article>
+          <article class="job done"><div class="job-head"><strong>已完成</strong><span>e7f8a9b0</span></div><p class="job-path">/mnt/115/中字制作区/IPX-777/IPX-777.mp4</p><p class="job-msg">翻译完成，耗时 7m30s</p><small>/output/IPX-777/IPX-777.srt</small></article>
+          <article class="job failed"><div class="job-head"><strong>失败</strong><span>f8a9b0c1</span></div><p class="job-path">/mnt/115/中字制作区/BAD-TOO/bad.mp4</p><p class="job-msg">Modal 容器 OOM，请重试</p></article>
+          <article class="job done"><div class="job-head"><strong>已完成</strong><span>a9b0c1d2</span></div><p class="job-path">/mnt/115/中字制作区/SSIS-888/SSIS-888.mp4</p><p class="job-msg">翻译完成，耗时 9m45s</p><small>/output/SSIS-888/SSIS-888.srt</small></article>
+          <article class="job done"><div class="job-head"><strong>已完成</strong><span>b0c1d2e3</span></div><p class="job-path">/mnt/115/中字制作区/STARS-999/STARS-999.mp4</p><p class="job-msg">翻译完成，耗时 3m55s</p><small>/output/STARS-999/STARS-999.srt</small></article>
+          <article class="job cancelled"><div class="job-head"><strong>已取消</strong><span>c1d2e3f4</span></div><p class="job-path">/mnt/115/中字制作区/ABW-000/ABW-000.mp4</p><p class="job-msg">用户手动取消</p></article>
+        </div>
+        <div class="pager"><button disabled>上一页</button><span>1 / 3</span><button>下一页</button></div>
+      </div>
+    </section>
+  </main>
+  <script>
+    const PAGE_SIZE = 5;
+    // 每个 tab 对应的所有卡片容器
+    const cardData = {
+      running: document.querySelectorAll("#tab-running .job"),
+      queued: document.querySelectorAll("#tab-queued .job"),
+      completed: document.querySelectorAll("#tab-completed .job"),
+    };
+    const pages = { running: 1, queued: 1, completed: 1 };
+    const totalPagesCache = {};
+    for (const [tab, cards] of Object.entries(cardData)) {
+      totalPagesCache[tab] = Math.ceil(cards.length / PAGE_SIZE) || 1;
+    }
+
+    function renderPage(tab) {
+      const cards = cardData[tab];
+      const total = totalPagesCache[tab];
+      const page = pages[tab];
+      const start = (page - 1) * PAGE_SIZE;
+      cards.forEach((card, i) => { card.style.display = (i >= start && i < start + PAGE_SIZE) ? "" : "none"; });
+      const pane = document.getElementById("tab-" + tab);
+      const pager = pane.querySelector(".pager");
+      
+      pager.innerHTML = `
+        <button ${page <= 1 ? "disabled" : ""} data-action="prev">上一页</button>
+        <span>${page} / ${total}</span>
+        <button ${page >= total ? "disabled" : ""} data-action="next">下一页</button>
+      `;
+      pager.querySelectorAll("button").forEach(btn => {
+        btn.addEventListener("click", () => {
+          if (btn.dataset.action === "prev" && page > 1) pages[tab]--;
+          if (btn.dataset.action === "next" && page < total) pages[tab]++;
+          renderPage(tab);
+        });
+      });
+    }
+
+    // 标签切换
+    let currentTab = "running";
+    document.querySelectorAll(".tab-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+        document.querySelectorAll(".tab-pane").forEach(p => p.classList.remove("active"));
+        btn.classList.add("active");
+        currentTab = btn.dataset.tab;
+        document.getElementById("tab-" + currentTab).classList.add("active");
+        renderPage(currentTab);
+      });
+    });
+
+    // 初始渲染
+    for (const tab of Object.keys(cardData)) { renderPage(tab); }
+  </script>
+</body>
+</html>

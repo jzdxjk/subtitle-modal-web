@@ -1,0 +1,73 @@
+﻿<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Subtitle Modal Web</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <main class="shell">
+    <section class="hero">
+      <p class="eyebrow">NAS / Modal GPU / Subtitle Automation</p>
+      <h1>云端 GPU 字幕工作台</h1>
+      <p>NAS 只负责读视频、抽音频和排队；Modal 负责跑 ChickenRice 推理，字幕写回你的输出目录。</p>
+    </section>
+
+    <section class="grid">
+      <form id="config-form" class="card">
+        <h2>配置</h2>
+        <label>Modal Token ID<input name="modal_token_id" placeholder="环境变量优先，留空不覆盖" /></label>
+        <label>Modal Token Secret<input name="modal_token_secret" type="password" placeholder="环境变量优先，留空不覆盖" /></label>
+        <label>HuggingFace Token<input name="hf_token" type="password" placeholder="可选" /></label>
+        <label>GPU<input name="default_gpu" value="T4" /></label>
+        <label>模型<input name="default_model" value="chickenrice" /><small>默认锁定海南鸡版 Chickenrice Edition</small></label>
+        <label>默认输出目录<input name="default_output_dir" value="/output" /></label>
+        <label>默认格式<input name="default_formats" value="srt" /></label>
+        <label>默认视频移动目录<input name="default_move_target_dir" placeholder="翻译完成后移走源文件夹，留空则不移" /></label>
+        <label class="check"><input name="enable_watchdog" type="checkbox" /> 启用目录监控</label>
+        <label>监控轮询间隔（秒）<input name="watchdog_interval_seconds" type="number" value="60" min="10" max="3600" /></label>
+        <label>最大并行线程（1-10）<input name="max_workers" type="number" value="1" min="1" max="10" /></label>
+        <label>超时秒数<input name="default_timeout_seconds" type="number" value="7200" /></label>
+        <button type="submit">保存配置</button>
+        <pre id="config-status"></pre>
+      </form>
+
+      <form id="job-form" class="card primary-card">
+        <h2>提交任务</h2>
+        <label>视频或文件夹路径<input name="input_path" value="/mnt/115/中字制作区" required /></label>
+        <label>输出目录<input name="output_dir" value="/output" /></label>
+        <label>字幕格式<input name="formats" value="srt" /></label>
+        <label>视频移动目录<input name="move_target_dir" placeholder="留空则使用默认配置" /></label>
+        <label class="check"><input name="overwrite" type="checkbox" /> 覆盖已有字幕</label>
+        <button type="submit">加入队列</button>
+        <pre id="job-status"></pre>
+      </form>
+    </section>
+
+    <section class="card jobs-card">
+      <div class="jobs-head">
+        <h2>任务队列</h2>
+        <button id="refresh" type="button">刷新</button>
+      </div>
+      <div class="tabs" id="job-tabs">
+        <button class="tab-btn active" data-tab="running">运行中</button>
+        <button class="tab-btn" data-tab="queued">排队中</button>
+        <button class="tab-btn" data-tab="failed">失败任务</button>
+        <button class="tab-btn" data-tab="completed">已完成</button>
+        <button class="tab-btn" data-tab="cancelled">已取消</button>
+      </div>
+      <div id="failed-tools" class="jobs-tools hidden">
+        <span id="failed-tools-text">当前有 0 个失败任务</span>
+        <button id="retry-all-failed" type="button" class="retry-all-btn">一键重试全部失败</button>
+      </div>
+      <div id="tab-running" class="tab-pane active"><div class="jobs jobs-running"></div><div class="pager"></div></div>
+      <div id="tab-queued" class="tab-pane"><div class="jobs jobs-queued"></div><div class="pager"></div></div>
+      <div id="tab-failed" class="tab-pane"><div class="jobs jobs-failed"></div><div class="pager"></div></div>
+      <div id="tab-completed" class="tab-pane"><div class="jobs jobs-completed"></div><div class="pager"></div></div>
+      <div id="tab-cancelled" class="tab-pane"><div class="jobs jobs-cancelled"></div><div class="pager"></div></div>
+    </section>
+  </main>
+  <script src="/static/app.js"></script>
+</body>
+</html>
