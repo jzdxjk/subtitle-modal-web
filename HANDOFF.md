@@ -2,7 +2,7 @@
 
 ## Re-entry Sentence（下次开工先贴这句）
 
-`C:\Users\jzdxjk\Documents\字幕云翻译\HANDOFF.md` — 暗色 NAS 风 UI + Mac Dock 式 4 视图导航 + 主界面 Emby 风格横版海报墙（按日期分组 + 横向滚动行）+ 海报后端代理 + localStorage 持久化缓存 + 增量渲染 + 亮/暗主题 + PWA 移动端底部 Dock 重做 + Docker Hub 发布 + Cloudflare 探索（已回滚）+ 取消杀进程 + 失败不重试 + 保存 toast + 版本号 + 番号规范化搜索回退；win 预览端口 15678；v2.2.2 刚修完番号前缀海报搜索；下一步 → LLM 翻译模块。
+`C:\Users\jzdxjk\Documents\字幕云翻译\HANDOFF.md` — 暗色 NAS 风 UI + Mac Dock 式 4 视图导航 + 主界面 Emby 风格横版海报墙（按日期分组 + 横向滚动行）+ 海报后端代理 + localStorage 持久化缓存 + 增量渲染 + 亮/暗主题 + PWA 移动端底部 Dock 重做 + Docker Hub 发布 + Cloudflare 探索（已回滚）+ 取消杀进程 + 失败不重试 + 保存 toast + 版本号 + 番号规范化搜索回退 + 根目录直放文件迁移修复；win 预览端口 15678；v2.3 刚修完根目录直放文件迁移 bug；下一步 → LLM 翻译模块。
 
 ---
 
@@ -38,6 +38,18 @@
 - 底部 Dock 重做：72px 高，桌面端风格纯色背景，11px 文字，蓝色激活高亮
 - 画廊卡片响应式：桌面 240px，移动端 `50vw - 18px`
 - 主题按钮加「主题」文字标签
+
+### v2.3 — 根目录直放文件迁移修复（2026-05-26）
+
+- **bug**：媒体文件直接放在 watch 根目录（如 `/watch/ABC-123.mp4`）而非子文件夹时，任务结束后 `shutil.move` 会把整个 `/watch` 目录移到输出目录
+- **根因**：`media_path.parent` 是 watch_root 本身，迁移逻辑未做守卫
+- **修复（worker.py）**：
+  - watchdog 循环：根目录直放文件 → 自动创建以番号命名的子目录 → 移入文件 → 统一走子目录模式
+  - 迁移安全守卫：`parent == self.watch_root` 时跳过并 warning，永不移动 watch 根目录
+- **修复（app.js）**：
+  - 画廊 av 名称去扩展名：`ABC-123.mp4` → `ABC-123`（正则 strip 常见视频扩展名）
+  - 海报搜索去扩展名：`loadPoster()` 内先 strip 再搜 DBO
+- **副作用修复**：reasonix 写入的 Python 文件带 UTF-8 BOM，导致语法错误，已批量清除
 
 ### v2.2.2 — 番号规范化：海报搜索回退 + 失败自动重试
 - **核心修复**：素人番号（如 `300Mium-1336`）提取后规范化为 DBO 认识的形式（`mium-1336`）回退搜索
