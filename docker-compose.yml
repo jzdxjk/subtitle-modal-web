@@ -1,25 +1,24 @@
-﻿services:
+services:
   subtitle-web:
     build: .
     image: subtitle-modal-web:latest
     container_name: subtitle-modal-web
     restart: unless-stopped
     ports:
-      - "9198:8898"
+      - "8898:8898"
     volumes:
-      - /tmp/zfsv3/nvme14/17858927371/data/Docker/CloudNAS/115open:/mnt/115
-      - /tmp/zfsv3/sata12/17858927371/data/strm/字幕包:/output
-      - ./subtitle-modal-web:/cache
+      - ./media:/mnt/media
+      - ./output:/output
+      - ./cache:/cache
       - ./config:/config
     environment:
-      MODAL_TOKEN_ID: "ak-t46hXhtZvcBrC4mzliDbn2"
-      MODAL_TOKEN_SECRET: "as-BRfkEyfZl6CxPz2kFLVH00"
-      HF_TOKEN: "${HF_TOKEN:-}"
+      MODAL_TOKEN_ID: ${MODAL_TOKEN_ID}
+      MODAL_TOKEN_SECRET: ${MODAL_TOKEN_SECRET}
+      HF_TOKEN: ${HF_TOKEN:-}
       APP_PORT: "8898"
       DEFAULT_GPU: "T4"
       DEFAULT_MODEL: "chickenrice"
       REPO_BRANCH: "v1.7"
       DEFAULT_FORMATS: "srt"
-      WATCH_DIR: "/mnt/115/中字制作区"
-      DEFAULT_MOVE_TARGET_DIR: "/mnt/115/AV中转站"
-
+      WATCH_DIR: "/mnt/media"
+      DEFAULT_MOVE_TARGET_DIR: ""

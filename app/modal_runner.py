@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import json
 import os
@@ -40,8 +40,14 @@ class ModalRunHandle:
                 if "[modal_stage] run_remote_pipeline" in line:
                     return
 
+        def _stderr_reader() -> None:
+            for _line in self._proc.stderr:
+                pass  # 消费掉防止管道死锁
+
         thread = threading.Thread(target=_reader, daemon=True)
         thread.start()
+        stderr_thread = threading.Thread(target=_stderr_reader, daemon=True)
+        stderr_thread.start()
         thread.join(timeout=timeout_seconds)
 
         if thread.is_alive():
@@ -194,6 +200,7 @@ class ModalRunner:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
+            bufsize=1,
         )
         return ModalRunHandle(proc, output_dir, formats, before)
 

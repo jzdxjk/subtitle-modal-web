@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import json
 import sqlite3
@@ -28,6 +28,21 @@ class Job:
 
 
 class JobStore:
+    def list_all(self) -> list[Job]:
+        with self._connect() as conn:
+            rows = conn.execute("SELECT * FROM jobs ORDER BY created_at DESC").fetchall()
+        return [self._row_to_job(r) for r in rows]
+
+    def get_by_completion_date(self, date_start: float) -> list[Job]:
+        """Get done jobs completed on a specific date (midnight timestamp)."""
+        date_end = date_start + 86400
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT * FROM jobs WHERE status='done' AND completed_at >= ? AND completed_at < ?",
+                (date_start, date_end)
+            ).fetchall()
+        return [self._row_to_job(r) for r in rows]
+
     def __init__(self, db_path: Path):
         self.db_path = db_path
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -190,6 +205,15 @@ class JobStore:
             )
         return cur.rowcount
 
+    def has_any_failed_job_for_path(self, input_path: str) -> bool:
+        """该路径是否已有失败/取消任务（不自动重试）"""
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT 1 FROM jobs WHERE input_path = ? AND status IN ('failed','cancelled') LIMIT 1",
+                (input_path,),
+            ).fetchone()
+        return row is not None
+
     def has_active_job_for_path(self, input_path: str) -> bool:
         with self._connect() as conn:
             row = conn.execute(
@@ -214,6 +238,12 @@ class JobStore:
                 (claim_id,),
             ).fetchone()
         return self._row_to_job(row) if row else None
+
+    def delete_job(self, job_id: str) -> bool:
+        """Delete a job. Returns True if found and deleted."""
+        with self._connect() as conn:
+            cur = conn.execute("DELETE FROM jobs WHERE id = ?", (job_id,))
+        return cur.rowcount > 0
 
     def _row_to_job(self, row: sqlite3.Row) -> Job:
         return Job(

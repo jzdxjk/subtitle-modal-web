@@ -1,4 +1,4 @@
-﻿const $ = (selector) => document.querySelector(selector);
+const $ = (selector) => document.querySelector(selector);
 
 async function api(path, options = {}) {
   const response = await fetch(path, {
@@ -76,6 +76,8 @@ async function loadConfig() {
       input.value = value;
     }
   }
+  if (config.dbo_api_url) DBO_BASE = config.dbo_api_url;
+  if (config.dbo_api_key) DBO_KEY = config.dbo_api_key;
   $("#config-status").textContent = JSON.stringify(config, null, 2);
 }
 
@@ -95,6 +97,16 @@ async function retryJob(jobId) {
     alert(error.message);
   }
   currentTab = "queued";
+  await loadJobs();
+}
+
+async function deleteJob(jobId) {
+  if (!confirm("确定删除此任务？")) return;
+  try {
+    await api(`/api/jobs/${jobId}`, { method: "DELETE" });
+  } catch (e) {
+    alert("删除失败: " + e.message);
+  }
   await loadJobs();
 }
 
@@ -144,6 +156,7 @@ function renderJobCard(job) {
     actions.push(`<button class="retry-btn" data-id="${job.id}">${retryLabel}</button>`);
   }
   if (cancellable) actions.push(`<button class="cancel-btn" data-id="${job.id}">取消</button>`);
+  actions.push(`<button class="delete-btn" data-id="${job.id}">删除</button>`);
 
   return `
     <article class="job ${job.status}">
@@ -222,6 +235,10 @@ function renderTab(tab) {
     btn.addEventListener("click", () => retryJob(btn.dataset.id));
   });
 
+  document.querySelectorAll(".delete-btn").forEach((btn) => {
+    btn.addEventListener("click", () => deleteJob(btn.dataset.id));
+  });
+
   const pagerEl = pane ? pane.querySelector(".pager") : null;
   if (pagerEl) {
     pagerEl.innerHTML = totalPages <= 1 ? "" : `
@@ -253,9 +270,9 @@ $("#config-form").addEventListener("submit", async (event) => {
   data.enable_watchdog = Boolean(event.target.enable_watchdog.checked);
   try {
     const saved = await api("/api/config", { method: "POST", body: JSON.stringify(data) });
-    $("#config-status").textContent = "✅ 保存配置成功！";
+    showToast("✅ 配置已保存");
   } catch (error) {
-    $("#config-status").textContent = error.message;
+    showToast("保存失败: " + error.message, false);
   }
 });
 
@@ -273,14 +290,361 @@ $("#job-form").addEventListener("submit", async (event) => {
   }
 });
 
+function showToast(msg, ok = true) {
+  const t = document.createElement("div");
+  t.className = "toast " + (ok ? "toast-ok" : "toast-err");
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 2500);
+}
+
+$("#test-dbo-btn")?.addEventListener("click", async () => {
+  const btn = $("#test-dbo-btn");
+  btn.disabled = true; btn.textContent = "检测中...";
+  try {
+    const r = await api("/api/test-dbo", { method: "POST" });
+    if (r.ok) btn.textContent = `✅ DBO 连通 ${r.latency_ms}ms`;
+    else btn.textContent = `❌ ${r.error || "失败"}`;
+  } catch (e) {
+    btn.textContent = "❌ " + e.message.slice(0,30);
+  }
+  btn.disabled = false;
+  setTimeout(() => { btn.textContent = "测试 DBO 连通性"; }, 5000);
+});
+
 $("#refresh").addEventListener("click", loadJobs);
+api("/api/version").then(r => { const v = $("#version"); if (v) v.textContent = r.version; });
+
+$("#clear-audio")?.addEventListener("click", async () => {
+  if (!confirm("确定清空音频缓存？已缓存的文件下次需要重新提取。")) return;
+  try {
+    const r = await api("/api/clear-audio-cache", { method: "POST" });
+    alert("已清除 " + r.removed + " 个音频缓存文件");
+  } catch (e) {
+    alert("清除失败: " + e.message);
+  }
+});
 $("#retry-all-failed")?.addEventListener("click", retryAllFailedJobs);
 loadConfig().catch((error) => $("#config-status").textContent = error.message);
+
+// Combined override: gallery refresh + splash hide
+
+
+/* ═══ POSTER CACHE ═══ */
+const posterCache = new Map();
+const pendingFetches = new Map();
+const posterQueue = [];
+
+let DBO_BASE = "";
+let DBO_KEY = "";
+const LS_PREFIX = "poster_";
+
+// 从 localStorage 恢复缓存（自动清理旧格式 dbo 直连 URL）
+for (let i = localStorage.length - 1; i >= 0; i--) {
+  const key = localStorage.key(i);
+  if (key && key.startsWith(LS_PREFIX)) {
+    const av = key.slice(LS_PREFIX.length);
+    const val = localStorage.getItem(key);
+    if (val && val.startsWith("http://10.0.0.235:9090")) {
+      localStorage.removeItem(key);
+    } else if (val && val !== "null") {
+      posterCache.set(av, val);
+    }
+  }
+}
+
+function _normalizeAvCode(code) {
+  const lower = code.toLowerCase();
+  if (lower.startsWith("fc2")) return lower;
+  const dashIdx = lower.indexOf("-");
+  if (dashIdx === -1) return lower;
+  const prefix = lower.slice(0, dashIdx).replace(/^\d+/, "");
+  return (prefix || lower.slice(0, dashIdx)) + lower.slice(dashIdx);
+}
+
+async function _searchDbo(q) {
+  const r = await fetch("/api/dbo-search?q=" + encodeURIComponent(q) + "&limit=1");
+  const data = await r.json();
+  return (data.success && data.data.movies.length > 0) ? data.data.movies : null;
+}
+
+async function _doFetch(av) {
+  try {
+    // 1) 精确匹配原始码
+    let movies = await _searchDbo(av);
+    // 2) 无结果则用规范化码回退（300Mium-1336 → mium-1336）
+    if (!movies) {
+      const normalized = _normalizeAvCode(av);
+      if (normalized !== av.toLowerCase()) {
+        movies = await _searchDbo(normalized);
+      }
+    }
+    if (movies) {
+      const match = movies.find(m => m.number === av) || movies[0];
+      const remoteUrl = new URL(match.cover_url, DBO_BASE).searchParams.get("url");
+      if (remoteUrl) {
+        return "/api/poster-proxy?url=" + encodeURIComponent(remoteUrl);
+      }
+    }
+  } catch (e) {
+    console.error("Poster fetch error:", av, e);
+  }
+  return null;
+}
+
+const MAX_POSTER_CONCURRENCY = 4;
+let posterInFlight = 0;
+
+function _processQueue() {
+  while (posterInFlight < MAX_POSTER_CONCURRENCY && posterQueue.length > 0) {
+    const { av, resolve } = posterQueue.shift();
+    posterInFlight++;
+    _fetchOne(av, resolve);
+  }
+}
+
+async function _fetchOne(av, resolve) {
+  const url = await _doFetch(av);
+  if (url) {
+    posterCache.set(av, url);
+    try { localStorage.setItem(LS_PREFIX + av, url); } catch (_) {}
+  } else {
+    posterCache.set(av, null);
+  }
+  resolve(url);
+  posterInFlight--;
+  _processQueue();
+}
+
+function fetchPoster(av) {
+  if (posterCache.has(av)) return Promise.resolve(posterCache.get(av));
+  if (pendingFetches.has(av)) return pendingFetches.get(av);
+  const promise = new Promise((resolve) => {
+    posterQueue.push({ av, resolve });
+    _processQueue();
+  });
+  pendingFetches.set(av, promise);
+  return promise;
+}
+
+async function loadPoster(el, av) {
+  av = av.replace(/\.(mp4|mkv|avi|wmv|flv|mov|webm|ts|m4v)$/i, "");
+  const url = await fetchPoster(av);
+  pendingFetches.delete(av);
+  const img = el.querySelector(".gallery-poster img");
+  const poster = el.querySelector(".gallery-poster");
+  if (url && img) {
+    img.src = url;
+  } else if (poster) {
+    poster.classList.add("gallery-poster-failed");
+  }
+}
+
+const _origLoadJobs = loadJobs;
+let _lastJobsHash = "";
+
+loadJobs = async function() {
+  try {
+    const jobs = await api("/api/jobs");
+    const hash = JSON.stringify(jobs.map(j => ({ id: j.id, status: j.status, progress: j.progress, completed_at: j.completed_at })));
+    const changed = hash !== _lastJobsHash;
+    _lastJobsHash = hash;
+    allJobs = jobs;
+    renderTab(currentTab);
+    if (changed) {
+      const gallery = $("#gallery");
+      if (gallery) gallery.classList.add("no-animate");
+      renderHome();
+    }
+  } catch (e) {
+    console.error(e);
+  } finally {
+    hideSplash();
+  }
+};
 loadJobs().catch(console.error);
 setInterval(loadJobs, 5000);
 
 document.querySelectorAll(".tab-btn").forEach((btn) => {
   btn.addEventListener("click", () => switchTab(btn.dataset.tab));
 });
+
+
+
+
+/* ═══ NAVIGATION ═══ */
+function switchView(viewId) {
+  document.querySelectorAll(".dock-item, .dock-mobile-item").forEach((item) => {
+    item.classList.toggle("active", item.dataset.view === viewId);
+  });
+  document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
+  const view = document.getElementById("view-" + viewId);
+  if (view) view.classList.add("active");
+  if (viewId === "queue") renderTab(currentTab);
+  if (viewId === "config") loadConfig().catch(() => {});
+  if (viewId === "home") {
+    const gallery = $("#gallery");
+    if (gallery) gallery.classList.remove("no-animate");
+    renderHome();
+  }
+}
+
+document.querySelectorAll(".dock-item, .dock-mobile-item").forEach((btn) => {
+  btn.addEventListener("click", () => switchView(btn.dataset.view));
+});
+
+/* ═══ PACK DOWNLOAD ═══ */
+function downloadPack(ts) {
+  const a = document.createElement("a");
+  a.href = "/api/pack?date=" + Math.floor(ts / 1000);
+  a.download = "";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+/* ═══ HOME GALLERY — 按日期归组 ═══ */
+function renderHome() {
+  const gallery = $("#gallery");
+  if (!gallery) return;
+
+  const done = allJobs.filter((j) => j.status === "done" && (j.output_files || []).length > 0);
+  const sorted = done.sort((a, b) => (b.completed_at || 0) - (a.completed_at || 0));
+
+  const count = $("#home-count");
+  if (count) count.textContent = done.length + " 部已完成";
+
+  if (sorted.length === 0) {
+    gallery.innerHTML = '<div class="gallery-empty">尚无已完成字幕</div>';
+    return;
+  }
+
+  // 收集已有卡片的 DOM，按 av 号索引（用于恢复已加载的海报）
+  const existingCards = new Map();
+  gallery.querySelectorAll(".gallery-card").forEach((el) => {
+    const av = el.dataset.av;
+    if (av) existingCards.set(av, el);
+  });
+
+  // 按日期分组
+  const nowTs = Date.now();
+  const today = new Date(new Date().toLocaleDateString("zh-CN", { timeZone: "Asia/Shanghai" })).getTime();
+  const yesterday = today - 86400000;
+
+  const groups = new Map();
+  sorted.forEach((job) => {
+    const ts = (job.completed_at || 0) * 1000;
+    const d = new Date(ts);
+    const dateStart = new Date(d.toLocaleDateString("zh-CN", { timeZone: "Asia/Shanghai" })).getTime();
+    const key = dateStart;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(job);
+  });
+
+  // 构建 HTML
+  let html = "";
+  for (const [ts, jobs] of groups) {
+    // 日期标题
+    let label;
+    if (ts === today) {
+      label = "今天";
+    } else if (ts === yesterday) {
+      label = "昨天";
+    } else {
+      const d = new Date(ts);
+      const now = new Date();
+      if (d.getFullYear() === now.getFullYear()) {
+        label = (d.getMonth() + 1) + "月" + d.getDate() + "日";
+      } else {
+        label = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+      }
+    }
+    html += '<div class="gallery-section"><h3 class="gallery-section-header"><span>' + label + '</span><button class="pack-btn" onclick="downloadPack(' + ts + ')">打包(' + jobs.length + ')</button></h3><div class="gallery-row">';
+    for (const job of jobs) {
+      const av = (job.input_path.split("/").pop() || job.input_path).replace(/\.(mp4|mkv|avi|wmv|flv|mov|webm|ts|m4v)$/i, "");
+      const fmt = ((job.output_files || [])[0] || "").split(".").pop() || "srt";
+      html +=
+        '<div class="gallery-card" data-job-id="' + job.id + '" data-av="' + av + '">' +
+        '<div class="gallery-poster"><img alt="' + av + '" loading="lazy" /></div>' +
+        '<div class="gallery-poster-fallback">' + av + '</div>' +
+        '<div class="gallery-footer">' +
+        '<div class="av">' + av + '</div>' +
+        '<div class="meta">' + fmtDate(job.completed_at) + '</div>' +
+        '<span class="fmt-badge">' + fmt + '</span>' +
+        '</div></div>';
+    }
+    html += '</div></div>';
+  }
+
+  // 保存各日期行的滚动位置
+  const scrollPositions = [];
+  gallery.querySelectorAll(".gallery-row").forEach((row) => {
+    scrollPositions.push({ date: row.closest(".gallery-section")?.querySelector(".gallery-section-header")?.textContent || "", left: row.scrollLeft });
+  });
+
+  gallery.innerHTML = html;
+
+  // 恢复滚动位置
+  gallery.querySelectorAll(".gallery-row").forEach((row) => {
+    const header = row.closest(".gallery-section")?.querySelector(".gallery-section-header")?.textContent || "";
+    const saved = scrollPositions.find((s) => s.date === header);
+    if (saved) row.scrollLeft = saved.left;
+  });
+
+  // 恢复已加载的海报图片 src
+  for (const [av, oldCard] of existingCards) {
+    const oldImg = oldCard.querySelector(".gallery-poster img");
+    if (!oldImg || !oldImg.src) continue;
+    const newCard = gallery.querySelector('.gallery-card[data-av="' + av + '"]');
+    if (newCard) {
+      const newImg = newCard.querySelector(".gallery-poster img");
+      if (newImg) newImg.src = oldImg.src;
+    }
+  }
+
+  // 异步加载海报
+  gallery.querySelectorAll(".gallery-card").forEach((card) => {
+    const img = card.querySelector(".gallery-poster img");
+    if (img.src) return;
+    const av = card.dataset.av;
+    if (av) loadPoster(card, av);
+  });
+}
+
+
+
+
+/* ═══ SPLASH ═══ */
+function hideSplash() {
+  const splash = document.getElementById("splash");
+  if (splash) splash.classList.add("is-hidden");
+}
+
+// 保底：3 秒后无论是否加载完成都隐藏 splash
+setTimeout(hideSplash, 3000);
+
+/* ═══ THEME TOGGLE ═══ */
+function setTheme(theme) {
+  const root = document.documentElement;
+  document.getElementById("theme-toggle-mobile");
+  if (theme === "light") {
+    root.classList.add("light");
+  } else {
+    root.classList.remove("light");
+  }
+  localStorage.setItem("subtitle-theme", theme);
+}
+
+function toggleTheme() {
+  const isLight = document.documentElement.classList.contains("light");
+  setTheme(isLight ? "dark" : "light");
+}
+
+// Restore saved theme
+const saved = localStorage.getItem("subtitle-theme");
+if (saved) setTheme(saved);
+
+document.getElementById("theme-toggle")?.addEventListener("click", toggleTheme);
+document.getElementById("theme-toggle-mobile")?.addEventListener("click", toggleTheme);
 
 

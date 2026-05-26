@@ -2,193 +2,286 @@
 
 ## Re-entry Sentence（下次开工先贴这句）
 
-`C:\Users\jzdxjk\Documents\字幕云翻译\HANDOFF.md` — 全部消息中文化 + 实时进度条 + 阶段耗时 + 5 标签页分页（运行中/排队中/失败/已完成/已取消）+ 重试/批量重试 + FIFO 排队排序 + 取消按钮 + 前端反馈提示；win 预览端口 15678。
+`C:\Users\jzdxjk\Documents\字幕云翻译\HANDOFF.md` — 暗色 NAS 风 UI + Mac Dock 式 4 视图导航 + 主界面 Emby 风格横版海报墙（按日期分组 + 横向滚动行）+ 海报后端代理 + localStorage 持久化缓存 + 增量渲染 + 亮/暗主题 + PWA 移动端底部 Dock 重做 + Docker Hub 发布 + Cloudflare 探索（已回滚）+ 取消杀进程 + 失败不重试 + 保存 toast + 版本号 + 番号规范化搜索回退；win 预览端口 15678；v2.2.2 刚修完番号前缀海报搜索；下一步 → LLM 翻译模块。
 
 ---
 
-## 1) 项目目标
-- 在 NAS / Docker 上运行字幕任务中台：
-  - 本地负责扫描媒体、抽音频、任务队列、结果落盘。
-  - Modal 云端负责推理。
-- 模型仓库：`TransWithAI/Faster-Whisper-TransWithAI-ChickenRice`
-- 分支：`v1.7`
-- 默认模型：`chickenrice`
+## 版本迭代
+
+### v1.0 — 基础功能（3.1~3.8）
+- FastAPI 后端，SQLite 存任务状态
+- Modal 云端推理桥接
+- ffmpeg 音频抽取
+- 任务创建/队列/取消/重试
+
+### v1.1 — UI 大改（3.9）
+- Dock 210px 左栏桌面端导航
+- 4 视图 SPA：主界面 / 任务队列 / 提交任务 / 配置
+- Manrope + Noto Sans SC 字体
+- CSS 变量双主题（亮/暗），localStorage 记忆
+- 启动 Splash 动画
+- PWA manifest + Service Worker
+
+### v1.2 — 海报墙（3.10）
+- dbo API 代理 JavDB 封面搜索
+- 封面图 800×536 横版，3:2 容器
+- 串行请求队列 + 防重复并发
+- poster-proxy 后端代理（手机公网可用）
+- localStorage 持久化海报缓存
+
+### v1.3 — 日期分组画廊
+- 按完成日期分组（今天/昨天/MM月DD日/YYYY-MM-DD）
+- 每组独立横向滚动行
+- 入场动画（首次加载播 fadeUp，后续刷新跳过）
+
+### v1.4 — 移动端优化
+- 底部 Dock 重做：72px 高，桌面端风格纯色背景，11px 文字，蓝色激活高亮
+- 画廊卡片响应式：桌面 240px，移动端 `50vw - 18px`
+- 主题按钮加「主题」文字标签
+
+### v2.2.2 — 番号规范化：海报搜索回退 + 失败自动重试
+- **核心修复**：素人番号（如 `300Mium-1336`）提取后规范化为 DBO 认识的形式（`mium-1336`）回退搜索
+- `AV_PATTERN` 正则加 `(?:\d+)?` 可选数字前缀 + `re.IGNORECASE` 支持混合大小写
+- 新增 `normalize_av_code()`（Python）+ `_normalizeAvCode()`（JS）规范化函数
+- 前端 `_doFetch()` 先搜原始码，无结果自动用规范化码再搜一次（最多 2 次请求）
+- 页面刷新时自动重试之前搜不到海报的番号（localStorage 过滤 `"null"` 缓存值）
+- Service Worker 改为 network-first 策略（HTML/CSS/JS），更新不再被旧缓存卡住
+
+### v2.2.1 — hotfix: json import
+- `/api/dbo-search` 和 `/api/test-dbo` 中用了 `json.dumps()` 但顶层没 `import json`，修复
+
+### v2.2 — DBO 搜索代理 + 诊断工具
+- **核心修复**：DBO 搜索从前端直连改为后端代理（`/api/dbo-search`）
+- 根因：`app.js` 中 `_doFetch()` 直连 `10.0.0.235:9090`，切换流量后浏览器访问不了内网
+- 之前只修了图片代理（`poster-proxy`），搜索那路一直是裸连，不是回归
+- 新增 `/api/test-dbo` 诊断端点 + 配置页「测试 DBO 连通性」按钮
+
+### v2.1 — Cloudflare+DeepSeek 尝试（已回滚）
+- 新增 `app/cloudflare_asr.py` + `app/deepseek_translate.py`（已删除）
+- 配置页 ASR 提供商切换 + CF 密钥 + LLM 配置区域
+- 取消即杀 ffmpeg（`proc.kill()` in reader thread，保留）
+- 失败/取消不自动重试（`has_any_failed_job_for_path`，保留）
+- 保存成功 toast 通知（保留）
+- 版本号显示 `v2.1`（保留）
+- **回滚原因**：Cloudflare Workers AI 限制 5MB/请求，2h 视频需切片 5-6 段，每天 100 次额度只够 16-20 部；NAS 上 ffmpeg 的 libopus / segment_size 均不支持。改为探索 LLM 翻译方案。
+
+### v1.9 — 安全加固 + 更多修复
+- SSRF 防护：poster-proxy 加域名白名单 + https 强制
+- ffmpeg stdout 管道死锁修复：`stdout=DEVNULL`
+- Modal runner stderr 管道死锁修复：加 stderr reader 线程
+- 任务删除：新增 `DELETE /api/jobs/{id}` + 前端删除按钮
+- 海报骨架屏：shimmer 加载动画替代空黑块
+- 看门狗异常日志：`except: pass` → `logger.exception`
+- 配置保存竞态提示：保存按钮下加 ⚠ 多标签页警告
+- FC2 番号适配：`AV_PATTERN` 扩展匹配 `FC2-PPV-1234567`
+- 海报并行加载：串行队列 → 并发 4
+
+### v1.8 — 防重复任务提交
+- 看门狗：字幕已存在则跳过，不再重复创建任务
+- API：相同路径有活跃任务时返回 409 拒绝
+- `_output_exists_for_media()` 辅助函数检查所有格式字幕
+
+### v1.7 — 音频清理 + 队列页按钮优化
+- 任务完成后自动删除 `cache/audio/` 中的音频缓存
+- 任务队列页添「清除音频缓存」按钮（红色强调），一键清空 audio 目录
+- 后端 `POST /api/clear-audio-cache` 端点
+- 刷新按钮和清除按钮紧靠排列，`.header-actions` 容器 + `.btn-danger` 样式
+
+### v1.6 — 一键打包 + 滚动修复 + 轮询优化
+- 画廊每个日期分组加「打包(N)」按钮，自动 zip 当天所有字幕下载
+- 后端 `/api/pack?date=ts` 端点，`JobStore.get_by_completion_date()` 查询
+- 轮询加变化检测：只有任务状态、进度、完成时间变化时才重建画廊，空闲不闪
+- 画廊重建时保存/恢复各日期行的横向滚动位置
+
+### v1.5.1 — DBO 配置保存修复
+- `ConfigPayload` 缺失 `dbo_api_url` / `dbo_api_key` → POST 时被 pydantic 丢弃
+- `switchView("config")` 加 `loadConfig()` 调用，切回配置页自动刷新表单
+
+### v1.5 — 净化发布
+- docker-compose.yml 去明文 token → 环境变量占位符
+- 去个人 NAS 路径 → 相对路径 / 通用示例
+- `.env.example` 模板
+- Docker Hub 发布：`jzdxjk/subtitle-modal-web:latest`
+- GitHub 介绍页：`https://github.com/jzdxjk/subtitle-modal-web`
 
 ---
 
-## 2) 当前工作区与运行信息
-- 本地目录：`C:\Users\jzdxjk\Documents\字幕云翻译`
-- 容器名：`subtitle-modal-web`
-- NAS 路径：`/tmp/zfsv3/nvme14/17858927371/data/Docker/subtitle-modal-web/`
-- Docker 端口映射：`8898:8898`
-- 本地预览端口：`15678`
+## 后续待推进
+
+> **2026-05-25**：分析了 `aexachao/nas-submaster` 的架构，确定未来 3 个借鉴方向（详见下方《开发日志》）。
 
 ---
 
-## 3) 全部改动记录
+## 开发日志 — 下一步方向
 
-### 3.1 Bug 修复 — 脏文件名残留
-- **文件**：`app/worker.py` — `_normalize_outputs()`
-- **问题**：`by_suffix = {suffix: path}` 字典在多个同后缀文件时只保留最后一个，脏文件（如 `489155.com@START-554-xxxx.srt`）不被清理
-- **修复**：改为 `by_suffix: dict[str, list[Path]]` 分组列表 → 优先匹配目标文件名 → 清理剩余脏文件
+### v2.2：LLM 翻译模块（借鉴点 1）
 
-### 3.2 中文国际化
-| 文件 | 内容 |
-|---|---|
-| `app/storage.py` | `等待中` / `用户已取消` / `取消中...` / 重试消息中文化 |
-| `app/worker.py` | 全部 stage 提示改为中文 + emoji（🎵 ☁️ 🧠 📦 ✅ ❌ ⏭️） |
+**目标**：ASR 出日文 SRT → LLM 翻译 → 中文 SRT。不再依赖 Modal ChickenRice 内置翻译。
 
-### 3.3 实时进度条 + 阶段耗时
+**融入方式**：
 
-**后端**：
-- `app/media.py` — `prepare_audio` 新增 `on_progress` 回调；`subprocess.Popen` + 线程解析 ffmpeg 的 `Duration:` / `time=` 行 → 计算百分比
-- `app/worker.py` — `_process_job_pipelined` 记录 `phase_timings`（local / cloud），写入 `started_at / completed_at / progress` 到 DB
-
-**前端**：
-- 进度条（`app/static/styles.css`）— 8px 高圆角，分段彩色：
-  - 本地阶段 0-35%：橙色渐变
-  - 云端阶段 40-90%：蓝色渐变
-  - 完成阶段 90-100%：绿色渐变
-- 运行中实时显示 `⏱ 已运行 XXs`
-
-### 3.4 5 标签页 + 分页 + 排序
-
-**标签定义**（`app/static/app.js`）：
-
-| 标签 | 包含状态 | 排序 |
-|---|---|---|
-| 运行中 | `running` | `started_at` 升序（先开始的在上） |
-| 排队中 | `queued` | `created_at` 升序（最早提交的在上，FIFO） |
-| 失败任务 | `failed` | API 返回顺序（最新在前） |
-| 已完成 | `done` | API 返回顺序 |
-| 已取消 | `cancelled`, `cancelling` | API 返回顺序 |
-
-- 每页 5 条，带上下翻页
-- 标签页上显示数量：`运行中 (2)`
-
-### 3.5 重试机制
-
-| API | 方法 | 路径 |
-|---|---|---|
-| 单条重试 | POST | `/api/jobs/{id}/retry` |
-| 批量重试全部失败 | POST | `/api/jobs/retry-failed` |
-
-- 支持 `failed / cancelled / cancelling` 三种状态重试
-- 重试后重置：`status=queued`, `output_files=[]`, `started_at=0`, `completed_at=0`, `progress=0`
-- 失败标签页顶部有「一键重试全部失败」按钮
-
-### 3.6 UI 细节优化
-- 取消按钮文字从 `停止` 改为 `取消`，与后端统一
-- 已取消任务显示 `取消时间 HH:MM:SS`（而不是 `完成时间`）
-- 保存配置后提示 `✅ 保存配置成功！`
-- 提交任务后提示 `✅ 加入队列成功！`
-- 耗时格式 `mm:ss`（如 `总耗时21:15`）
-
-### 3.7 数据库新增字段（`app/storage.py`）
-
-```python
-started_at: float = 0.0     # 开始处理时间戳
-completed_at: float = 0.0   # 完成/失败/取消时间戳
-progress: int = 0            # 0-100 进度
+```
+现流程：ffmpeg → Modal ASR → SRT → 完成
+融入后：ffmpeg → Modal ASR → SRT → [可选] LLM 批量翻译 → .zh.srt → 完成
 ```
 
-新增迁移：`ALTER TABLE jobs ADD COLUMN ...`
+**新增 `app/services/translator.py`**：
+- 统一 OpenAI 兼容客户端（一份代码调 DeepSeek / Ollama / Gemini / OpenAI / 自定义）
+- 分段批处理：SRT 按 N 行分组，加前后上下文防断句
+- JSON 强制输出：Prompt 要求 `[{"line":1,"text":"..."}]`，解析时格式校验 + 行号对齐
+- 重试 + 降级：最多 3 次，截断时自动对半分批递归处理
+- 8 渠道预设（参考 nas-submaster）：DeepSeek / Ollama / Gemini / Moonshot / 通义千问 / 智谱 / OpenAI / 自定义
 
-### 3.8 单元测试补充（`tests/test_core.py`）
-- `test_retry_failed_job`
-- `test_retry_all_failed_jobs`
-- `test_retry_cancelled_job`
-- `test_cannot_retry_non_failed_job`
+**新增配置项**（配置页加"翻译设置"区）：
 
----
+```
+翻译引擎:    [关闭 ▼] [DeepSeek ▼] [Ollama ▼] [OpenAI ▼] [自定义 ▼]
+API Key:     [sk-xxx________________]
+API 地址:    [https://api.deepseek.com/v1]
+模型:        [deepseek-chat__________]
+提示词:      [日文→中文口语化，保留格式…]
+每批行数:    [15]
+```
 
-## 4) 关键文件清单
+- 选"关闭"→ 不走翻译，跟现在完全一样
+- 选具体渠道 → 预填默认 base_url + 模型名
+- 每个渠道旁加「测试」按钮，10s 测连通延迟
 
-| 文件 | 职责 |
+**改动文件**：
+| 文件 | 改动 |
 |---|---|
-| `app/main.py` | FastAPI 路由（config / jobs / cancel / retry / retry-failed） |
-| `app/config.py` | AppConfig + ConfigStore（JSON + env 覆盖） |
-| `app/storage.py` | Job dataclass + SQLite WAL 存储、重试逻辑 |
-| `app/worker.py` | Worker 池、流水线（ffmpeg→上传→云端）、进度/计时/中文消息 |
-| `app/media.py` | 媒体发现、AV 码提取、ffmpeg 进度解析 |
-| `app/modal_runner.py` | Modal 桥接（repo 管理、patch、Popen 管线） |
-| `app/static/index.html` | 5 标签页结构 + 失败工具条 |
-| `app/static/app.js` | 标签渲染、分页、排序、进度条、重试/取消交互 |
-| `app/static/styles.css` | 分段彩色进度条、标签页、重试按钮、工具条 |
-| `tests/test_core.py` | 单元测试（config / media / store / retry / modal） |
-| `docker-compose.yml` | 服务定义 + 挂载 + 环境变量（含密钥⚠️） |
-| `Dockerfile` | python:3.10-slim + ffmpeg + git |
-| `requirements.txt` | fastapi / uvicorn / pydantic / modal |
+| `app/services/translator.py` | **新建**，核心翻译模块 |
+| `app/worker.py` | ASR 完成后加 `if config.llm_enabled: translate_srt()` |
+| `app/config.py` | 加 llm_provider / llm_api_key / llm_api_url / llm_model / llm_prompt / llm_batch_size |
+| `app/main.py` | ConfigPayload 加对应字段 + `/api/test-llm` 端点 |
+| `app/static/index.html` | 配置页加翻译区 + 测试按钮 |
+| `app/static/app.js` | 测试按钮逻辑 + 渠道切换预填 |
 
 ---
 
-## 5) API 总览
+### v2.3：配置变更检测（借鉴点 3）
+
+**目标**：`save()` 时先 `deepcopy` 对比新旧，相同就跳过磁盘写入。
+
+**代码变更**（`config.py` 约 3 行）：
+```python
+# 在 ConfigStore 加字段
+_last_saved: dict | None = None
+
+# 在 save() 开头
+new_dict = {**current, **filtered_payload}
+if new_dict == self._last_saved:
+    return AppConfig(**new_dict)  # 跳过写入
+self._last_saved = deepcopy(new_dict)
+```
+
+**价值**：当前 `save()` 只在用户手动点按钮时触发，次数少。但后续如果加 WebSocket 配置推送或轮询自动保存，能避免大量冗余写入。
+
+---
+
+### v2.4：模块化 5 层架构（借鉴点 5）
+
+**目标**：把当前扁平文件结构 → 清晰分层，长期易维护。
+
+**目标结构**：
+```
+app/
+├── api/                 ← 路由层（从 main.py 拆）
+│   └── main.py          → 只放 @app.route + FastAPI 配置
+├── core/                ← 业务层
+│   ├── config.py        → AppConfig + ConfigStore
+│   ├── worker.py        → JobRunner + Worker 池
+│   └── models.py        → 所有 Pydantic 数据类集中
+├── services/            ← 服务层（可独立调用）
+│   ├── media.py           → ffmpeg 音频提取
+│   ├── modal_runner.py    → Modal 云桥接
+│   └── translator.py      → [v2.2 新建] LLM 翻译
+├── database/            ← 数据层（从 storage.py 拆）
+│   ├── connection.py      → SQLite 连接 + WAL
+│   └── job_dao.py         → 任务 CRUD
+├── static/              ← 前端（不动）
+└── __init__.py
+```
+
+**收益**：
+| | 改前 | 改后 |
+|---|---|---|
+| `main.py` | 路由 + 端点 + JSON 序列化混一起 | 只放路由，~150 行 |
+| 加新功能 | 在 `worker.py` 里堆代码 → 越来越长 | 加 `services/xxx.py`，独立 |
+| 测试 | 难测，函数分散 | 每层可单独 mock 测试 |
+| 新人接手 | 读完 440 行 worker 才懂流程 | 看目录名就知道有什么 |
+
+**实施策略**：不一次性大重构。随 v2.2 翻译模块渐进拆分——新建 `services/` 时顺手把 `media.py` `modal_runner.py` 移入；新建 `database/` 时拆 `storage.py`。最后再拆 `api/` 和 `models.py`。
+
+---
+
+## 之前的待推进（已完成或放弃）
+
+| 功能 | 状态 |
+|---|---|
+| FC2 非标番号适配 | ✅ v1.9 完成 |
+| 任务删除 | ✅ v1.9 完成 |
+| 海报加载骨架屏 | ✅ v1.9 完成 |
+| Cloudflare+DeepSeek 双通道 | ❌ v2.1 尝试后移除（CF 5MB 限制不可行） |
+
+---
+
+## 关键文件
+
+| 文件 | 作用 |
+|---|---|
+| `app/main.py` | FastAPI 路由 + poster-proxy 代理 |
+| `app/config.py` | AppConfig（含 dbo_api_url/key） |
+| `app/storage.py` | Job SQLite 存储 |
+| `app/worker.py` | Worker 池 / 流水线 |
+| `app/media.py` | 媒体发现 + ffmpeg |
+| `app/modal_runner.py` | Modal 桥接 |
+| `app/static/index.html` | SPA + Dock + PWA（v23） |
+| `app/static/app.js` | 导航/画廊/海报/缓存/配置（~550 行）|
+| `app/static/styles.css` | 主题/Dock/海报墙/响应式 |
+| `docker-compose.yml` | 镜像拉取部署 |
+| `Dockerfile` | python:3.10-slim + ffmpeg + git |
+| `.env.example` | Modal 密钥模板 |
+
+## API
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| GET | `/api/config` | 获取配置（脱敏） |
+| GET | `/api/version` | 版本号 |
+| GET | `/api/config` | 获取配置 |
 | POST | `/api/config` | 保存配置 |
 | POST | `/api/jobs` | 创建任务 |
-| GET | `/api/jobs` | 列出所有任务（按 created_at DESC） |
+| GET | `/api/jobs` | 列出任务 |
 | GET | `/api/jobs/{id}` | 任务详情 |
-| POST | `/api/jobs/{id}/cancel` | 取消任务（queued→cancelled / running→cancelling） |
-| POST | `/api/jobs/{id}/retry` | 重试（failed/cancelled/cancelling→queued） |
-| POST | `/api/jobs/retry-failed` | 批量重试所有 failed 任务 |
+| POST | `/api/jobs/{id}/cancel` | 取消 |
+| POST | `/api/jobs/{id}/retry` | 重试 |
+| DELETE | `/api/jobs/{id}` | 删除任务 |
+| POST | `/api/jobs/retry-failed` | 批量重试 |
+| GET | `/api/dbo-search?q=...&limit=1` | DBO 搜索代理 |
+| POST | `/api/test-dbo` | 测试 DBO 连通性 |
+| GET | `/api/poster-proxy?url=...` | 海报图片代理 |
+| POST | `/api/clear-audio-cache` | 清空音频缓存 |
+| GET | `/api/pack?date=ts` | 按日期打包字幕 |
 
----
+## 外部依赖
 
-## 6) 本地预览
+- **dbo**：内网 `10.0.0.235:9090` → Web 配置页可填写地址和密钥
+- **Modal**：API 密钥通过 docker-compose 环境变量传入
+- **JavDB**：通过 dbo 间接访问
+
+## 本地预览
 
 ```powershell
 cd "C:\Users\jzdxjk\Documents\字幕云翻译"
-pip install fastapi uvicorn pydantic
-python -c "import os;os.chdir('.');os.environ['CONFIG_DIR']='.';os.environ['CACHE_DIR']='./cache';os.environ['WATCH_DIR']='.';os.environ['OUTPUT_DIR']='./output';import uvicorn;uvicorn.run('app.main:app',host='127.0.0.1',port=15678)"
+python -c "import os;os.chdir('.');os.environ['CONFIG_DIR']='.';os.environ['CACHE_DIR']='./cache';os.environ['WATCH_DIR']='.';os.environ['OUTPUT_DIR']='./output';import uvicorn;uvicorn.run('app.main:app',host='0.0.0.0',port=15678)"
 ```
 
-打开 `http://127.0.0.1:15678`
+访问 `http://192.168.100.141:15678`（桌面）或手机同 WiFi 访问。
 
----
-
-## 7) NAS 部署
+## 部署
 
 ```bash
-# Windows → NAS 传代码
-scp -r "C:\Users\jzdxjk\Documents\字幕云翻译\app" root@<NAS_IP>:/tmp/zfsv3/nvme14/17858927371/data/Docker/subtitle-modal-web/app/
-
-# NAS 重建
-cd /tmp/zfsv3/nvme14/17858927371/data/Docker/subtitle-modal-web
-docker-compose down && docker-compose build --pull && docker-compose up -d
-sleep 10 && docker logs subtitle-modal-web --tail 20
+git clone https://github.com/jzdxjk/subtitle-modal-web.git
+# 改 docker-compose.yml 里的密钥和路径
+docker-compose up -d
 ```
-
----
-
-## 8) 已知注意事项
-
-1. **docker-compose.yml 含明文密钥**（MODAL_TOKEN_ID / MODAL_TOKEN_SECRET / HF_TOKEN），建议部署到 NAS 后改用 `.env` 文件
-2. 当前项目目录**不是 git 仓库**，无法 `git diff`
-3. 历史任务不会自动获得新字段（`started_at / completed_at / progress`），新提交/执行的才会
-4. ffmpeg 进度解析依赖 stderr 中的 `Duration:` / `time=` 行，某些 ffmpeg 版本输出格式差异可能影响解析
-
----
-
-## 9) 快速排障命令
-
-```bash
-# 容器日志
-docker logs --tail 200 subtitle-modal-web
-
-# 查看任务状态
-docker exec -it subtitle-modal-web sh -c "sqlite3 /config/jobs.sqlite3 'SELECT id,status,substr(message,1,80),progress FROM jobs ORDER BY created_at DESC LIMIT 20'"
-```
-
----
-
-## 10) 下次可做的方向
-
-1. 优化 ffmpeg 进度条实时刷新频率（当前只在上报百分比变化时更新，可考虑秒级定时）
-2. 给重试增加确认弹窗（尤其批量重试）
-3. 为新 API 增加 FastAPI 层集成测试
-4. 清理 `styles.css` 压缩格式（当前部分样式被合并到单行，可读性差）
-5. 任务卡片增加展开/折叠详情
-6. 已完成任务支持删除

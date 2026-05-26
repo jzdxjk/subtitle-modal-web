@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import hashlib
 import re
@@ -8,8 +8,8 @@ from pathlib import Path
 
 VIDEO_EXTENSIONS = {".mp4", ".mkv", ".avi", ".mov", ".wmv", ".flv", ".webm", ".m4v", ".ts"}
 AUDIO_EXTENSIONS = {".mp3", ".m4a", ".wav", ".flac", ".aac", ".ogg"}
-# 匹配 AV 番号格式：2-5 位大写字母 + 连字符 + 3-5 位数字
-AV_PATTERN = re.compile(r"[A-Z]{2,5}-\d{3,5}")
+# 匹配 AV 番号格式：2-5 位大写字母 + 连字符 + 3-5 位数字（含 FC2-PPV 格式）
+AV_PATTERN = re.compile(r"(?:\d+)?[A-Z]{2,5}-\d{3,5}|FC2-[A-Z]{3}-\d{5,7}|FC2-\d{6,7}", re.IGNORECASE)
 
 
 def is_video_file(path: Path) -> bool:
@@ -24,6 +24,25 @@ def extract_av_code(path: Path) -> str | None:
     """从文件名中提取 AV 番号，如 FNS-192、EBWH-309，找不到返回 None"""
     match = AV_PATTERN.search(path.stem)
     return match.group(0) if match else None
+
+
+def normalize_av_code(code: str) -> str:
+    """规范化 AV 番号：去掉数字前缀、转小写。
+    用于 DBO 搜索回退。
+    300Mium-1336 → mium-1336
+    250Idol-456  → idol-456
+    FNS-192      → fns-192
+    FC2-PPV-1234567 → fc2-ppv-1234567
+    """
+    code_lower = code.lower()
+    if code_lower.startswith("fc2"):
+        return code_lower
+    prefix, _, number = code_lower.partition("-")
+    # 去掉前缀开头的数字（如 "300mium" → "mium"）
+    clean_prefix = prefix.lstrip("0123456789")
+    if not clean_prefix:
+        return code_lower  # fallback: 前缀全是数字就原样返回
+    return f"{clean_prefix}-{number}"
 
 
 def discover_media(input_path: Path) -> list[Path]:
@@ -82,10 +101,11 @@ def _parse_ffmpeg_time(line: str) -> float | None:
     return None
 
 
-def prepare_audio(media_path: Path, cache_dir: Path, on_progress=None) -> Path:
+def prepare_audio(media_path: Path, cache_dir: Path, on_progress=None, is_cancelled_fn=None) -> Path:
     """
     提取音频。若文件已是音频格式则直接返回。
     on_progress: Callable[[int], None] | None — 进度回调（0-100）
+    is_cancelled_fn: Callable[[], bool] | None — 取消检查，返回 True 时杀 ffmpeg
     """
     if is_audio_file(media_path):
         return media_path
@@ -94,7 +114,7 @@ def prepare_audio(media_path: Path, cache_dir: Path, on_progress=None) -> Path:
     if audio_path.exists() and audio_path.stat().st_size > 0:
         return audio_path
     command = build_ffmpeg_command(media_path, audio_path)
-    proc = subprocess.Popen(command, stderr=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+    proc = subprocess.Popen(command, stderr=subprocess.PIPE, stdout=subprocess.DEVNULL, text=True)
 
     total_duration: float | None = None
     last_report = -1
@@ -102,6 +122,9 @@ def prepare_audio(media_path: Path, cache_dir: Path, on_progress=None) -> Path:
     def _reader() -> None:
         nonlocal total_duration, last_report
         for line in proc.stderr:
+            if is_cancelled_fn and is_cancelled_fn():
+                proc.kill()
+                return
             if total_duration is None:
                 d = _parse_ffmpeg_duration(line)
                 if d is not None and d > 0:

@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import asyncio
 import logging
@@ -8,7 +8,14 @@ from datetime import datetime
 from pathlib import Path
 
 from app.config import ConfigStore
-from app.media import discover_media, output_subtitle_path, prepare_audio
+from app.media import discover_media, extract_av_code, output_subtitle_path, prepare_audio
+
+
+def _output_exists_for_media(media_path: Path, output_dir: Path, formats: list[str]) -> bool:
+    """检查媒体文件的所有格式字幕是否都已存在"""
+    return all(output_subtitle_path(media_path, output_dir, fmt).exists() for fmt in formats)
+
+
 from app.modal_runner import ModalRunner
 from app.storage import Job, JobStore
 
@@ -147,6 +154,7 @@ class JobRunner:
             item_output_dir = Path(job.output_dir)
 
             total_media = len(media_files)
+            audio_paths: list[Path] = []
             for index, media_path in enumerate(media_files, start=1):
                 if self.store.is_cancelling(job.id):
                     self.store.update_job(job.id, status="cancelled", message=f"用户已取消（文件 {index}/{total_media}）")
@@ -181,6 +189,7 @@ class JobRunner:
 
                     t_local_start = time.time()
 
+
                     def _mk_cb(jid, store, idx, total, tls):
                         def cb(pct):
                             overall = int(pct * 35 // 100) + (idx - 1) * 35 // total if total > 0 else 0
@@ -192,14 +201,22 @@ class JobRunner:
                     self.store.update_job(job.id, status="running", message=f"🎵 正在提取音频 {index}/{total_media}", progress=max(1, (index - 1) * 35 // total_media))
                     audio_path = await asyncio.to_thread(
                         prepare_audio, media_path, self.cache_dir,
-                        on_progress=_mk_cb(job.id, self.store, index, total_media, t_local_start)
+                        on_progress=_mk_cb(job.id, self.store, index, total_media, t_local_start),
+                        is_cancelled_fn=lambda: self.store.is_cancelling(job.id),
                     )
+
+                    if self.store.is_cancelling(job.id):
+                        self.store.update_job(job.id, status="cancelled", message=f"用户已取消（文件 {index}/{total_media}）")
+                        return
+
+                    audio_paths.append(audio_path)
                     t_local_end = time.time()
                     local_dur = int(t_local_end - t_local_start)
                     phase_timings["local"] = phase_timings.get("local", 0) + local_dur
 
                     stage = f"正在上传到云端 {index}/{total_media}"
                     base_prog = 35 + (index - 1) * 55 // total_media if total_media > 0 else 35
+
                     self.store.update_job(job.id, message=f"☁️ 正在上传音频到云端GPU...（{index}/{total_media}）", progress=base_prog)
                     handle = await asyncio.to_thread(runner.launch, audio_path, item_output_dir, job.formats, config.default_timeout_seconds)
 
@@ -217,6 +234,8 @@ class JobRunner:
                 cloud_dur = int(t_cloud_end - t_cloud_start)
                 phase_timings["cloud"] = phase_timings.get("cloud", 0) + cloud_dur
 
+
+
                 # --- Finalize ---
                 stage = f"正在整理输出 {index}/{total_media}"
                 final_prog = 90 + (index - 1) * 10 // total_media if total_media > 0 else 90
@@ -232,6 +251,9 @@ class JobRunner:
                 self.store.update_job(job.id, message=f"📂 正在移动源文件夹到 {move_target}", progress=95)
                 for parent in sorted(media_parents):
                     if not parent.exists():
+                        continue
+                    if parent == self.watch_root:
+                        logger.warning("refusing to move watch root: %s", parent)
                         continue
                     dest = Path(move_target) / parent.name
                     dest.parent.mkdir(parents=True, exist_ok=True)
@@ -255,6 +277,12 @@ class JobRunner:
 
             self.store.update_job(job.id, status="done", message=timing_msg,
                                   output_files=output_files, completed_at=t_end, progress=100)
+
+            for p in audio_paths:
+                try:
+                    p.unlink(missing_ok=True)
+                except Exception:
+                    pass
         except Exception as exc:
             self.store.update_job(job.id, status="failed", message=f"❌ {stage}: {exc}", completed_at=time.time())
 
@@ -272,22 +300,47 @@ class JobRunner:
                     if media:
                         parent = media[0].parent
                         if parent == self.watch_root:
-                            candidates.add(media[0])
+                            # 根目录直放文件：创建子目录，移入文件，统一为子目录模式
+                            av_code = extract_av_code(media[0]) or media[0].stem
+                            sub_dir = self.watch_root / av_code
+                            sub_dir.mkdir(exist_ok=True)
+                            try:
+                                dest = sub_dir / media[0].name
+                                media[0].rename(dest)
+                                logger.info("moved root file %s -> %s", media[0].name, dest)
+                            except OSError:
+                                logger.exception("move failed for %s", media[0])
+                                continue
+                            candidates.add(sub_dir)
                         else:
                             candidates.add(parent)
 
                 for path in sorted(candidates):
+                    formats = [f.strip() for f in config.default_formats.split(",") if f.strip()]
+                    output_dir = Path(config.default_output_dir)
                     input_path = str(path)
-                    if not self.store.has_active_job_for_path(input_path):
-                        self.store.create_job(
-                            input_path=input_path,
-                            output_dir=config.default_output_dir,
-                            formats=[f.strip() for f in config.default_formats.split(",") if f.strip()],
-                            overwrite=False,
-                            move_target_dir=config.default_move_target_dir,
-                        )
+
+                    # A: 跳过活跃任务中已有或字幕已存在的文件
+                    if self.store.has_active_job_for_path(input_path):
+                        continue
+                    if self.store.has_any_failed_job_for_path(input_path):
+                        continue  # 已有失败任务，不自动重试
+                    media_files = discover_media(path)
+                    if all(
+                        _output_exists_for_media(m, output_dir, formats)
+                        for m in media_files
+                    ):
+                        continue
+
+                    self.store.create_job(
+                        input_path=input_path,
+                        output_dir=config.default_output_dir,
+                        formats=formats,
+                        overwrite=False,
+                        move_target_dir=config.default_move_target_dir,
+                    )
             except Exception:
-                pass
+                logger.exception("watchdog scan error")
 
             await asyncio.sleep(config.watchdog_interval_seconds)
 

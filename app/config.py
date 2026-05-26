@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import json
 import os
@@ -24,6 +24,8 @@ class AppConfig:
     max_workers: int = 1
     repo_url: str = "https://github.com/TransWithAI/Faster-Whisper-TransWithAI-ChickenRice.git"
     repo_branch: str = "v1.7"
+    dbo_api_url: str = ""
+    dbo_api_key: str = ""
 
     def merged_with_env(self) -> "AppConfig":
         data = asdict(self)
