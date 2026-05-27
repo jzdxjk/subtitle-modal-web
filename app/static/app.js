@@ -339,13 +339,16 @@ let DBO_BASE = "";
 let DBO_KEY = "";
 const LS_PREFIX = "poster_";
 
-// 从 localStorage 恢复缓存（自动清理旧格式 dbo 直连 URL）
+// 从 localStorage 恢复缓存（自动清理旧格式 dbo 直连 URL 和 FC2 旧缓存）
 for (let i = localStorage.length - 1; i >= 0; i--) {
   const key = localStorage.key(i);
   if (key && key.startsWith(LS_PREFIX)) {
     const av = key.slice(LS_PREFIX.length);
     const val = localStorage.getItem(key);
+    // 清理旧格式 URL 和 FC2 番号旧缓存（之前可能缓存了 null）
     if (val && val.startsWith("http://10.0.0.235:9090")) {
+      localStorage.removeItem(key);
+    } else if (av.toLowerCase().startsWith("fc2") && val === "null") {
       localStorage.removeItem(key);
     } else if (val && val !== "null") {
       posterCache.set(av, val);
@@ -571,7 +574,16 @@ function renderHome() {
     }
     html += '<div class="gallery-section"><h3 class="gallery-section-header"><span>' + label + '</span><button class="pack-btn" onclick="downloadPack(' + ts + ')">打包(' + jobs.length + ')</button></h3><div class="gallery-row">';
     for (const job of jobs) {
-      const av = (job.input_path.split("/").pop() || job.input_path).replace(/\.(mp4|mkv|avi|wmv|flv|mov|webm|ts|m4v)$/i, "");
+      // 优先从 output_files 提取 av 码（更可靠），否则从 input_path 提取
+      let av = "";
+      if (job.output_files && job.output_files.length > 0) {
+        // output_files 格式: ["/output/FNS-192.srt"]
+        const filename = job.output_files[0].split("/").pop() || "";
+        av = filename.replace(/\.(srt|vtt|ass|ssa|sub|txt)$/i, "");
+      }
+      if (!av) {
+        av = (job.input_path.split("/").pop() || job.input_path).replace(/\.(mp4|mkv|avi|wmv|flv|mov|webm|ts|m4v)$/i, "");
+      }
       const fmt = ((job.output_files || [])[0] || "").split(".").pop() || "srt";
       html +=
         '<div class="gallery-card" data-job-id="' + job.id + '" data-av="' + av + '">' +
