@@ -32,10 +32,21 @@ def normalize_av_code(code: str) -> str:
     300Mium-1336 → mium-1336
     250Idol-456  → idol-456
     FNS-192      → fns-192
-    FC2-PPV-1234567 → fc2-ppv-1234567
+    FC2-PPV-1234567 → fc2-1234567
     """
     code_lower = code.lower()
     if code_lower.startswith("fc2"):
+        # FC2番号统一映射为 fc2-数字 格式
+        # FC2PPV-4907804 → fc2-4907804
+        # FC2-PPV-4907804 → fc2-4907804
+        # FC2-4907804 → fc2-4907804
+        import re
+        m = re.search(r'fc2-?ppv-?(\d+)', code_lower)
+        if m:
+            return f"fc2-{m.group(1)}"
+        m = re.search(r'fc2-?(\d+)', code_lower)
+        if m:
+            return f"fc2-{m.group(1)}"
         return code_lower
     prefix, _, number = code_lower.partition("-")
     # 去掉前缀开头的数字（如 "300mium" → "mium"）

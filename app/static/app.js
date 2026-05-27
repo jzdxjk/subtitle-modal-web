@@ -355,7 +355,17 @@ for (let i = localStorage.length - 1; i >= 0; i--) {
 
 function _normalizeAvCode(code) {
   const lower = code.toLowerCase();
-  if (lower.startsWith("fc2")) return lower;
+  if (lower.startsWith("fc2")) {
+    // FC2番号统一映射为 fc2-数字 格式
+    // FC2PPV-4907804 → fc2-4907804
+    // FC2-PPV-4907804 → fc2-4907804
+    // FC2-4907804 → fc2-4907804
+    let m = lower.match(/fc2-?ppv-?(\d+)/);
+    if (m) return `fc2-${m[1]}`;
+    m = lower.match(/fc2-?(\d+)/);
+    if (m) return `fc2-${m[1]}`;
+    return lower;
+  }
   const dashIdx = lower.indexOf("-");
   if (dashIdx === -1) return lower;
   const prefix = lower.slice(0, dashIdx).replace(/^\d+/, "");
