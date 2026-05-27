@@ -9,7 +9,7 @@ from pathlib import Path
 VIDEO_EXTENSIONS = {".mp4", ".mkv", ".avi", ".mov", ".wmv", ".flv", ".webm", ".m4v", ".ts"}
 AUDIO_EXTENSIONS = {".mp3", ".m4a", ".wav", ".flac", ".aac", ".ogg"}
 # 匹配 AV 番号格式：2-5 位大写字母 + 连字符 + 3-5 位数字（含 FC2-PPV 格式）
-AV_PATTERN = re.compile(r"(?:\d+)?[A-Z]{2,5}-\d{3,5}|FC2-[A-Z]{3}-\d{5,7}|FC2-\d{6,7}", re.IGNORECASE)
+AV_PATTERN = re.compile(r"FC2-?(?:[A-Z]{3}-?)?\d{5,7}|(?:\d+)?[A-Z]{2,5}-\d{3,5}", re.IGNORECASE)
 
 
 def is_video_file(path: Path) -> bool:
