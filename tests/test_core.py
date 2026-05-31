@@ -2,7 +2,13 @@
 from pathlib import Path
 
 from app.config import AppConfig, ConfigStore
-from app.media import build_ffmpeg_command, extract_av_code, is_video_file, output_subtitle_path
+from app.media import (
+    build_ffmpeg_command,
+    extract_av_code,
+    is_video_file,
+    normalize_av_code,
+    output_subtitle_path,
+)
 from app.modal_runner import ModalRunner
 from app.storage import JobStore
 
@@ -18,8 +24,8 @@ def test_config_env_overrides_file(tmp_path, monkeypatch):
     assert config.modal_token_id == "env-id"
     assert config.modal_token_secret == "env-secret"
     assert config.default_gpu == "A10G"
-    assert config.redacted()["modal_token_id"] == "env-***"
-    assert config.redacted()["modal_token_secret"] == "env-***"
+    assert config.redacted()["modal_token_id"] == "***"
+    assert config.redacted()["modal_token_secret"] == "env***ret"
 
 
 def test_video_file_detection_is_case_insensitive():
@@ -35,6 +41,24 @@ def test_extract_av_code():
     assert extract_av_code(Path("/watch/NHDTB-963.mp4")) == "NHDTB-963"
     assert extract_av_code(Path("/watch/18+游戏大全-垃圾广告.mp4")) is None
     assert extract_av_code(Path("/watch/normal video.mp4")) is None
+
+
+def test_extract_fc2_av_code_variants():
+    assert extract_av_code(Path("/watch/FC2PPV-4907804.mp4")) == "FC2PPV-4907804"
+    assert extract_av_code(Path("/watch/FC2-PPV-4907804.mp4")) == "FC2-PPV-4907804"
+    assert extract_av_code(Path("/watch/FC2-4907804.mp4")) == "FC2-4907804"
+
+
+def test_normalize_av_code_fc2_variants():
+    assert normalize_av_code("FC2PPV-4907804") == "fc2-4907804"
+    assert normalize_av_code("FC2-PPV-4907804") == "fc2-4907804"
+    assert normalize_av_code("FC2-4907804") == "fc2-4907804"
+
+
+def test_normalize_av_code_strips_numeric_prefix_for_non_fc2():
+    assert normalize_av_code("300Mium-1336") == "mium-1336"
+    assert normalize_av_code("250Idol-456") == "idol-456"
+    assert normalize_av_code("FNS-192") == "fns-192"
 
 
 def test_output_subtitle_path_uses_av_code():
@@ -162,6 +186,8 @@ def test_retry_cancelled_job(tmp_path):
     assert retried.status == "queued"
     assert retried.progress == 0
     assert retried.completed_at == 0.0
+
+
 def test_cannot_retry_non_failed_job(tmp_path):
     db_path = tmp_path / "jobs.sqlite3"
     store = JobStore(db_path)
