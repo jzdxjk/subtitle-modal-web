@@ -613,6 +613,12 @@ function renderHome() {
     html += '</div></div>';
   }
 
+  // 比较新旧 HTML（忽略海报 src），相同则跳过重建避免闪烁
+  const normalize = (s) => s.replace(/<img[^>]*>/g, '<img>').replace(/\s+/g, ' ');
+  if (normalize(gallery.innerHTML) === normalize(html)) {
+    return;
+  }
+
   // 保存各日期行的滚动位置
   const scrollPositions = [];
   gallery.querySelectorAll(".gallery-row").forEach((row) => {
