@@ -22,7 +22,7 @@ class ModalResult:
 class ModalRunHandle:
     """Handle to a running Modal cloud job started via ModalRunner.launch()."""
 
-    def __init__(self, proc: subprocess.Popen, output_dir: Path, formats: list[str], before: set[Path]):
+    def __init__(self, proc: subprocess.Popen, output_dir: Path, formats: list[str], before: dict[Path, float]):
         self._proc = proc
         self._output_dir = output_dir
         self._formats = formats
@@ -98,7 +98,7 @@ class ModalRunHandle:
             raise RuntimeError(f"Modal run failed at stage [{last_stage}]: {detail}")
 
         after = ModalRunner._snapshot(self._output_dir, self._formats)
-        produced = sorted(after - self._before)
+        produced = sorted(p for p, mtime in after.items() if p not in self._before or mtime > self._before[p])
         return ModalResult(output_files=produced, message=self._extract_log_summary(full_stdout))
 
     @staticmethod
@@ -336,8 +336,9 @@ class ModalRunner:
         return bridge
 
     @staticmethod
-    def _snapshot(output_dir: Path, formats: list[str]) -> set[Path]:
+    def _snapshot(output_dir: Path, formats: list[str]) -> dict[Path, float]:
+        """Snapshot output dir: returns {path: mtime} for matching files."""
         suffixes = {"." + fmt.strip().lstrip(".").lower() for fmt in formats}
         if not output_dir.exists():
-            return set()
-        return {path for path in output_dir.rglob("*") if path.is_file() and path.suffix.lower() in suffixes}
+            return {}
+        return {path: path.stat().st_mtime for path in output_dir.rglob("*") if path.is_file() and path.suffix.lower() in suffixes}

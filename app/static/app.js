@@ -469,16 +469,15 @@ let _lastJobsHash = "";
 loadJobs = async function() {
   try {
     const jobs = await api("/api/jobs");
-    const hash = JSON.stringify(jobs.map(j => ({ id: j.id, output_files: j.output_files })));
+    const hash = JSON.stringify(jobs.map(j => [j.id, j.status, j.message, j.progress, j.output_files, j.completed_at]));
     const changed = hash !== _lastJobsHash;
     _lastJobsHash = hash;
+    if (!changed) return;
     allJobs = jobs;
     renderTab(currentTab);
-    if (changed) {
-      const gallery = $("#gallery");
-      if (gallery) gallery.classList.add("no-animate");
-      renderHome();
-    }
+    const gallery = $("#gallery");
+    if (gallery) gallery.classList.add("no-animate");
+    renderHome();
   } catch (e) {
     console.error(e);
   } finally {

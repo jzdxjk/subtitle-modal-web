@@ -163,6 +163,7 @@ class JobRunner:
                 # Skip check (no cloud needed)
                 expected = [output_subtitle_path(media_path, item_output_dir, fmt) for fmt in job.formats]
                 if not job.overwrite and all(path.exists() for path in expected):
+                    logger.info("[skip] job=%s media=%s existing files=%s", job.id, media_path.name, [str(p) for p in expected])
                     output_files.extend(str(path) for path in expected)
                     media_parents.add(media_path.parent)
                     prog = min(int(index / total_media * 95), 99)
@@ -240,7 +241,12 @@ class JobRunner:
                 stage = f"正在整理输出 {index}/{total_media}"
                 final_prog = 90 + (index - 1) * 10 // total_media if total_media > 0 else 90
                 self.store.update_job(job.id, message=f"📦 正在整理输出文件...（{index}/{total_media}）", progress=final_prog)
+                logger.info("[normalize] job=%s media=%s produced=%s expected=%s",
+                            job.id, media_path.name,
+                            [str(p) for p in result.output_files],
+                            [str(p) for p in expected])
                 renamed = self._normalize_outputs(result.output_files, expected)
+                logger.info("[normalize] job=%s renamed=%s", job.id, [str(p) for p in renamed])
                 output_files.extend(str(path) for path in renamed)
                 media_parents.add(media_path.parent)
 
@@ -282,8 +288,11 @@ class JobRunner:
 
             verified_files = [f for f in output_files if Path(f).exists()]
             if len(verified_files) < len(output_files):
-                logger.warning("job %s: %d/%d output files missing at completion",
-                               job.id, len(output_files) - len(verified_files), len(output_files))
+                missing = [f for f in output_files if not Path(f).exists()]
+                logger.warning("job %s: %d/%d output files missing at completion: %s",
+                               job.id, len(output_files) - len(verified_files), len(output_files), missing)
+            else:
+                logger.info("job %s: all %d output files verified: %s", job.id, len(verified_files), verified_files)
             self.store.update_job(job.id, status="done", message=timing_msg,
                                   output_files=verified_files, completed_at=t_end, progress=100)
 
@@ -359,16 +368,19 @@ class JobRunner:
     @staticmethod
     def _normalize_outputs(produced: list[Path], expected: list[Path]) -> list[Path]:
         if not produced:
+            logger.info("[normalize] no produced files, returning []")
             return []
         normalized: list[Path] = []
         # 按后缀分组，每个后缀可能对应多个文件（如脏名 + 纯番号）
         by_suffix: dict[str, list[Path]] = {}
         for path in produced:
             by_suffix.setdefault(path.suffix.lower(), []).append(path)
+        logger.info("[normalize] by_suffix=%s", {k: [str(p) for p in v] for k, v in by_suffix.items()})
 
         for target in expected:
             candidates = by_suffix.get(target.suffix.lower(), [])
             if not candidates:
+                logger.warning("[normalize] no candidates for target %s (suffix %s)", target, target.suffix)
                 continue
             # 优先选文件名已经匹配的，否则取第一个
             source = next(
@@ -378,18 +390,23 @@ class JobRunner:
             candidates.remove(source)
             target.parent.mkdir(parents=True, exist_ok=True)
             if source.resolve() != target.resolve():
+                logger.info("[normalize] moving %s -> %s", source, target)
                 shutil.move(str(source), str(target))
             normalized.append(target)
 
         # 清理未被匹配的脏文件（如 489155.com@START-554-xxxx.srt）
         leftovers = [p for lst in by_suffix.values() for p in lst]
+        if leftovers:
+            logger.info("[normalize] deleting %d leftover(s): %s", len(leftovers), [str(p) for p in leftovers])
         for path in leftovers:
             try:
                 path.unlink()
             except OSError:
                 pass
 
-        return [p for p in (normalized or produced) if p.exists()]
+        result = [p for p in (normalized or produced) if p.exists()]
+        logger.info("[normalize] returning %d file(s): %s", len(result), [str(p) for p in result])
+        return result
 
 
 
