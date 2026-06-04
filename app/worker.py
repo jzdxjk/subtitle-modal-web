@@ -249,11 +249,16 @@ class JobRunner:
             if move_target:
                 stage = "正在移动源文件夹"
                 self.store.update_job(job.id, message=f"📂 正在移动源文件夹到 {move_target}", progress=95)
+                output_parents = {Path(f).parent for f in output_files}
                 for parent in sorted(media_parents):
                     if not parent.exists():
                         continue
                     if parent == self.watch_root:
                         logger.warning("refusing to move watch root: %s", parent)
+                        continue
+                    # 检查输出文件是否在移动范围内，避免删除已生成的字幕
+                    if any(parent in op.parents or parent == op for op in output_parents):
+                        logger.warning("refusing to move parent %s: output files are inside", parent)
                         continue
                     dest = Path(move_target) / parent.name
                     dest.parent.mkdir(parents=True, exist_ok=True)
@@ -275,8 +280,12 @@ class JobRunner:
                 timing_msg += f"（{local_str} / {cloud_str}）"
             # 前端通过 completed_at 时间戳渲染完成时间，消息只保留耗时
 
+            verified_files = [f for f in output_files if Path(f).exists()]
+            if len(verified_files) < len(output_files):
+                logger.warning("job %s: %d/%d output files missing at completion",
+                               job.id, len(output_files) - len(verified_files), len(output_files))
             self.store.update_job(job.id, status="done", message=timing_msg,
-                                  output_files=output_files, completed_at=t_end, progress=100)
+                                  output_files=verified_files, completed_at=t_end, progress=100)
 
             for p in audio_paths:
                 try:
@@ -380,7 +389,7 @@ class JobRunner:
             except OSError:
                 pass
 
-        return normalized or produced
+        return [p for p in (normalized or produced) if p.exists()]
 
 
 

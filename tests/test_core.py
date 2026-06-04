@@ -213,3 +213,60 @@ def test_modal_infer_patch_adds_include_source(tmp_path):
     patched = modal_infer.read_text(encoding="utf-8")
     assert "include_source=True" in patched
 
+
+def test_normalize_outputs_returns_only_existing_files(tmp_path):
+    """验证 _normalize_outputs 不返回已删除的路径"""
+    from app.worker import JobRunner
+
+    # 场景：produced 有 .vtt 文件，但 expected 只要 .srt
+    # cleanup 循环会删除 .vtt 文件，此时不应返回已删除的路径
+    vtt_file = tmp_path / "orphan.vtt"
+    vtt_file.write_text("vtt content", encoding="utf-8")
+
+    result = JobRunner._normalize_outputs(
+        produced=[vtt_file],
+        expected=[tmp_path / "expected.srt"]
+    )
+    # vtt 文件被 cleanup 删除，应返回空列表（不是 [vtt_file]）
+    assert result == []
+    assert not vtt_file.exists()
+
+
+def test_normalize_outputs_moves_and_returns_existing(tmp_path):
+    """验证 _normalize_outputs 正确移动文件并返回存在的路径"""
+    from app.worker import JobRunner
+
+    source = tmp_path / "source.srt"
+    source.write_text("subtitle content", encoding="utf-8")
+    target = tmp_path / "target.srt"
+
+    result = JobRunner._normalize_outputs(
+        produced=[source],
+        expected=[target]
+    )
+
+    assert len(result) == 1
+    assert result[0] == target
+    assert target.exists()
+    assert not source.exists()
+
+
+def test_normalize_outputs_cleans_leftovers(tmp_path):
+    """验证 _normalize_outputs 清理未匹配的脏文件"""
+    from app.worker import JobRunner
+
+    good = tmp_path / "good.srt"
+    good.write_text("good", encoding="utf-8")
+    dirty = tmp_path / "dirty.com@START-554.srt"
+    dirty.write_text("dirty", encoding="utf-8")
+    target = tmp_path / "good.srt"
+
+    result = JobRunner._normalize_outputs(
+        produced=[good, dirty],
+        expected=[target]
+    )
+
+    assert len(result) == 1
+    assert result[0] == target
+    assert not dirty.exists()  # 脏文件应被清理
+
