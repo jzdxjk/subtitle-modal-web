@@ -464,20 +464,26 @@ async function loadPoster(el, av) {
 }
 
 const _origLoadJobs = loadJobs;
-let _lastJobsHash = "";
+let _lastTabHash = "";
+let _lastGalleryHash = "";
 
 loadJobs = async function() {
   try {
     const jobs = await api("/api/jobs");
-    const hash = JSON.stringify(jobs.map(j => [j.id, j.status, j.message, j.progress, j.output_files, j.completed_at]));
-    const changed = hash !== _lastJobsHash;
-    _lastJobsHash = hash;
-    if (!changed) return;
+    const tabHash = JSON.stringify(jobs.map(j => [j.id, j.status, j.message, j.progress, j.output_files, j.completed_at]));
+    const galleryHash = JSON.stringify(jobs.filter(j => j.status === "done").map(j => [j.id, j.output_files, j.completed_at]));
     allJobs = jobs;
-    renderTab(currentTab);
-    const gallery = $("#gallery");
-    if (gallery) gallery.classList.add("no-animate");
-    renderHome();
+
+    if (tabHash !== _lastTabHash) {
+      _lastTabHash = tabHash;
+      renderTab(currentTab);
+    }
+    if (galleryHash !== _lastGalleryHash) {
+      _lastGalleryHash = galleryHash;
+      const gallery = $("#gallery");
+      if (gallery) gallery.classList.add("no-animate");
+      renderHome();
+    }
   } catch (e) {
     console.error(e);
   } finally {
