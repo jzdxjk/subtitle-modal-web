@@ -1,12 +1,27 @@
 ﻿# HANDOFF - subtitle-modal-web
 
-最后更新: 2026-06-04
+最后更新: 2026-06-05
 当前分支: master
 
 ## 一句话现状
-项目主链路可用（NAS/Docker Web + Modal 云端识别 + 任务队列 + 海报墙），当前已完成到 v2.5 的字幕文件丢失修复 + ffmpeg 进度 bug + 前端 XSS 修复；LLM 翻译能力仍处于规划/草案阶段，未在当前代码树完整落地。
+项目主链路可用（NAS/Docker Web + Modal 云端识别 + 任务队列 + 海报墙），v2.6 修复了字幕文件被跨任务误删的根因 + 画廊闪烁 + Modal git fetch 竞态；LLM 翻译能力仍处于规划/草案阶段，未在当前代码树完整落地。
 
 ## 近期已实现（代码已落地）
+- v2.6 跨任务文件误删修复 + 画廊闪烁修复 + Modal 竞态修复
+  - **根因修复**: `_snapshot` 用简单集合差集检测新文件，导致之前任务遗留的 `.srt` 被误判为当前产出，随后被 `_normalize_outputs` 清理删除
+    - 改为 `{path: mtime}` 字典，只检测**新创建或被修改**的文件
+    - 关键文件: app/modal_runner.py
+  - **画廊闪烁修复**: 每 5 秒轮询即使数据无变化也用 `innerHTML` 重建整个画廊 DOM
+    - `loadJobs` 分离 tabHash / galleryHash，运行中任务进度变化不触发画廊重渲染
+    - `renderHome()` 在写入 `innerHTML` 前 normalize 比较新旧 HTML（忽略海报 src），相同则跳过
+    - 关键文件: app/static/app.js
+  - **Modal 竞态修复**: `_ensure_repo` 每次 launch 都 git fetch，修改 `.git/FETCH_HEAD` 导致 Modal 构建失败
+    - git fetch 结果缓存 1 小时
+    - 关键文件: app/modal_runner.py
+  - **调试日志**: worker.py 添加 `[normalize]`/`[skip]`/`[verify]` 日志，方便排查文件丢失
+    - 关键文件: app/worker.py
+  - 版本号: v2.5 → v2.6
+
 - v2.5 字幕文件丢失修复 + P0 bug 修复
   - 修复 `_normalize_outputs` 返回已删除路径的问题（从源头消除 `(missing)` 根因）
   - 任务完成时验证文件存在性，确保数据库只记录真实文件
