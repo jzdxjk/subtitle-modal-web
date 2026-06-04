@@ -469,7 +469,7 @@ let _lastJobsHash = "";
 loadJobs = async function() {
   try {
     const jobs = await api("/api/jobs");
-    const hash = JSON.stringify(jobs.map(j => ({ id: j.id, status: j.status, progress: j.progress, completed_at: j.completed_at })));
+    const hash = JSON.stringify(jobs.map(j => ({ id: j.id, output_files: j.output_files })));
     const changed = hash !== _lastJobsHash;
     _lastJobsHash = hash;
     allJobs = jobs;
