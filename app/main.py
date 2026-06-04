@@ -111,7 +111,7 @@ def test_dbo() -> dict:
 
 @app.get("/api/version")
 def get_version() -> dict:
-    return {"version": "v2.6"}
+    return {"version": "v2.7"}
 
 
 @app.get("/api/config")

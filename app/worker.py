@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 import shutil
 import time
 from datetime import datetime
@@ -219,7 +220,7 @@ class JobRunner:
                     base_prog = 35 + (index - 1) * 55 // total_media if total_media > 0 else 35
 
                     self.store.update_job(job.id, message=f"☁️ 正在上传音频到云端GPU...（{index}/{total_media}）", progress=base_prog)
-                    handle = await asyncio.to_thread(runner.launch, audio_path, item_output_dir, job.formats, config.default_timeout_seconds)
+                    handle = await asyncio.to_thread(runner.launch, audio_path, item_output_dir, job.formats, config.default_timeout_seconds, expected)
 
                     self.store.update_job(job.id, message=f"☁️ 正在提交到云端GPU...（{index}/{total_media}）", progress=base_prog + 5)
                     await asyncio.to_thread(handle.wait_for_submit, 600)
@@ -370,6 +371,17 @@ class JobRunner:
         if not produced:
             logger.info("[normalize] no produced files, returning []")
             return []
+
+        # 过滤掉不属于当前任务的文件：produced 来自共享 /output/ 的 before/after 快照差集，
+        # 可能包含其他并发任务的输出。用哈希后缀剥离后的文件名与 expected 匹配。
+        expected_stems = {t.stem for t in expected}
+        _re_hash = re.compile(r'-[0-9a-f]{8,}$')
+        original_count = len(produced)
+        produced = [p for p in produced if _re_hash.sub('', p.stem) in expected_stems or p.stem in expected_stems]
+        if len(produced) < original_count:
+            logger.info("[normalize] filtered %d -> %d files (excluded other jobs' output)",
+                        original_count, len(produced))
+
         normalized: list[Path] = []
         # 按后缀分组，每个后缀可能对应多个文件（如脏名 + 纯番号）
         by_suffix: dict[str, list[Path]] = {}
@@ -394,15 +406,11 @@ class JobRunner:
                 shutil.move(str(source), str(target))
             normalized.append(target)
 
-        # 清理未被匹配的脏文件（如 489155.com@START-554-xxxx.srt）
+        # 不删除 leftover：produced 列表来自共享 /output/ 目录的 before/after 快照差集，
+        # 可能包含其他并发任务的输出文件，删除会误删别人的文件。
         leftovers = [p for lst in by_suffix.values() for p in lst]
         if leftovers:
-            logger.info("[normalize] deleting %d leftover(s): %s", len(leftovers), [str(p) for p in leftovers])
-        for path in leftovers:
-            try:
-                path.unlink()
-            except OSError:
-                pass
+            logger.info("[normalize] skipping %d leftover(s) (shared dir): %s", len(leftovers), [str(p) for p in leftovers])
 
         result = [p for p in (normalized or produced) if p.exists()]
         logger.info("[normalize] returning %d file(s): %s", len(result), [str(p) for p in result])

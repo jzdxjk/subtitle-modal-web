@@ -4,9 +4,20 @@
 当前分支: master
 
 ## 一句话现状
-项目主链路可用（NAS/Docker Web + Modal 云端识别 + 任务队列 + 海报墙），v2.6 修复了字幕文件被跨任务误删的根因 + 画廊闪烁 + Modal git fetch 竞态；LLM 翻译能力仍处于规划/草案阶段，未在当前代码树完整落地。
+项目主链路可用（NAS/Docker Web + Modal 云端识别 + 任务队列 + 海报墙），v2.7 彻底修复并发任务字幕文件互删问题（快照范围限定 + produced 过滤 + 不删 leftover）；LLM 翻译能力仍处于规划/草案阶段，未在当前代码树完整落地。
 
 ## 近期已实现（代码已落地）
+- v2.7 并发任务字幕文件互删修复（纵深防御）
+  - **根因修复**: `_snapshot` 扫描整个共享 `/output/` 目录，并发任务的 before/after 快照差集会包含其他任务写入的文件，导致 `_normalize_outputs` 误删或覆盖
+    - `_snapshot` 新增 `expected` 参数，只监控当前任务的目标文件，从源头切断其他任务文件的混入
+    - `launch()` → `ModalRunHandle` → `wait()` 全链路传递 `expected`
+    - 关键文件: app/modal_runner.py
+  - **第二层防御**: `_normalize_outputs` 入口过滤 produced 列表，用哈希后缀剥离 + stem 匹配排除不属于当前任务的文件
+    - 关键文件: app/worker.py
+  - **移除危险逻辑**: 删除 leftover 文件 `unlink()` 清理，避免误删其他任务文件
+  - **审计确认**: 全量扫描所有文件删除/覆盖路径，确认除 `_normalize_outputs` 外无其他风险点
+  - 版本号: v2.6 → v2.7
+
 - v2.6 跨任务文件误删修复 + 画廊闪烁修复 + Modal 竞态修复
   - **根因修复**: `_snapshot` 用简单集合差集检测新文件，导致之前任务遗留的 `.srt` 被误判为当前产出，随后被 `_normalize_outputs` 清理删除
     - 改为 `{path: mtime}` 字典，只检测**新创建或被修改**的文件
