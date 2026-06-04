@@ -108,7 +108,7 @@ def _parse_ffmpeg_time(line: str) -> float | None:
     import re
     m = re.search(r'time=(\d+):(\d+):(\d+)\.(\d+)', line)
     if m:
-        return int(m.group(1)) * 3600 + int(m.group(2)) * 60 + int(m.group(3)) + int(m.group(4)) / 10
+        return int(m.group(1)) * 3600 + int(m.group(2)) * 60 + int(m.group(3)) + int(m.group(4)) / 100
     return None
 
 

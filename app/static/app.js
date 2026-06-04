@@ -1,5 +1,15 @@
 const $ = (selector) => document.querySelector(selector);
 
+function escapeHtml(str) {
+  if (!str) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 async function api(path, options = {}) {
   const response = await fetch(path, {
     headers: { "Content-Type": "application/json" },
@@ -159,19 +169,19 @@ function renderJobCard(job) {
   actions.push(`<button class="delete-btn" data-id="${job.id}">删除</button>`);
 
   return `
-    <article class="job ${job.status}">
+    <article class="job ${escapeHtml(job.status)}">
       <div class="job-head">
-        <strong>${statusLabel}</strong>
-        <span>${job.id.slice(0, 8)}</span>
+        <strong>${escapeHtml(statusLabel)}</strong>
+        <span>${escapeHtml(job.id.slice(0, 8))}</span>
         ${timingHtml}
         <span class="head-spacer"></span>
         <div class="job-actions">${actions.join("")}</div>
       </div>
       ${progressHtml}
-      <p class="job-path">${job.input_path}</p>
-      <p class="job-msg">${job.message || ""}</p>
+      <p class="job-path">${escapeHtml(job.input_path)}</p>
+      <p class="job-msg">${escapeHtml(job.message || "")}</p>
       ${completedHtml}
-      <small>${(job.output_files || []).join("\n")}</small>
+      <small>${escapeHtml((job.output_files || []).join("\n"))}</small>
     </article>
   `;
 }
@@ -572,7 +582,7 @@ function renderHome() {
         label = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
       }
     }
-    html += '<div class="gallery-section"><h3 class="gallery-section-header"><span>' + label + '</span><button class="pack-btn" onclick="downloadPack(' + ts + ')">打包(' + jobs.length + ')</button></h3><div class="gallery-row">';
+    html += '<div class="gallery-section"><h3 class="gallery-section-header"><span>' + escapeHtml(label) + '</span><button class="pack-btn" onclick="downloadPack(' + ts + ')">打包(' + jobs.length + ')</button></h3><div class="gallery-row">';
     for (const job of jobs) {
       // 优先从 output_files 提取 av 码（更可靠），否则从 input_path 提取
       let av = "";
@@ -586,13 +596,13 @@ function renderHome() {
       }
       const fmt = ((job.output_files || [])[0] || "").split(".").pop() || "srt";
       html +=
-        '<div class="gallery-card" data-job-id="' + job.id + '" data-av="' + av + '">' +
-        '<div class="gallery-poster"><img alt="' + av + '" loading="lazy" /></div>' +
-        '<div class="gallery-poster-fallback">' + av + '</div>' +
+        '<div class="gallery-card" data-job-id="' + escapeHtml(job.id) + '" data-av="' + escapeHtml(av) + '">' +
+        '<div class="gallery-poster"><img alt="' + escapeHtml(av) + '" loading="lazy" /></div>' +
+        '<div class="gallery-poster-fallback">' + escapeHtml(av) + '</div>' +
         '<div class="gallery-footer">' +
-        '<div class="av">' + av + '</div>' +
-        '<div class="meta">' + fmtDate(job.completed_at) + '</div>' +
-        '<span class="fmt-badge">' + fmt + '</span>' +
+        '<div class="av">' + escapeHtml(av) + '</div>' +
+        '<div class="meta">' + escapeHtml(fmtDate(job.completed_at)) + '</div>' +
+        '<span class="fmt-badge">' + escapeHtml(fmt) + '</span>' +
         '</div></div>';
     }
     html += '</div></div>';
