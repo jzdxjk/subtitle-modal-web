@@ -1,0 +1,23 @@
+services:
+  subtitle-web:
+    image: jzdxjk/subtitle-modal-web:latest
+    container_name: subtitle-modal-web
+    restart: unless-stopped
+    ports:
+      - "9198:8898"                     # 外部端口:容器端口
+    volumes:
+      - /your/media/path:/mnt/115       # 媒体库路径（放置待翻译视频的文件夹）
+      - /your/output/path:/output       # 字幕输出路径（翻译结果存放位置）
+      - ./cache:/cache                  # 缓存持久化（海报缓存等）
+      - ./config:/config                # 配置持久化（DBO地址、Modal密钥等）
+    environment:
+      MODAL_TOKEN_ID: "ak-YOUR_TOKEN_ID"               # Modal Token ID（必填）
+      MODAL_TOKEN_SECRET: "as-YOUR_TOKEN_SECRET"         # Modal Token Secret（必填）
+      HF_TOKEN: "hf-YOUR_HF_TOKEN"                       # HuggingFace Token（可选，留空即可）
+      APP_PORT: "8898"                                    # 容器内端口（勿改）
+      DEFAULT_GPU: "T4"                                   # 默认GPU型号（T4 / A100 等）
+      DEFAULT_MODEL: "chickenrice"                        # 默认模型名称
+      REPO_BRANCH: "v1.7"                                 # 推理仓库分支
+      DEFAULT_FORMATS: "srt"                               # 默认输出格式
+      WATCH_DIR: "/mnt/115/你的监听文件夹"                   # 自动监听目录（放视频进去自动翻译）
+      DEFAULT_MOVE_TARGET_DIR: "/mnt/115/翻译后移到这"       # 翻译完成后源文件移动目标（留空则不移）
