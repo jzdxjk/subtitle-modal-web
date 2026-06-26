@@ -1,0 +1,25 @@
+name: subtitle-web-temp
+
+services:
+  subtitle-web-temp:
+    build: .
+    image: subtitle-modal-web:latest
+    restart: unless-stopped
+    ports:
+      - "9199:8898"
+    volumes:
+      - ./temp-second-instance/media:/mnt/media
+      - ./temp-second-instance/output:/output
+      - ./temp-second-instance/cache:/cache
+      - ./temp-second-instance/config:/config
+    environment:
+      MODAL_TOKEN_ID: ${MODAL_TOKEN_ID}
+      MODAL_TOKEN_SECRET: ${MODAL_TOKEN_SECRET}
+      HF_TOKEN: ${HF_TOKEN:-}
+      APP_PORT: "8898"
+      DEFAULT_GPU: "T4"
+      DEFAULT_MODEL: "chickenrice"
+      REPO_BRANCH: "v1.7"
+      DEFAULT_FORMATS: "srt"
+      WATCH_DIR: "/mnt/media"
+      DEFAULT_MOVE_TARGET_DIR: ""

@@ -152,8 +152,8 @@ body {
 .btn-danger:hover { background: #dc2626; }
 .test-btn {
   background: var(--accent); color: #fff; border: 0; border-radius: 6px;
-  padding: 4px 10px; font-size: 12px; font-weight: 600; cursor: pointer;
-  margin-left: 8px; min-height: auto; transition: all .15s;
+  padding: 10px 18px; font-size: 14px; font-weight: 600; cursor: pointer;
+  margin-left: 0; min-height: 40px; transition: all .15s;
 }
 .test-btn:disabled { opacity: .5; cursor: not-allowed; }
 
@@ -188,6 +188,43 @@ body {
   padding: 60px 0;
   color: var(--text-dim);
   font-size: 14px;
+}
+
+.gallery-pagination {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  padding: 24px 0;
+}
+
+.gallery-pagination button {
+  min-width: 36px;
+  height: 36px;
+  padding: 0 10px;
+  background: var(--surface-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background .15s, border-color .15s;
+}
+
+.gallery-pagination button:hover:not(:disabled) {
+  background: var(--surface-3);
+  border-color: var(--accent-green);
+}
+
+.gallery-pagination button.active {
+  background: var(--accent-green);
+  color: #fff;
+  border-color: var(--accent-green);
+  cursor: default;
+}
+
+.gallery-pagination button:disabled:not(.active) {
+  opacity: .35;
+  cursor: default;
 }
 
 /* Section 日期标题 */
@@ -363,6 +400,47 @@ body {
 label { display: block; color: var(--text-muted); font-size: 13px; margin: 14px 0; }
 label:first-child { margin-top: 0; }
 
+.config-label-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-start;
+  gap: 8px;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.config-label-row small {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.45;
+  white-space: normal;
+}
+
+.config-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 16px 0 0;
+}
+
+.config-actions .test-btn,
+.config-actions .config-save-btn {
+  min-height: 40px;
+  padding: 10px 18px;
+  border-radius: var(--radius);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.2;
+  margin: 0;
+}
+
+.config-actions .config-save-btn {
+  margin-left: auto;
+}
+
 input, select {
   width: 100%; margin-top: 5px; padding: 10px 12px; border-radius: var(--radius);
   border: 1px solid var(--border); background: var(--bg);
@@ -535,6 +613,7 @@ pre {
   .view-header h1 { font-size: 18px; }
   .view-header { margin-bottom: 14px; padding-bottom: 12px; }
   .card { padding: 16px; }
+  .config-label-row { flex-wrap: wrap; }
   .job { padding: 12px; }
   input { padding: 12px; font-size: 16px; }
   button { min-height: 44px; }

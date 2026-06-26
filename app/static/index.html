@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/styles.css?v=71" />
+  <link rel="stylesheet" href="/static/styles.css?v=74" />
 </head>
 <body>
   <!-- Splash -->
@@ -117,6 +117,13 @@
         <label>模型<input name="default_model" value="chickenrice" /></label>
         <label>默认输出目录<input name="default_output_dir" value="/output" /></label>
         <label>默认格式<input name="default_formats" value="srt" /></label>
+        <label>
+          <span class="config-label-row">
+            <span>文件大小过滤(MB)</span>
+            <small>小于此大小的文件将被忽略，填 0 可关闭</small>
+          </span>
+          <input name="min_file_size_mb" type="number" value="100" min="0" />
+        </label>
         <label>默认视频移动目录<input name="default_move_target_dir" placeholder="翻译完成后移走源文件夹，留空则不移" /></label>
         <label class="check"><input name="enable_watchdog" type="checkbox" /> 启用目录监控</label>
         <label>监控轮询间隔（秒）<input name="watchdog_interval_seconds" type="number" value="60" min="10" max="3600" /></label>
@@ -124,9 +131,10 @@
         <label>超时秒数<input name="default_timeout_seconds" type="number" value="7200" /></label>
         <label>DBO API 地址<input name="dbo_api_url" placeholder="" /></label>
         <label>DBO API 密钥<input name="dbo_api_key" placeholder="" /></label>
-        <label><button type="button" id="test-dbo-btn" class="test-btn">测试 DBO 连通性</button></label>
-
-        <button type="submit">保存配置</button>
+        <div class="config-actions">
+          <button type="button" id="test-dbo-btn" class="test-btn">测试 DBO 连通性</button>
+          <button type="submit" class="config-save-btn">保存配置</button>
+        </div>
         <small style="display:block;margin-top:8px;color:var(--text-dim);font-size:11px;">⚠ 请勿同时在多个标签页保存配置，后保存的会覆盖前者。</small>
         <pre id="config-status"></pre>
       </form>
@@ -159,7 +167,7 @@
     </button>
   </nav>
 
-  <script src="/static/app.js?v=71"></script>
+  <script src="/static/app.js?v=74"></script>
   <script>if("serviceWorker" in navigator){navigator.serviceWorker.register("/static/sw.js")}</script>
 </body>
 </html>

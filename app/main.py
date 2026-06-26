@@ -41,6 +41,7 @@ class ConfigPayload(BaseModel):
     default_output_dir: str | None = None
     default_cache_dir: str | None = None
     default_formats: str | None = None
+    min_file_size_mb: int | None = Field(default=None, ge=0)
     default_timeout_seconds: int | None = Field(default=None, ge=60, le=86400)
     default_move_target_dir: str | None = None
     enable_watchdog: bool | None = None
@@ -111,7 +112,7 @@ def test_dbo() -> dict:
 
 @app.get("/api/version")
 def get_version() -> dict:
-    return {"version": "v2.7"}
+    return {"version": "v2.10"}
 
 
 @app.get("/api/config")
@@ -244,7 +245,8 @@ def pack_jobs(date: str):
 
 # 允许代理的图片 CDN 域名白名单
 _ALLOWED_IMAGE_DOMAINS = {
-    "tp.cmastd.com", "pics.dmm.co.jp", "image.mgstage.com",
+    "tp.cmastd.com", "tp.spfcas.com",
+    "pics.dmm.co.jp", "image.mgstage.com",
     "pics.r18.com", "imgr18.shemalejapanhardcore.com",
 }
 

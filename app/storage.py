@@ -38,7 +38,7 @@ class JobStore:
         date_end = date_start + 86400
         with self._connect() as conn:
             rows = conn.execute(
-                "SELECT * FROM jobs WHERE status='done' AND completed_at >= ? AND completed_at < ?",
+                "SELECT * FROM jobs WHERE status='done' AND completed_at >= ? AND completed_at < ? AND json_array_length(output_files) > 0",
                 (date_start, date_end)
             ).fetchall()
         return [self._row_to_job(r) for r in rows]
@@ -147,9 +147,12 @@ class JobStore:
             row = conn.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
         return self._row_to_job(row) if row else None
 
-    def list_jobs(self, limit: int = 100) -> list[Job]:
+    def list_jobs(self, limit: int = 0) -> list[Job]:
         with self._connect() as conn:
-            rows = conn.execute("SELECT * FROM jobs ORDER BY created_at DESC LIMIT ?", (limit,)).fetchall()
+            if limit > 0:
+                rows = conn.execute("SELECT * FROM jobs ORDER BY created_at DESC LIMIT ?", (limit,)).fetchall()
+            else:
+                rows = conn.execute("SELECT * FROM jobs ORDER BY created_at DESC").fetchall()
         return [self._row_to_job(row) for row in rows]
 
     def next_queued(self) -> Job | None:

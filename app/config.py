@@ -17,6 +17,7 @@ class AppConfig:
     default_output_dir: str = "/output"
     default_cache_dir: str = "/cache"
     default_formats: str = "srt"
+    min_file_size_mb: int = 100
     default_timeout_seconds: int = 7200
     default_move_target_dir: str = ""
     enable_watchdog: bool = False
@@ -38,6 +39,7 @@ class AppConfig:
             "DEFAULT_OUTPUT_DIR": "default_output_dir",
             "DEFAULT_CACHE_DIR": "default_cache_dir",
             "DEFAULT_FORMATS": "default_formats",
+            "MIN_FILE_SIZE_MB": "min_file_size_mb",
             "DEFAULT_TIMEOUT_SECONDS": "default_timeout_seconds",
             "DEFAULT_MOVE_TARGET_DIR": "default_move_target_dir",
             "ENABLE_WATCHDOG": "enable_watchdog",
@@ -50,7 +52,7 @@ class AppConfig:
             value = os.getenv(env_name)
             if not value:
                 continue
-            if field_name in ("default_timeout_seconds", "watchdog_interval_seconds", "max_workers"):
+            if field_name in ("min_file_size_mb", "default_timeout_seconds", "watchdog_interval_seconds", "max_workers"):
                 data[field_name] = int(value)
             elif field_name == "enable_watchdog":
                 data[field_name] = value.lower() in ("1", "true", "yes")

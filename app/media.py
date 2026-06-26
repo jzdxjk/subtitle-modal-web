@@ -20,6 +20,13 @@ def is_audio_file(path: Path) -> bool:
     return path.suffix.lower() in AUDIO_EXTENSIONS
 
 
+def meets_min_file_size(path: Path, min_file_size_mb: int = 0) -> bool:
+    if min_file_size_mb <= 0:
+        return True
+    min_file_size_bytes = min_file_size_mb * 1024 * 1024
+    return path.stat().st_size >= min_file_size_bytes
+
+
 def extract_av_code(path: Path) -> str | None:
     """从文件名中提取 AV 番号，如 FNS-192、EBWH-309，找不到返回 None"""
     match = AV_PATTERN.search(path.stem)
@@ -56,16 +63,36 @@ def normalize_av_code(code: str) -> str:
     return f"{clean_prefix}-{number}"
 
 
-def discover_media(input_path: Path) -> list[Path]:
+def discover_media(input_path: Path, min_file_size_mb: int = 0) -> list[Path]:
     """发现媒体文件，只保留文件名包含 AV 番号的"""
     if input_path.is_file():
-        return [input_path] if (is_video_file(input_path) or is_audio_file(input_path)) and extract_av_code(input_path) else []
+        return [input_path] if (is_video_file(input_path) or is_audio_file(input_path)) and extract_av_code(input_path) and meets_min_file_size(input_path, min_file_size_mb) else []
     if not input_path.is_dir():
         return []
     return sorted(
         path for path in input_path.rglob("*")
-        if path.is_file() and (is_video_file(path) or is_audio_file(path)) and extract_av_code(path) is not None
+        if path.is_file() and (is_video_file(path) or is_audio_file(path)) and extract_av_code(path) is not None and meets_min_file_size(path, min_file_size_mb)
     )
+
+
+def list_small_av_files(input_path: Path, min_file_size_mb: int = 0) -> list[Path]:
+    """Return AV media files that are recognized but below the minimum size threshold."""
+    if min_file_size_mb <= 0:
+        return []
+
+    def _is_small_av_file(path: Path) -> bool:
+        return (
+            path.is_file()
+            and (is_video_file(path) or is_audio_file(path))
+            and extract_av_code(path) is not None
+            and not meets_min_file_size(path, min_file_size_mb)
+        )
+
+    if input_path.is_file():
+        return [input_path] if _is_small_av_file(input_path) else []
+    if not input_path.is_dir():
+        return []
+    return sorted(path for path in input_path.rglob("*") if _is_small_av_file(path))
 
 
 def output_subtitle_path(media_path: Path, output_root: Path, fmt: str) -> Path:
@@ -118,6 +145,8 @@ def prepare_audio(media_path: Path, cache_dir: Path, on_progress=None, is_cancel
     on_progress: Callable[[int], None] | None — 进度回调（0-100）
     is_cancelled_fn: Callable[[], bool] | None — 取消检查，返回 True 时杀 ffmpeg
     """
+    if not media_path.exists():
+        raise RuntimeError(f"input path does not exist in container: {media_path}")
     if is_audio_file(media_path):
         return media_path
     audio_path = cache_audio_path(media_path, cache_dir)
@@ -155,6 +184,8 @@ def prepare_audio(media_path: Path, cache_dir: Path, on_progress=None, is_cancel
 
     if proc.returncode != 0:
         stderr = proc.stderr.read() if proc.stderr else ''
+        if not stderr:
+            stderr = f"input path may be unreadable or missing: {media_path}"
         raise RuntimeError(f"ffmpeg failed: {stderr[-2000:]}")
     if not audio_path.exists() or audio_path.stat().st_size == 0:
         raise RuntimeError("ffmpeg finished but audio file was not created")

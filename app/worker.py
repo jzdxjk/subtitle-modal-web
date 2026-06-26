@@ -1,15 +1,24 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
-import re
 import shutil
 import time
+from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
 
 from app.config import ConfigStore
-from app.media import discover_media, extract_av_code, output_subtitle_path, prepare_audio
+from app.media import (
+    AUDIO_EXTENSIONS,
+    VIDEO_EXTENSIONS,
+    discover_media,
+    extract_av_code,
+    list_small_av_files,
+    output_subtitle_path,
+    prepare_audio,
+)
 
 
 def _output_exists_for_media(media_path: Path, output_dir: Path, formats: list[str]) -> bool:
@@ -23,12 +32,95 @@ from app.storage import Job, JobStore
 logger = logging.getLogger("subtitle.worker")
 
 
+@dataclass
+class SmallFileSnapshot:
+    path: str
+    size: int
+    mtime: float
+
+
+class SmallFileIgnoreStore:
+    def __init__(self, path: Path):
+        self.path = path
+        self._data = self._load()
+
+    def should_skip(self, entry: Path) -> bool:
+        record = self._data.get(str(entry))
+        if not record:
+            return False
+
+        current_files = self._current_files(entry)
+        if current_files is None:
+            self.forget(entry)
+            return False
+
+        current = [asdict(item) for item in self._snapshot_files(current_files)]
+        if record.get("files") != current:
+            self.forget(entry)
+            return False
+        return True
+
+    def remember(self, entry: Path, files: list[Path]) -> None:
+        self._data[str(entry)] = {
+            "files": [asdict(item) for item in self._snapshot_files(files)],
+            "updated_at": time.time(),
+        }
+        self._save()
+
+    def forget(self, entry: Path) -> None:
+        if self._data.pop(str(entry), None) is not None:
+            self._save()
+
+    def _current_files(self, entry: Path) -> list[Path] | None:
+        if entry.is_file():
+            if not entry.exists():
+                return None
+            if extract_av_code(entry) is None:
+                return None
+            if entry.suffix.lower() not in VIDEO_EXTENSIONS | AUDIO_EXTENSIONS:
+                return None
+            return [entry]
+
+        if not entry.exists():
+            return None
+
+        files = sorted(
+            path for path in entry.rglob("*")
+            if path.is_file()
+            and extract_av_code(path) is not None
+            and path.suffix.lower() in VIDEO_EXTENSIONS | AUDIO_EXTENSIONS
+        )
+        return files or None
+
+    @staticmethod
+    def _snapshot_files(files: list[Path]) -> list[SmallFileSnapshot]:
+        snapshots: list[SmallFileSnapshot] = []
+        for file_path in sorted(files):
+            stat = file_path.stat()
+            snapshots.append(SmallFileSnapshot(path=str(file_path), size=stat.st_size, mtime=stat.st_mtime))
+        return snapshots
+
+    def _load(self) -> dict[str, dict]:
+        if not self.path.exists():
+            return {}
+        try:
+            raw = json.loads(self.path.read_text(encoding="utf-8"))
+            return raw if isinstance(raw, dict) else {}
+        except (OSError, json.JSONDecodeError):
+            return {}
+
+    def _save(self) -> None:
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.path.write_text(json.dumps(self._data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
 class JobRunner:
     def __init__(self, store: JobStore, config_store: ConfigStore, watch_root: Path, cache_dir: Path):
         self.store = store
         self.config_store = config_store
         self.watch_root = watch_root
         self.cache_dir = cache_dir
+        self.small_file_ignore_store = SmallFileIgnoreStore(self.config_store.path.parent / "watchdog_ignored_small_files.json")
         self._running = False
 
     async def start(self) -> None:
@@ -145,7 +237,7 @@ class JobRunner:
             self.store.update_job(job.id, progress=0)
 
             config = self.config_store.load()
-            media_files = discover_media(Path(job.input_path))
+            media_files = discover_media(Path(job.input_path), min_file_size_mb=config.min_file_size_mb)
             if not media_files:
                 raise RuntimeError("未找到支持的媒体文件")
 
@@ -220,7 +312,7 @@ class JobRunner:
                     base_prog = 35 + (index - 1) * 55 // total_media if total_media > 0 else 35
 
                     self.store.update_job(job.id, message=f"☁️ 正在上传音频到云端GPU...（{index}/{total_media}）", progress=base_prog)
-                    handle = await asyncio.to_thread(runner.launch, audio_path, item_output_dir, job.formats, config.default_timeout_seconds, expected)
+                    handle = await asyncio.to_thread(runner.launch, audio_path, item_output_dir, job.formats, config.default_timeout_seconds)
 
                     self.store.update_job(job.id, message=f"☁️ 正在提交到云端GPU...（{index}/{total_media}）", progress=base_prog + 5)
                     await asyncio.to_thread(handle.wait_for_submit, 600)
@@ -314,9 +406,14 @@ class JobRunner:
 
             try:
                 candidates: set[Path] = set()
+                min_file_size_mb = config.min_file_size_mb
                 for entry in sorted(self.watch_root.iterdir()):
-                    media = discover_media(entry)
+                    if self.small_file_ignore_store.should_skip(entry):
+                        continue
+
+                    media = discover_media(entry, min_file_size_mb=min_file_size_mb)
                     if media:
+                        self.small_file_ignore_store.forget(entry)
                         parent = media[0].parent
                         if parent == self.watch_root:
                             # 根目录直放文件：创建子目录，移入文件，统一为子目录模式
@@ -333,6 +430,13 @@ class JobRunner:
                             candidates.add(sub_dir)
                         else:
                             candidates.add(parent)
+                        continue
+
+                    small_files = list_small_av_files(entry, min_file_size_mb=min_file_size_mb)
+                    if small_files:
+                        self.small_file_ignore_store.remember(entry, small_files)
+                    else:
+                        self.small_file_ignore_store.forget(entry)
 
                 for path in sorted(candidates):
                     formats = [f.strip() for f in config.default_formats.split(",") if f.strip()]
@@ -344,7 +448,7 @@ class JobRunner:
                         continue
                     if self.store.has_any_failed_job_for_path(input_path):
                         continue  # 已有失败任务，不自动重试
-                    media_files = discover_media(path)
+                    media_files = discover_media(path, min_file_size_mb=min_file_size_mb)
                     if all(
                         _output_exists_for_media(m, output_dir, formats)
                         for m in media_files
@@ -373,14 +477,16 @@ class JobRunner:
             return []
 
         # 过滤掉不属于当前任务的文件：produced 来自共享 /output/ 的 before/after 快照差集，
-        # 可能包含其他并发任务的输出。用哈希后缀剥离后的文件名与 expected 匹配。
-        expected_stems = {t.stem for t in expected}
-        _re_hash = re.compile(r'-[0-9a-f]{8,}$')
-        original_count = len(produced)
-        produced = [p for p in produced if _re_hash.sub('', p.stem) in expected_stems or p.stem in expected_stems]
-        if len(produced) < original_count:
-            logger.info("[normalize] filtered %d -> %d files (excluded other jobs' output)",
-                        original_count, len(produced))
+        # 可能包含其他并发任务的输出。用 AV 番号匹配而非文件名精确匹配。
+        from app.media import extract_av_code
+        expected_codes = {extract_av_code(t) for t in expected}
+        expected_codes.discard(None)
+        if expected_codes:
+            original_count = len(produced)
+            produced = [p for p in produced if extract_av_code(p) in expected_codes]
+            if len(produced) < original_count:
+                logger.info("[normalize] filtered %d -> %d files (excluded other jobs' output)",
+                            original_count, len(produced))
 
         normalized: list[Path] = []
         # 按后缀分组，每个后缀可能对应多个文件（如脏名 + 纯番号）
@@ -406,15 +512,17 @@ class JobRunner:
                 shutil.move(str(source), str(target))
             normalized.append(target)
 
-        # 不删除 leftover：produced 列表来自共享 /output/ 目录的 before/after 快照差集，
-        # 可能包含其他并发任务的输出文件，删除会误删别人的文件。
+        # 清理未被匹配的脏文件（如 489155.com@START-554-xxxx.srt）
+        # 经过 AV 番号过滤后，leftovers 只包含属于当前任务的多余文件，可安全删除。
         leftovers = [p for lst in by_suffix.values() for p in lst]
         if leftovers:
-            logger.info("[normalize] skipping %d leftover(s) (shared dir): %s", len(leftovers), [str(p) for p in leftovers])
+            logger.info("[normalize] deleting %d leftover(s): %s", len(leftovers), [str(p) for p in leftovers])
+        for path in leftovers:
+            try:
+                path.unlink()
+            except OSError:
+                pass
 
         result = [p for p in (normalized or produced) if p.exists()]
         logger.info("[normalize] returning %d file(s): %s", len(result), [str(p) for p in result])
         return result
-
-
-

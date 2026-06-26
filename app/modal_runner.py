@@ -22,13 +22,11 @@ class ModalResult:
 class ModalRunHandle:
     """Handle to a running Modal cloud job started via ModalRunner.launch()."""
 
-    def __init__(self, proc: subprocess.Popen, output_dir: Path, formats: list[str], before: dict[Path, float],
-                 expected: list[Path] | None = None):
+    def __init__(self, proc: subprocess.Popen, output_dir: Path, formats: list[str], before: dict[Path, float]):
         self._proc = proc
         self._output_dir = output_dir
         self._formats = formats
         self._before = before
-        self._expected = expected
         self._submitted_lines: list[str] = []
         self._submitted = False
 
@@ -99,7 +97,7 @@ class ModalRunHandle:
                 detail += f"\n--- stderr tail ---\n{stderr_tail.strip()}"
             raise RuntimeError(f"Modal run failed at stage [{last_stage}]: {detail}")
 
-        after = ModalRunner._snapshot(self._output_dir, self._formats, self._expected)
+        after = ModalRunner._snapshot(self._output_dir, self._formats)
         produced = sorted(p for p, mtime in after.items() if p not in self._before or mtime > self._before[p])
         return ModalResult(output_files=produced, message=self._extract_log_summary(full_stdout))
 
@@ -158,8 +156,7 @@ class ModalRunner:
         handle.wait_for_submit()
         return handle.wait(timeout_seconds=(timeout_seconds or self.config.default_timeout_seconds) + 300)
 
-    def launch(self, audio_path: Path, output_dir: Path, formats: list[str], timeout_seconds: int | None = None,
-               expected: list[Path] | None = None) -> ModalRunHandle:
+    def launch(self, audio_path: Path, output_dir: Path, formats: list[str], timeout_seconds: int | None = None) -> ModalRunHandle:
         """Launch Modal bridge script, return handle after local prep work is done."""
         if not self.config.modal_token_id or not self.config.modal_token_secret:
             raise RuntimeError("Modal token is missing. Set MODAL_TOKEN_ID and MODAL_TOKEN_SECRET.")
@@ -205,7 +202,7 @@ class ModalRunner:
             text=True,
             bufsize=1,
         )
-        return ModalRunHandle(proc, output_dir, formats, before, expected)
+        return ModalRunHandle(proc, output_dir, formats, before)
 
     def _ensure_repo(self, work_dir: Path) -> None:
         if (work_dir / ".git").exists():
@@ -345,12 +342,8 @@ class ModalRunner:
         return bridge
 
     @staticmethod
-    def _snapshot(output_dir: Path, formats: list[str], expected: list[Path] | None = None) -> dict[Path, float]:
-        """Snapshot output dir: returns {path: mtime} for matching files.
-        If expected is given, only track those specific files (scoped snapshot).
-        """
-        if expected is not None:
-            return {p: p.stat().st_mtime if p.exists() else 0.0 for p in expected}
+    def _snapshot(output_dir: Path, formats: list[str]) -> dict[Path, float]:
+        """Snapshot output dir: returns {path: mtime} for matching files."""
         suffixes = {"." + fmt.strip().lstrip(".").lower() for fmt in formats}
         if not output_dir.exists():
             return {}

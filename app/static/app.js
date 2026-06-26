@@ -274,6 +274,7 @@ function switchTab(tab) {
 $("#config-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   const data = formData(event.target);
+  data.min_file_size_mb = Number(data.min_file_size_mb || 0);
   data.default_timeout_seconds = Number(data.default_timeout_seconds || 7200);
   data.watchdog_interval_seconds = Number(data.watchdog_interval_seconds || 60);
   data.max_workers = Number(data.max_workers || 1);
@@ -466,12 +467,17 @@ async function loadPoster(el, av) {
 const _origLoadJobs = loadJobs;
 let _lastTabHash = "";
 let _lastGalleryHash = "";
+let galleryPageIndex = 0;
 
 loadJobs = async function() {
   try {
     const jobs = await api("/api/jobs");
-    const tabHash = JSON.stringify(jobs.map(j => [j.id, j.status, j.message, j.progress, j.output_files, j.completed_at]));
-    const galleryHash = JSON.stringify(jobs.filter(j => j.status === "done").map(j => [j.id, j.output_files, j.completed_at]));
+    const statusCounts = {};
+    let progressSum = 0;
+    for (const j of jobs) { statusCounts[j.status] = (statusCounts[j.status] || 0) + 1; progressSum += j.progress || 0; }
+    const tabHash = JSON.stringify(statusCounts) + "|" + progressSum + "|" + (jobs[0]?.id || "");
+    const doneJobs = jobs.filter(j => j.status === "done" && (j.output_files || []).length > 0);
+    const galleryHash = doneJobs.length + "|" + (doneJobs[0]?.id || "") + "|" + (doneJobs[0]?.completed_at || "");
     allJobs = jobs;
 
     if (tabHash !== _lastTabHash) {
@@ -554,7 +560,7 @@ function renderHome() {
     if (av) existingCards.set(av, el);
   });
 
-  // 按日期分组
+  // 按日期分组（全量）
   const nowTs = Date.now();
   const today = new Date(new Date().toLocaleDateString("zh-CN", { timeZone: "Asia/Shanghai" })).getTime();
   const yesterday = today - 86400000;
@@ -569,9 +575,17 @@ function renderHome() {
     groups.get(key).push(job);
   });
 
+  // 按天数分页：每页 10 个有海报的日期
+  const allDates = [...groups.keys()].sort((a, b) => b - a);
+  const daysPerPage = 10;
+  const totalPages = Math.ceil(allDates.length / daysPerPage);
+  if (galleryPageIndex >= totalPages) galleryPageIndex = Math.max(0, totalPages - 1);
+  const pagedDates = allDates.slice(galleryPageIndex * daysPerPage, (galleryPageIndex + 1) * daysPerPage);
+
   // 构建 HTML
   let html = "";
-  for (const [ts, jobs] of groups) {
+  for (const ts of pagedDates) {
+    const jobs = groups.get(ts);
     // 日期标题
     let label;
     if (ts === today) {
@@ -587,7 +601,8 @@ function renderHome() {
         label = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
       }
     }
-    html += '<div class="gallery-section"><h3 class="gallery-section-header"><span>' + escapeHtml(label) + '</span><button class="pack-btn" onclick="downloadPack(' + ts + ')">打包(' + jobs.length + ')</button></h3><div class="gallery-row">';
+    const fileCount = jobs.reduce((n, j) => n + (j.output_files || []).length, 0);
+    html += '<div class="gallery-section"><h3 class="gallery-section-header"><span>' + escapeHtml(label) + '</span><button class="pack-btn" onclick="downloadPack(' + ts + ')">打包(' + fileCount + ')</button></h3><div class="gallery-row">';
     for (const job of jobs) {
       // 优先从 output_files 提取 av 码（更可靠），否则从 input_path 提取
       let av = "";
@@ -613,10 +628,24 @@ function renderHome() {
     html += '</div></div>';
   }
 
-  // 比较新旧 HTML（忽略海报 src），相同则跳过重建避免闪烁
-  const normalize = (s) => s.replace(/<img[^>]*>/g, '<img>').replace(/\s+/g, ' ');
-  if (normalize(gallery.innerHTML) === normalize(html)) {
-    return;
+  // 页码导航
+  if (totalPages > 1) {
+    let pag = '<div class="gallery-pagination">';
+    pag += '<button' + (galleryPageIndex === 0 ? ' disabled' : ' onclick="galleryPageIndex=0;renderHome();"') + '>«</button>';
+    pag += '<button' + (galleryPageIndex === 0 ? ' disabled' : ' onclick="galleryPageIndex--;renderHome();"') + '>‹</button>';
+    const start = Math.max(0, galleryPageIndex - 1);
+    const end = Math.min(totalPages, galleryPageIndex + 2);
+    for (let i = start; i < end; i++) {
+      if (i === galleryPageIndex) {
+        pag += '<button class="active" disabled>' + (i + 1) + '</button>';
+      } else {
+        pag += '<button onclick="galleryPageIndex=' + i + ';renderHome();">' + (i + 1) + '</button>';
+      }
+    }
+    pag += '<button' + (galleryPageIndex >= totalPages - 1 ? ' disabled' : ' onclick="galleryPageIndex++;renderHome();"') + '>›</button>';
+    pag += '<button' + (galleryPageIndex >= totalPages - 1 ? ' disabled' : ' onclick="galleryPageIndex=' + (totalPages - 1) + ';renderHome();"') + '>»</button>';
+    pag += '</div>';
+    html += pag;
   }
 
   // 保存各日期行的滚动位置
@@ -689,5 +718,4 @@ if (saved) setTheme(saved);
 
 document.getElementById("theme-toggle")?.addEventListener("click", toggleTheme);
 document.getElementById("theme-toggle-mobile")?.addEventListener("click", toggleTheme);
-
 
