@@ -55,6 +55,7 @@ class ConfigPayload(BaseModel):
     openai_api_key: str | None = None
     openai_model: str | None = None
     transcribe_prompt: str | None = None
+    repo_branch: str | None = None
 
 
 class JobPayload(BaseModel):
