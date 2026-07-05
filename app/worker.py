@@ -242,7 +242,7 @@ class JobRunner:
 
             config = self.config_store.load()
             is_transcribe = config.enable_transcribe and all([
-                config.openai_api_url, config.openai_api_key, config.openai_model
+                config.openai_api_url, config.openai_api_key, config.openai_model, config.transcribe_model
             ])
             media_files = discover_media(Path(job.input_path), min_file_size_mb=config.min_file_size_mb)
             if not media_files:

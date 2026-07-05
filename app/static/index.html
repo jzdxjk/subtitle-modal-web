@@ -155,7 +155,7 @@
           <input name="enable_transcribe" type="checkbox" /> 启用日文转录 + LLM 翻译
           <small style="display:block;color:var(--text-dim);margin-top:4px">勾选后，云端使用下方配置的 Whisper 转录模型做日文转录，再用 LLM 翻译为中文。日文原文保存在 /ja_subs/ 目录。</small>
         </label>
-        <label>Whisper 转录模型<input name="transcribe_model" value="jim-ja-transcribe" placeholder="jim-ja-transcribe / chickenrice 等" /></label>
+        <label>Whisper 转录模型<input name="transcribe_model" placeholder="例如 jim-ja-transcribe（留空则不启用）" /></label>
         <label>OpenAI API URL<input name="openai_api_url" placeholder="https://api.openai.com/v1" /></label>
         <label>OpenAI API Key<input name="openai_api_key" type="password" placeholder="sk-..." /></label>
         <label>
