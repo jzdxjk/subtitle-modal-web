@@ -507,10 +507,30 @@ pre {
 
 /* ═══ PROGRESS ═══ */
 .progress-bar { height: 5px; background: #21262d; border-radius: 99px; margin: 8px 0 6px; overflow: hidden; }
-.progress-fill { height: 100%; border-radius: 99px; transition: width .6s ease; }
+.progress-fill { height: 100%; border-radius: 99px; transition: width .6s ease; position: relative; }
 .progress-fill.progress-local { background: linear-gradient(to right, #d29922, #e3b341); }
 .progress-fill.progress-cloud { background: linear-gradient(to right, #58a6ff, #79c0ff); }
 .progress-fill.progress-final { background: linear-gradient(to right, #2ea043, #3fb950); }
+
+@keyframes progress-shimmer {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
+}
+.job.running .progress-fill::after,
+.job.cancelling .progress-fill::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent 40%, rgba(255,255,255,.18) 50%, transparent 60%);
+  border-radius: 99px;
+  animation: progress-shimmer 2s ease-in-out infinite;
+}
+.job.running .progress-fill {
+  box-shadow: 0 0 6px rgba(88,166,255,.3);
+}
+.job.cancelling .progress-fill {
+  box-shadow: 0 0 6px rgba(210,153,34,.3);
+}
 
 .timing { color: var(--text-muted); font-size: 12px; margin-left: auto; font-family: var(--font-mono); }
 .completed-time { display: block; color: var(--text-muted); font-size: 12px; margin-top: 2px; font-family: var(--font-mono); }

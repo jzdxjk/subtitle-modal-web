@@ -74,6 +74,15 @@ function fmtDate(ts) {
   return `${y}-${m}-${day}`;
 }
 
+function updateRunningTimers() {
+  document.querySelectorAll('.elapsed-timer').forEach(el => {
+    const startedAt = parseFloat(el.dataset.startedAt);
+    if (startedAt) {
+      el.textContent = '已运行 ' + fmtDuration(elapsedSeconds(startedAt));
+    }
+  });
+}
+
 
 async function loadConfig() {
   const config = await api("/api/config");
@@ -143,7 +152,7 @@ function renderJobCard(job) {
   let timingHtml = "";
   if (job.status === "running" && job.started_at) {
     const el = elapsedSeconds(job.started_at);
-    timingHtml = `<span class="timing">已运行 ${fmtDuration(el)}</span>`;
+    timingHtml = `<span class="timing elapsed-timer" data-started-at="${job.started_at}">已运行 ${fmtDuration(el)}</span>`;
   }
 
   let completedHtml = "";
@@ -568,7 +577,21 @@ loadJobs = async function() {
   }
 };
 loadJobs().catch(console.error);
-setInterval(loadJobs, 5000);
+let _pollTimer = null;
+let _elapsedTimer = null;
+
+function startQueuePolling() {
+  stopQueuePolling();
+  _pollTimer = setInterval(loadJobs, 5000);
+  _elapsedTimer = setInterval(updateRunningTimers, 1000);
+}
+
+function stopQueuePolling() {
+  if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; }
+  if (_elapsedTimer) { clearInterval(_elapsedTimer); _elapsedTimer = null; }
+}
+
+startQueuePolling();
 
 document.querySelectorAll(".tab-btn").forEach((btn) => {
   btn.addEventListener("click", () => switchTab(btn.dataset.tab));
@@ -585,7 +608,8 @@ function switchView(viewId) {
   document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
   const view = document.getElementById("view-" + viewId);
   if (view) view.classList.add("active");
-  if (viewId === "queue") renderTab(currentTab);
+  if (viewId === "queue") { renderTab(currentTab); startQueuePolling(); }
+  else stopQueuePolling();
   if (viewId === "config") loadConfig().catch(() => {});
   if (viewId === "transcribe") loadTranscribeConfig().catch(() => {});
   if (viewId === "home") {

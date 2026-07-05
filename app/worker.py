@@ -404,11 +404,14 @@ class JobRunner:
             total_dur = int(t_end - (t0 or t_end))
             local_secs = phase_timings.get("local", 0)
             cloud_secs = phase_timings.get("cloud", 0)
+            translate_secs = phase_timings.get("translate", 0)
             local_str = f"本地{_fmt_mmss(local_secs)}" if local_secs else ""
             cloud_str = f"云端{_fmt_mmss(cloud_secs)}" if cloud_secs else ""
+            translate_str = f"LLM{_fmt_mmss(translate_secs)}" if translate_secs else ""
             timing_msg = f"✅ 完成  总耗时{_fmt_mmss(total_dur)}"
-            if local_str or cloud_str:
-                timing_msg += f"（{local_str} / {cloud_str}）"
+            parts = [p for p in [local_str, cloud_str, translate_str] if p]
+            if parts:
+                timing_msg += f"（{' / '.join(parts)}）"
             # 前端通过 completed_at 时间戳渲染完成时间，消息只保留耗时
 
             verified_files = [f for f in output_files if Path(f).exists()]
