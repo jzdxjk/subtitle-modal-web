@@ -25,6 +25,13 @@ WATCH_DIR = Path(os.getenv("WATCH_DIR", "/watch"))
 OUTPUT_DIR = Path(os.getenv("OUTPUT_DIR", "/output"))
 JA_SUBS_DIR = Path("/ja_subs")
 
+# 启动前验证关键目录，避免挂载遗漏导致静默失败
+for _dir, _name in [(WATCH_DIR, "WATCH_DIR"), (OUTPUT_DIR, "OUTPUT_DIR"), (CACHE_DIR, "CACHE_DIR")]:
+    if not _dir.exists():
+        raise RuntimeError(
+            f"{_name} 目录不存在: {_dir}。请检查 docker-compose.yml 的 volumes 挂载配置。"
+        )
+
 config_store = ConfigStore(CONFIG_DIR / "config.json")
 job_store = JobStore(CONFIG_DIR / "jobs.sqlite3")
 runner = JobRunner(job_store, config_store, WATCH_DIR, CACHE_DIR)
