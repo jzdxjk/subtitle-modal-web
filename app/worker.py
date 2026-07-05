@@ -323,7 +323,7 @@ class JobRunner:
                     base_prog = 35 + (index - 1) * 55 // total_media if total_media > 0 else 35
 
                     self.store.update_job(job.id, message=f"☁️ 正在上传音频到云端GPU...（{index}/{total_media}）", progress=base_prog)
-                    transcribe_model = "jim-ja-transcribe" if is_transcribe else None
+                    transcribe_model = config.transcribe_model if is_transcribe else None
                     handle = await asyncio.to_thread(runner.launch, audio_path, item_output_dir, job.formats, config.default_timeout_seconds, model=transcribe_model)
 
                     self.store.update_job(job.id, message=f"☁️ 正在提交到云端GPU...（{index}/{total_media}）", progress=base_prog + 5)

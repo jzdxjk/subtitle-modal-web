@@ -318,6 +318,7 @@ async function loadTranscribeConfig() {
     sel.value = config.openai_model;
   }
   f.transcribe_prompt.value = config.transcribe_prompt || "";
+  if (config.transcribe_model) f.transcribe_model.value = config.transcribe_model;
 }
 
 $("#transcribe-form")?.addEventListener("submit", async (event) => {
@@ -329,6 +330,7 @@ $("#transcribe-form")?.addEventListener("submit", async (event) => {
     openai_api_key: f.openai_api_key.value.trim() || null,
     openai_model: f.openai_model.value || null,
     transcribe_prompt: f.transcribe_prompt.value || null,
+    transcribe_model: f.transcribe_model.value || null,
   };
   try {
     await api("/api/transcribe-config", { method: "POST", body: JSON.stringify(data) });
