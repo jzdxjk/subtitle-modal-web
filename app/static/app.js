@@ -466,6 +466,14 @@ function _normalizeAvCode(code) {
   return (prefix || lower.slice(0, dashIdx)) + lower.slice(dashIdx);
 }
 
+// 从文件名中提取 AV 番号（与后端 extract_av_code 保持一致），
+// 能正确处理 MOON-058.zh.srt → MOON-058
+const _AV_RE = /FC2-?(?:[A-Z]{3}-?)?\d{5,7}|(?:\d+)?[A-Z]{2,5}-\d{3,5}/i;
+function extractAvCode(filename) {
+  const m = filename.match(_AV_RE);
+  return m ? m[0].toUpperCase() : "";
+}
+
 async function _searchDbo(q) {
   const r = await fetch("/api/dbo-search?q=" + encodeURIComponent(q) + "&limit=1");
   const data = await r.json();
@@ -532,7 +540,8 @@ function fetchPoster(av) {
 }
 
 async function loadPoster(el, av) {
-  av = av.replace(/\.(mp4|mkv|avi|wmv|flv|mov|webm|ts|m4v)$/i, "");
+  av = extractAvCode(av);
+  if (!av) { av = el.dataset.av || ""; }
   const url = await fetchPoster(av);
   pendingFetches.delete(av);
   const img = el.querySelector(".gallery-poster img");
@@ -703,12 +712,11 @@ function renderHome() {
       // 优先从 output_files 提取 av 码（更可靠），否则从 input_path 提取
       let av = "";
       if (job.output_files && job.output_files.length > 0) {
-        // output_files 格式: ["/output/FNS-192.srt"]
         const filename = job.output_files[0].split("/").pop() || "";
-        av = filename.replace(/\.(srt|vtt|ass|ssa|sub|txt)$/i, "");
+        av = extractAvCode(filename);
       }
       if (!av) {
-        av = (job.input_path.split("/").pop() || job.input_path).replace(/\.(mp4|mkv|avi|wmv|flv|mov|webm|ts|m4v)$/i, "");
+        av = extractAvCode(job.input_path.split("/").pop() || job.input_path);
       }
       const fmt = ((job.output_files || [])[0] || "").split(".").pop() || "srt";
       html +=
