@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import shutil
@@ -42,7 +43,8 @@ class ModalRunHandle:
 
         def _stderr_reader() -> None:
             for _line in self._proc.stderr:
-                pass  # 消费掉防止管道死锁
+                if _line.strip():
+                    logging.getLogger("subtitle.modal").warning("[bridge-stderr] %s", _line.rstrip("\n"))
 
         thread = threading.Thread(target=_reader, daemon=True)
         thread.start()
