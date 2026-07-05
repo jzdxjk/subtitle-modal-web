@@ -31,8 +31,6 @@ from app.storage import Job, JobStore
 from app.translator import translate_srt
 from app.media import extract_av_code
 
-JA_SUBS_DIR = Path("/ja_subs")
-
 logger = logging.getLogger("subtitle.worker")
 
 
@@ -261,11 +259,7 @@ class JobRunner:
                     return
 
                 # Skip check (no cloud needed)
-                if is_transcribe:
-                    # 转录模式：检查 .zh.srt 是否已存在
-                    expected = [item_output_dir / f"{extract_av_code(media_path) or media_path.stem}.zh.{fmt}" for fmt in job.formats]
-                else:
-                    expected = [output_subtitle_path(media_path, item_output_dir, fmt) for fmt in job.formats]
+                expected = [output_subtitle_path(media_path, item_output_dir, fmt) for fmt in job.formats]
                 if not job.overwrite and all(path.exists() for path in expected):
                     logger.info("[skip] job=%s media=%s existing files=%s", job.id, media_path.name, [str(p) for p in expected])
                     output_files.extend(str(path) for path in expected)
@@ -356,13 +350,14 @@ class JobRunner:
                 # --- Transcribe post-processing: archive ja + LLM translate ---
                 if is_transcribe and renamed:
                     stage = f"正在翻译字幕 {index}/{total_media}"
-                    JA_SUBS_DIR.mkdir(parents=True, exist_ok=True)
+                    ja_subs_dir = item_output_dir / "ja_subs"
+                    ja_subs_dir.mkdir(parents=True, exist_ok=True)
                     ja_final: list[Path] = []
                     for srt_path in renamed:
                         av_code = extract_av_code(srt_path) or srt_path.stem
-                        ja_path = JA_SUBS_DIR / f"{av_code}.ja.srt"
+                        ja_path = JobRunner._unique_path(ja_subs_dir / f"{av_code}.ja.srt")
                         shutil.move(str(srt_path), str(ja_path))
-                        zh_path = item_output_dir / f"{av_code}.zh.srt"
+                        zh_path = JobRunner._unique_path(item_output_dir / f"{av_code}.srt")
                         self.store.update_job(job.id, message=f"🤖 LLM 翻译中...（{av_code}）", progress=final_prog)
                         t_tl_start = time.time()
                         await asyncio.to_thread(
@@ -508,6 +503,21 @@ class JobRunner:
         self._running = False
 
     @staticmethod
+    def _unique_path(path: Path) -> Path:
+        """生成不重复的文件路径，重复则追加 (01) (02)..."""
+        if not path.exists():
+            return path
+        stem = path.stem
+        suffix = path.suffix
+        parent = path.parent
+        counter = 1
+        while True:
+            new_path = parent / f"{stem}({counter:02d}){suffix}"
+            if not new_path.exists():
+                return new_path
+            counter += 1
+
+    @staticmethod
     def _normalize_outputs(produced: list[Path], expected: list[Path]) -> list[Path]:
         if not produced:
             logger.info("[normalize] no produced files, returning []")
@@ -543,6 +553,7 @@ class JobRunner:
                 candidates[0]
             )
             candidates.remove(source)
+            target = JobRunner._unique_path(target)
             target.parent.mkdir(parents=True, exist_ok=True)
             if source.resolve() != target.resolve():
                 logger.info("[normalize] moving %s -> %s", source, target)
