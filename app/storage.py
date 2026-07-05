@@ -227,18 +227,22 @@ class JobStore:
 
     def claim_next_queued(self) -> Job | None:
         """Atomically claim the next queued job. Returns the job or None."""
-        claim_id = str(uuid.uuid4())
         now = time.time()
         with self._connect() as conn:
-            cur = conn.execute(
-                "UPDATE jobs SET status = 'running', message = ?, updated_at = ? WHERE id = (SELECT id FROM jobs WHERE status = 'queued' ORDER BY created_at ASC LIMIT 1)",
-                (claim_id, now),
-            )
-            if cur.rowcount == 0:
-                return None
+            # 先查出队首任务 id
             row = conn.execute(
-                "SELECT * FROM jobs WHERE message = ? AND status = 'running'",
-                (claim_id,),
+                "SELECT id FROM jobs WHERE status = 'queued' ORDER BY created_at ASC LIMIT 1"
+            ).fetchone()
+            if row is None:
+                return None
+            job_id = row["id"]
+            conn.execute(
+                "UPDATE jobs SET status = 'running', message = '', updated_at = ? WHERE id = ?",
+                (now, job_id),
+            )
+            row = conn.execute(
+                "SELECT * FROM jobs WHERE id = ?",
+                (job_id,),
             ).fetchone()
         return self._row_to_job(row) if row else None
 

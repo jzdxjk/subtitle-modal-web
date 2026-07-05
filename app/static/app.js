@@ -564,7 +564,8 @@ loadJobs = async function() {
     const statusCounts = {};
     let progressSum = 0;
     for (const j of jobs) { statusCounts[j.status] = (statusCounts[j.status] || 0) + 1; progressSum += j.progress || 0; }
-    const tabHash = JSON.stringify(statusCounts) + "|" + progressSum + "|" + (jobs[0]?.id || "");
+    const msgHash = jobs.filter(j => j.status === 'running').map(j => j.message).join('|');
+    const tabHash = JSON.stringify(statusCounts) + "|" + progressSum + "|" + msgHash + "|" + (jobs[0]?.id || "");
     const doneJobs = jobs.filter(j => j.status === "done" && (j.output_files || []).length > 0);
     const galleryHash = doneJobs.length + "|" + (doneJobs[0]?.id || "") + "|" + (doneJobs[0]?.completed_at || "");
     allJobs = jobs;
@@ -591,7 +592,7 @@ let _elapsedTimer = null;
 
 function startQueuePolling() {
   stopQueuePolling();
-  _pollTimer = setInterval(loadJobs, 5000);
+  _pollTimer = setInterval(loadJobs, 1000);
   _elapsedTimer = setInterval(updateRunningTimers, 1000);
 }
 
@@ -617,7 +618,7 @@ function switchView(viewId) {
   document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
   const view = document.getElementById("view-" + viewId);
   if (view) view.classList.add("active");
-  if (viewId === "queue") { renderTab(currentTab); startQueuePolling(); }
+  if (viewId === "queue") { loadJobs().then(() => { renderTab(currentTab); startQueuePolling(); }); }
   else stopQueuePolling();
   if (viewId === "config") loadConfig().catch(() => {});
   if (viewId === "transcribe") loadTranscribeConfig().catch(() => {});
