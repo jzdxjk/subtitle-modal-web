@@ -32,7 +32,7 @@ class AppConfig:
     openai_api_key: str = ""
     openai_model: str = ""
     transcribe_prompt: str = "你是一个专业的日文→中文字幕翻译助手。请将以下日文字幕翻译为中文，要求：\n1. 保持口语化，符合中文表达习惯\n2. 保留原文的语气和情感\n3. 专有名词（人名、地名、品牌等）保持原文不翻译\n4. 每行独立翻译，不要合并或拆分\n5. 只返回翻译结果，不要添加任何解释"
-    transcribe_model: str = ""
+    transcribe_model: str = "jim-ja-transcribe"
 
     def merged_with_env(self) -> "AppConfig":
         data = asdict(self)

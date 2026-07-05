@@ -297,6 +297,26 @@ class ModalRunner:
 
                 log_stage("validate_model")
 
+                # 自动注入 jim-ja-transcribe（兼容旧版 ChickenRice 无此预设）
+                if "jim-ja-transcribe" not in modal_infer.MODEL_PRESETS:
+                    try:
+                        modal_infer.MODEL_PRESETS["jim-ja-transcribe"] = modal_infer.ModelProfile(
+                            key="jim-ja-transcribe",
+                            label="TransWithAI \u65e5\u6587\u8f6c\u5f55\uff08whisper-ja-1.5B bf16\uff09",
+                            hf_repo="TransWithAI/whisper-ja-1.5B-ct2",
+                            target_dir="whisper-ja-1.5B-ct2",
+                            description="\u65e5\u6587\u539f\u6587\u8f6c\u5f55 bf16 \u6a21\u578b",
+                            task="transcribe",
+                        )
+                    except TypeError:
+                        modal_infer.MODEL_PRESETS["jim-ja-transcribe"] = modal_infer.ModelProfile(
+                            key="jim-ja-transcribe",
+                            label="TransWithAI \u65e5\u6587\u8f6c\u5f55\uff08whisper-ja-1.5B bf16\uff09",
+                            hf_repo="TransWithAI/whisper-ja-1.5B-ct2",
+                            target_dir="whisper-ja-1.5B-ct2",
+                            description="\u65e5\u6587\u539f\u6587\u8f6c\u5f55 bf16 \u6a21\u578b",
+                        )
+
                 if args.model not in modal_infer.MODEL_PRESETS:
                     available = ", ".join(sorted(modal_infer.MODEL_PRESETS))
                     raise RuntimeError(f"Model preset {args.model!r} not found. Available presets: {available}")
