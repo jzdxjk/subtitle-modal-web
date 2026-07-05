@@ -156,7 +156,7 @@ class ModalRunner:
         handle.wait_for_submit()
         return handle.wait(timeout_seconds=(timeout_seconds or self.config.default_timeout_seconds) + 300)
 
-    def launch(self, audio_path: Path, output_dir: Path, formats: list[str], timeout_seconds: int | None = None) -> ModalRunHandle:
+    def launch(self, audio_path: Path, output_dir: Path, formats: list[str], timeout_seconds: int | None = None, model: str | None = None) -> ModalRunHandle:
         """Launch Modal bridge script, return handle after local prep work is done."""
         if not self.config.modal_token_id or not self.config.modal_token_secret:
             raise RuntimeError("Modal token is missing. Set MODAL_TOKEN_ID and MODAL_TOKEN_SECRET.")
@@ -188,7 +188,7 @@ class ModalRunner:
             "--gpu",
             self.config.default_gpu,
             "--model",
-            self.config.default_model,
+            model or self.config.default_model,
             "--formats",
             ",".join(formats),
             "--timeout-minutes",

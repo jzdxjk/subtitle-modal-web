@@ -106,19 +106,51 @@ def cache_audio_path(media_path: Path, cache_dir: Path) -> Path:
     return cache_dir / "audio" / f"{media_path.stem}-{digest}.m4a"
 
 
+def _get_audio_codec(input_path: Path) -> str | None:
+    """用 ffprobe 检测第一个音频流的编码名称，如 'aac'、'mp3'，失败返回 None"""
+    try:
+        result = subprocess.run(
+            [
+                "ffprobe", "-v", "error",
+                "-select_streams", "a:0",
+                "-show_entries", "stream=codec_name",
+                "-of", "default=noprint_wrappers=1:nokey=1",
+                str(input_path),
+            ],
+            capture_output=True, text=True, timeout=30,
+        )
+        codec = result.stdout.strip()
+        return codec if codec else None
+    except Exception:
+        return None
+
+
 def build_ffmpeg_command(input_path: Path, audio_path: Path) -> list[str]:
-    return [
-        "ffmpeg",
-        "-y",
-        "-i",
-        str(input_path),
-        "-vn",
-        "-acodec",
-        "aac",
-        "-b:a",
-        "128k",
-        str(audio_path),
-    ]
+    """双路径策略：AAC 源码流拷贝（零 CPU），非 AAC 重编码为 64k 单声道"""
+    codec = _get_audio_codec(input_path)
+    if codec and codec.lower() == "aac":
+        # AAC 源码：流拷贝，零 CPU，10-30s
+        return [
+            "ffmpeg", "-y",
+            "-i", str(input_path),
+            "-vn",
+            "-map", "0:a:0?",
+            "-c:a", "copy",
+            str(audio_path),
+        ]
+    else:
+        # 非 AAC：重编码为 64k 单声道，单线程
+        return [
+            "ffmpeg", "-y",
+            "-i", str(input_path),
+            "-vn",
+            "-map", "0:a:0?",
+            "-acodec", "aac",
+            "-b:a", "64k",
+            "-ac", "1",
+            "-threads", "1",
+            str(audio_path),
+        ]
 
 
 def _parse_ffmpeg_duration(line: str) -> float | None:
@@ -179,7 +211,7 @@ def prepare_audio(media_path: Path, cache_dir: Path, on_progress=None, is_cancel
 
     thread = threading.Thread(target=_reader, daemon=True)
     thread.start()
-    proc.wait()
+    proc.wait(timeout=1800)
     thread.join(timeout=2)
 
     if proc.returncode != 0:

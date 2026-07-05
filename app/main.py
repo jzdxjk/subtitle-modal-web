@@ -23,6 +23,7 @@ CONFIG_DIR = Path(os.getenv("CONFIG_DIR", "/config"))
 CACHE_DIR = Path(os.getenv("CACHE_DIR", "/cache"))
 WATCH_DIR = Path(os.getenv("WATCH_DIR", "/watch"))
 OUTPUT_DIR = Path(os.getenv("OUTPUT_DIR", "/output"))
+JA_SUBS_DIR = Path("/ja_subs")
 
 config_store = ConfigStore(CONFIG_DIR / "config.json")
 job_store = JobStore(CONFIG_DIR / "jobs.sqlite3")
@@ -49,6 +50,11 @@ class ConfigPayload(BaseModel):
     max_workers: int | None = Field(default=None, ge=1, le=10)
     dbo_api_url: str | None = None
     dbo_api_key: str | None = None
+    enable_transcribe: bool | None = None
+    openai_api_url: str | None = None
+    openai_api_key: str | None = None
+    openai_model: str | None = None
+    transcribe_prompt: str | None = None
 
 
 class JobPayload(BaseModel):
@@ -124,6 +130,67 @@ def get_config() -> dict:
 def save_config(payload: ConfigPayload) -> dict:
     data = payload.dict(exclude_none=True)
     return config_store.save(data).redacted()
+
+
+# ═══ TRANSCRIBE API ═══
+
+class TranscribeConfigPayload(BaseModel):
+    enable_transcribe: bool | None = None
+    openai_api_url: str | None = None
+    openai_api_key: str | None = None
+    openai_model: str | None = None
+    transcribe_prompt: str | None = None
+
+
+@app.post("/api/transcribe-config")
+def save_transcribe_config(payload: TranscribeConfigPayload) -> dict:
+    """仅保存转录相关配置"""
+    data = payload.dict(exclude_none=True)
+    return config_store.save(data).redacted()
+
+
+@app.post("/api/transcribe/models")
+def fetch_openai_models() -> dict:
+    """代理获取 OpenAI 兼容 API 的模型列表"""
+    cfg = config_store.load()
+    if not cfg.openai_api_url or not cfg.openai_api_key:
+        raise HTTPException(status_code=400, detail="OpenAI API URL 或 Key 未配置")
+    url = cfg.openai_api_url.rstrip("/") + "/models"
+    req = urllib.request.Request(url, headers={"Authorization": f"Bearer {cfg.openai_api_key}"})
+    try:
+        r = urllib.request.urlopen(req, timeout=15)
+        data = json.loads(r.read())
+        models = sorted([m["id"] for m in data.get("data", []) if m.get("id")])
+        return {"ok": True, "models": models}
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"获取模型列表失败: {e}")
+
+
+@app.post("/api/transcribe/test")
+def test_openai_connection() -> dict:
+    """测试 OpenAI 兼容 API 连通性"""
+    cfg = config_store.load()
+    if not cfg.openai_api_url or not cfg.openai_api_key:
+        return {"ok": False, "error": "OpenAI API URL 或 Key 未配置"}
+    import time as _time
+    t0 = _time.time()
+    url = cfg.openai_api_url.rstrip("/") + "/chat/completions"
+    body = json.dumps({
+        "model": cfg.openai_model or "gpt-4o-mini",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "max_tokens": 5,
+    }).encode("utf-8")
+    req = urllib.request.Request(url, data=body, headers={
+        "Authorization": f"Bearer {cfg.openai_api_key}",
+        "Content-Type": "application/json",
+    })
+    try:
+        r = urllib.request.urlopen(req, timeout=15)
+        resp = json.loads(r.read())
+        model_used = resp.get("model", "unknown")
+        return {"ok": True, "latency_ms": round((_time.time() - t0) * 1000), "model": model_used}
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:200]}
 
 
 @app.post("/api/jobs")

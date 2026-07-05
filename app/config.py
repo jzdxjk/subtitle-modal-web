@@ -24,9 +24,14 @@ class AppConfig:
     watchdog_interval_seconds: int = 60
     max_workers: int = 1
     repo_url: str = "https://github.com/TransWithAI/Faster-Whisper-TransWithAI-ChickenRice.git"
-    repo_branch: str = "v1.7"
+    repo_branch: str = "v1.10"
     dbo_api_url: str = ""
     dbo_api_key: str = ""
+    enable_transcribe: bool = False
+    openai_api_url: str = ""
+    openai_api_key: str = ""
+    openai_model: str = ""
+    transcribe_prompt: str = "你是一个专业的日文→中文字幕翻译助手。请将以下日文字幕翻译为中文，要求：\n1. 保持口语化，符合中文表达习惯\n2. 保留原文的语气和情感\n3. 专有名词（人名、地名、品牌等）保持原文不翻译\n4. 每行独立翻译，不要合并或拆分\n5. 只返回翻译结果，不要添加任何解释"
 
     def merged_with_env(self) -> "AppConfig":
         data = asdict(self)
@@ -62,10 +67,11 @@ class AppConfig:
 
     def redacted(self) -> dict[str, Any]:
         data = asdict(self)
-        for key in ("modal_token_id", "modal_token_secret", "hf_token"):
+        for key in ("modal_token_id", "modal_token_secret", "hf_token", "openai_api_key"):
             data[key] = redact_secret(data.get(key, ""))
         data["has_modal_token"] = bool(self.modal_token_id and self.modal_token_secret)
         data["has_hf_token"] = bool(self.hf_token)
+        data["has_openai"] = bool(self.openai_api_url and self.openai_api_key)
         return data
 
 
@@ -91,7 +97,7 @@ class ConfigStore:
 
     def save(self, payload: dict[str, Any]) -> AppConfig:
         current = asdict(self.load())
-        for key in ("modal_token_id", "modal_token_secret", "hf_token"):
+        for key in ("modal_token_id", "modal_token_secret", "hf_token", "openai_api_key"):
             if key in payload and (not payload[key] or "***" in str(payload[key])):
                 payload.pop(key)
         current.update({key: value for key, value in payload.items() if key in current})

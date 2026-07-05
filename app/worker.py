@@ -28,6 +28,10 @@ def _output_exists_for_media(media_path: Path, output_dir: Path, formats: list[s
 
 from app.modal_runner import ModalRunner
 from app.storage import Job, JobStore
+from app.translator import translate_srt
+from app.media import extract_av_code
+
+JA_SUBS_DIR = Path("/ja_subs")
 
 logger = logging.getLogger("subtitle.worker")
 
@@ -237,6 +241,9 @@ class JobRunner:
             self.store.update_job(job.id, progress=0)
 
             config = self.config_store.load()
+            is_transcribe = config.enable_transcribe and all(
+                config.openai_api_url, config.openai_api_key, config.openai_model
+            )
             media_files = discover_media(Path(job.input_path), min_file_size_mb=config.min_file_size_mb)
             if not media_files:
                 raise RuntimeError("未找到支持的媒体文件")
@@ -254,7 +261,11 @@ class JobRunner:
                     return
 
                 # Skip check (no cloud needed)
-                expected = [output_subtitle_path(media_path, item_output_dir, fmt) for fmt in job.formats]
+                if is_transcribe:
+                    # 转录模式：检查 .zh.srt 是否已存在
+                    expected = [item_output_dir / f"{extract_av_code(media_path) or media_path.stem}.zh.{fmt}" for fmt in job.formats]
+                else:
+                    expected = [output_subtitle_path(media_path, item_output_dir, fmt) for fmt in job.formats]
                 if not job.overwrite and all(path.exists() for path in expected):
                     logger.info("[skip] job=%s media=%s existing files=%s", job.id, media_path.name, [str(p) for p in expected])
                     output_files.extend(str(path) for path in expected)
@@ -312,7 +323,8 @@ class JobRunner:
                     base_prog = 35 + (index - 1) * 55 // total_media if total_media > 0 else 35
 
                     self.store.update_job(job.id, message=f"☁️ 正在上传音频到云端GPU...（{index}/{total_media}）", progress=base_prog)
-                    handle = await asyncio.to_thread(runner.launch, audio_path, item_output_dir, job.formats, config.default_timeout_seconds)
+                    transcribe_model = "jim-ja-transcribe" if is_transcribe else None
+                    handle = await asyncio.to_thread(runner.launch, audio_path, item_output_dir, job.formats, config.default_timeout_seconds, model=transcribe_model)
 
                     self.store.update_job(job.id, message=f"☁️ 正在提交到云端GPU...（{index}/{total_media}）", progress=base_prog + 5)
                     await asyncio.to_thread(handle.wait_for_submit, 600)
@@ -340,6 +352,31 @@ class JobRunner:
                             [str(p) for p in expected])
                 renamed = self._normalize_outputs(result.output_files, expected)
                 logger.info("[normalize] job=%s renamed=%s", job.id, [str(p) for p in renamed])
+
+                # --- Transcribe post-processing: archive ja + LLM translate ---
+                if is_transcribe and renamed:
+                    stage = f"正在翻译字幕 {index}/{total_media}"
+                    JA_SUBS_DIR.mkdir(parents=True, exist_ok=True)
+                    ja_final: list[Path] = []
+                    for srt_path in renamed:
+                        av_code = extract_av_code(srt_path) or srt_path.stem
+                        ja_path = JA_SUBS_DIR / f"{av_code}.ja.srt"
+                        shutil.move(str(srt_path), str(ja_path))
+                        zh_path = item_output_dir / f"{av_code}.zh.srt"
+                        self.store.update_job(job.id, message=f"🤖 LLM 翻译中...（{av_code}）", progress=final_prog)
+                        t_tl_start = time.time()
+                        await asyncio.to_thread(
+                            translate_srt,
+                            ja_path, zh_path,
+                            config.openai_api_url, config.openai_api_key,
+                            config.openai_model, config.transcribe_prompt,
+                        )
+                        tl_dur = int(time.time() - t_tl_start)
+                        phase_timings["translate"] = phase_timings.get("translate", 0) + tl_dur
+                        ja_final.append(zh_path)
+                        logger.info("[transcribe] job=%s %s -> %s (LLM %ds)", job.id, ja_path.name, zh_path.name, tl_dur)
+                    renamed = ja_final
+
                 output_files.extend(str(path) for path in renamed)
                 media_parents.add(media_path.parent)
 

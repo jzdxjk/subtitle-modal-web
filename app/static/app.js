@@ -301,6 +301,75 @@ $("#job-form").addEventListener("submit", async (event) => {
   }
 });
 
+/* ═══ TRANSCRIBE ═══ */
+
+async function loadTranscribeConfig() {
+  const config = await api("/api/config");
+  const f = document.forms["transcribe-form"];
+  if (!f) return;
+  f.enable_transcribe.checked = !!config.enable_transcribe;
+  f.openai_api_url.value = config.openai_api_url || "";
+  f.openai_api_key.value = config.openai_api_key || "";
+  if (config.openai_model) {
+    const sel = f.openai_model;
+    if (![...sel.options].some(o => o.value === config.openai_model)) {
+      sel.appendChild(new Option(config.openai_model, config.openai_model));
+    }
+    sel.value = config.openai_model;
+  }
+  f.transcribe_prompt.value = config.transcribe_prompt || "";
+}
+
+$("#transcribe-form")?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const f = event.target;
+  const data = {
+    enable_transcribe: f.enable_transcribe.checked,
+    openai_api_url: f.openai_api_url.value.trim() || null,
+    openai_api_key: f.openai_api_key.value.trim() || null,
+    openai_model: f.openai_model.value || null,
+    transcribe_prompt: f.transcribe_prompt.value || null,
+  };
+  try {
+    await api("/api/transcribe-config", { method: "POST", body: JSON.stringify(data) });
+    showToast("✅ 转录配置已保存");
+  } catch (error) {
+    showToast("保存失败: " + error.message, false);
+  }
+});
+
+$("#fetch-models-btn")?.addEventListener("click", async () => {
+  const btn = $("#fetch-models-btn");
+  const sel = $("#openai-model-select");
+  btn.disabled = true; btn.textContent = "获取中...";
+  try {
+    const r = await api("/api/transcribe/models", { method: "POST" });
+    sel.innerHTML = "";
+    r.models.forEach(m => { sel.appendChild(new Option(m, m)); });
+    btn.textContent = "✅ " + r.models.length + " 个";
+    showToast("获取到 " + r.models.length + " 个模型");
+  } catch (e) {
+    btn.textContent = "获取失败";
+    showToast(e.message, false);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+$("#test-openai-btn")?.addEventListener("click", async () => {
+  const btn = $("#test-openai-btn");
+  btn.disabled = true; btn.textContent = "检测中...";
+  try {
+    const r = await api("/api/transcribe/test", { method: "POST" });
+    if (r.ok) btn.textContent = "✅ 连通 " + r.latency_ms + "ms (" + r.model + ")";
+    else btn.textContent = "❌ " + (r.error || "失败");
+  } catch (e) {
+    btn.textContent = "❌ " + e.message.slice(0, 30);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
 function showToast(msg, ok = true) {
   const t = document.createElement("div");
   t.className = "toast " + (ok ? "toast-ok" : "toast-err");
@@ -516,6 +585,7 @@ function switchView(viewId) {
   if (view) view.classList.add("active");
   if (viewId === "queue") renderTab(currentTab);
   if (viewId === "config") loadConfig().catch(() => {});
+  if (viewId === "transcribe") loadTranscribeConfig().catch(() => {});
   if (viewId === "home") {
     const gallery = $("#gallery");
     if (gallery) gallery.classList.remove("no-animate");
