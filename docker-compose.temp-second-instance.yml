@@ -2,8 +2,7 @@ name: subtitle-web-temp
 
 services:
   subtitle-web-temp:
-    build: .
-    image: subtitle-modal-web:latest
+    image: jzdxjk/subtitle-modal-web:latest
     restart: unless-stopped
     ports:
       - "9199:8898"

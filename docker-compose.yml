@@ -1,7 +1,6 @@
 services:
   subtitle-web:
-    build: .
-    image: subtitle-modal-web:latest
+    image: jzdxjk/subtitle-modal-web:latest
     container_name: subtitle-modal-web
     restart: unless-stopped
     ports:
