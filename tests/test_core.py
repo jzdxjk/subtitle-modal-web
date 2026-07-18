@@ -459,6 +459,34 @@ def _remote_pipeline(job):
     assert 'smart_vad_value = "true" if job.get("smart_split_with_vad") else "false"' in patched
 
 
+def test_modal_runner_skips_recent_fetch_only_for_same_repo_ref(tmp_path, monkeypatch):
+    repo_dir = tmp_path / "modal-repo"
+    git_dir = repo_dir / ".git"
+    git_dir.mkdir(parents=True)
+    (git_dir / "last_fetch").write_text("v1.10", encoding="utf-8")
+    calls = []
+    monkeypatch.setattr("app.modal_runner.subprocess.run", lambda *args, **kwargs: calls.append((args, kwargs)))
+
+    ModalRunner(AppConfig(repo_branch="v1.10"), tmp_path)._ensure_repo(repo_dir)
+
+    assert calls == []
+
+
+def test_modal_runner_fetches_when_repo_ref_changes(tmp_path, monkeypatch):
+    repo_dir = tmp_path / "modal-repo"
+    git_dir = repo_dir / ".git"
+    git_dir.mkdir(parents=True)
+    (git_dir / "last_fetch").write_text("v1.10", encoding="utf-8")
+    calls = []
+    monkeypatch.setattr("app.modal_runner.subprocess.run", lambda *args, **kwargs: calls.append((args, kwargs)))
+
+    ModalRunner(AppConfig(repo_branch="v1.7"), tmp_path)._ensure_repo(repo_dir)
+
+    assert calls[0][0][0] == ["git", "fetch", "--depth", "1", "origin", "v1.7"]
+    assert calls[1][0][0] == ["git", "reset", "--hard", "FETCH_HEAD"]
+    assert (git_dir / "last_fetch").read_text(encoding="utf-8") == "v1.7"
+
+
 def test_modal_runner_disables_supported_smart_vad_config(tmp_path):
     repo_dir = tmp_path / "modal-repo"
     repo_dir.mkdir()

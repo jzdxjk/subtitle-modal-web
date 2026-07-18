@@ -279,11 +279,12 @@ class ModalRunner:
             import time as _time
             stamp = work_dir / ".git" / "last_fetch"
             now = _time.time()
-            if stamp.exists() and now - stamp.stat().st_mtime < 3600:
+            last_ref = stamp.read_text(encoding="utf-8").strip() if stamp.exists() else ""
+            if last_ref == self.config.repo_branch and stamp.exists() and now - stamp.stat().st_mtime < 3600:
                 return  # skip fetch if done within the last hour
-            subprocess.run(["git", "fetch", "--depth", "1", "origin", self.config.repo_branch], cwd=work_dir, check=False)
-            subprocess.run(["git", "reset", "--hard", "FETCH_HEAD"], cwd=work_dir, check=False)
-            stamp.write_text(str(now))
+            subprocess.run(["git", "fetch", "--depth", "1", "origin", self.config.repo_branch], cwd=work_dir, check=True)
+            subprocess.run(["git", "reset", "--hard", "FETCH_HEAD"], cwd=work_dir, check=True)
+            stamp.write_text(self.config.repo_branch, encoding="utf-8")
             return
         work_dir.parent.mkdir(parents=True, exist_ok=True)
         subprocess.run(
@@ -292,6 +293,7 @@ class ModalRunner:
         )
         subprocess.run(["git", "fetch", "--depth", "1", "origin", self.config.repo_branch], cwd=work_dir, check=True)
         subprocess.run(["git", "reset", "--hard", "FETCH_HEAD"], cwd=work_dir, check=True)
+        (work_dir / ".git" / "last_fetch").write_text(self.config.repo_branch, encoding="utf-8")
 
     def _patch_modal_infer(self, work_dir: Path) -> None:
         target = work_dir / "modal_infer.py"
