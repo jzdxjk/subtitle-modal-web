@@ -147,6 +147,69 @@ def _all_apps_have_include_source(source: str) -> bool:
     return True
 
 
+def _patch_remote_repo_ref(source: str) -> str:
+    """Make upstream Modal code honor the repo ref selected in this app."""
+    new = textwrap.dedent('''
+        repo_ref = job.get("repo_ref") or "main"
+        if not (repo_dir / ".git").exists():
+            log("开始克隆仓库...")
+            run(["git", "clone", "--depth", "1", REPO_URL, str(repo_dir)])
+        else:
+            log("更新仓库...")
+
+        log(f"切换仓库版本: {repo_ref}")
+        run(["git", "-C", str(repo_dir), "fetch", "--depth", "1", "origin", repo_ref])
+        run(["git", "-C", str(repo_dir), "reset", "--hard", "FETCH_HEAD"])
+    ''').strip()
+    pattern = (
+        r'(?P<indent>[ \t]*)if not \(repo_dir / "\.git"\)\.exists\(\):\n'
+        r'(?P=indent)[ \t]+log\([^\n]+\)\n'
+        r'(?P=indent)[ \t]+run\(\["git", "clone", "--depth", "1", REPO_URL, str\(repo_dir\)\]\)\n'
+        r'(?P=indent)else:\n'
+        r'(?P=indent)[ \t]+log\([^\n]+\)\n'
+        r'(?P=indent)[ \t]+run\(\["git", "-C", str\(repo_dir\), "fetch", "origin"\]\)\n'
+        r'(?P=indent)[ \t]+run\(\["git", "-C", str\(repo_dir\), "reset", "--hard", "origin/main"\]\)'
+    )
+
+    def repl(match: re.Match) -> str:
+        indent = match.group("indent")
+        return "\n".join(indent + line if line else line for line in new.splitlines())
+
+    return re.sub(pattern, repl, source, count=1)
+
+
+def _patch_remote_smart_vad_arg(source: str) -> str:
+    """Pass smart VAD explicitly to upstream infer.py when that version supports it."""
+    new = textwrap.dedent('''
+        if job["enable_batching"]:
+            cmd.append("--enable_batching")
+            if job["batch_size"]:
+                cmd.extend(["--batch_size", str(job["batch_size"])])
+            cmd.extend(["--max_batch_size", str(job["max_batch_size"])])
+
+        if job.get("supports_smart_vad"):
+            smart_vad_value = "true" if job.get("smart_split_with_vad") else "false"
+            cmd.extend(["--smart_split_with_vad", smart_vad_value])
+
+        cmd.extend(job["remote_inputs"])
+    ''').strip()
+    pattern = (
+        r'(?P<indent>[ \t]*)if job\["enable_batching"\]:\n'
+        r'(?P=indent)[ \t]+cmd\.append\("--enable_batching"\)\n'
+        r'(?P=indent)[ \t]+if job\["batch_size"\]:\n'
+        r'(?P=indent)[ \t]+cmd\.extend\(\["--batch_size", str\(job\["batch_size"\]\)\]\)\n'
+        r'(?P=indent)[ \t]+cmd\.extend\(\["--max_batch_size", str\(job\["max_batch_size"\]\)\]\)\n'
+        r'\n'
+        r'(?P=indent)cmd\.extend\(job\["remote_inputs"\]\)'
+    )
+
+    def repl(match: re.Match) -> str:
+        indent = match.group("indent")
+        return "\n".join(indent + line if line else line for line in new.splitlines())
+
+    return re.sub(pattern, repl, source, count=1)
+
+
 class ModalRunner:
     def __init__(self, config: AppConfig, cache_dir: Path):
         self.config = config
@@ -196,6 +259,10 @@ class ModalRunner:
             ",".join(formats),
             "--timeout-minutes",
             str(max(1, int((timeout_seconds or self.config.default_timeout_seconds) / 60))),
+            "--repo-ref",
+            self.config.repo_branch,
+            "--enable-smart-vad",
+            "true" if self.config.enable_smart_vad else "false",
         ]
         proc = subprocess.Popen(
             command,
@@ -232,10 +299,14 @@ class ModalRunner:
             raise RuntimeError(f"modal_infer.py not found under repo dir: {work_dir}")
         source = target.read_text(encoding="utf-8")
 
-        if _all_apps_have_include_source(source):
+        patched = _patch_remote_repo_ref(source)
+        patched = _patch_remote_smart_vad_arg(patched)
+
+        if _all_apps_have_include_source(patched):
+            if patched != source:
+                target.write_text(patched, encoding="utf-8")
             return
 
-        patched = source
         for match in reversed(list(re.finditer(r"\bmodal\.App\s*\(", patched))):
             start = match.end() - 1
             if _paren_block_has_include_source(patched, start):
@@ -311,6 +382,8 @@ class ModalRunner:
                 parser.add_argument("--model", required=True)
                 parser.add_argument("--formats", required=True)
                 parser.add_argument("--timeout-minutes", type=int, default=120)
+                parser.add_argument("--repo-ref", required=True)
+                parser.add_argument("--enable-smart-vad", choices=("true", "false"), required=True)
                 return parser.parse_args()
 
             def main():
@@ -386,6 +459,15 @@ class ModalRunner:
 
                 log_stage("build_payload")
                 payload = modal_infer.build_job_payload(selection, manifest)
+                payload["repo_ref"] = args.repo_ref
+                payload["smart_split_with_vad"] = args.enable_smart_vad == "true"
+                payload["supports_smart_vad"] = any(
+                    candidate.exists() and "smart_split_with_vad" in candidate.read_text(encoding="utf-8", errors="ignore")
+                    for candidate in (
+                        repo_dir / "src" / "faster_whisper_transwithai_chickenrice" / "infer.py",
+                        repo_dir / "infer.py",
+                    )
+                )
 
                 log_stage("run_remote_pipeline")
                 result = modal_infer.run_remote_pipeline(volume, selection, manifest, payload)

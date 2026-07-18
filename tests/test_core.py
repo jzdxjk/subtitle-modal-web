@@ -401,6 +401,64 @@ def test_modal_infer_patch_adds_include_source(tmp_path):
     assert "include_source=True" in patched
 
 
+def test_modal_infer_patch_makes_remote_repo_ref_configurable(tmp_path):
+    repo_dir = tmp_path / "modal-repo"
+    repo_dir.mkdir()
+    modal_infer = repo_dir / "modal_infer.py"
+    modal_infer.write_text(
+        '''
+import modal
+app = modal.App("subtitle-modal")
+def _remote_pipeline(job):
+    if not (repo_dir / ".git").exists():
+        log("开始克隆仓库...")
+        run(["git", "clone", "--depth", "1", REPO_URL, str(repo_dir)])
+    else:
+        log("更新仓库...")
+        run(["git", "-C", str(repo_dir), "fetch", "origin"])
+        run(["git", "-C", str(repo_dir), "reset", "--hard", "origin/main"])
+''',
+        encoding="utf-8",
+    )
+    runner = ModalRunner(AppConfig(repo_branch="v1.10"), tmp_path)
+
+    runner._patch_modal_infer(repo_dir)
+
+    patched = modal_infer.read_text(encoding="utf-8")
+    assert 'repo_ref = job.get("repo_ref") or "main"' in patched
+    assert '"FETCH_HEAD"' in patched
+    assert '"origin/main"' not in patched
+
+
+def test_modal_infer_patch_passes_remote_smart_vad_arg(tmp_path):
+    repo_dir = tmp_path / "modal-repo"
+    repo_dir.mkdir()
+    modal_infer = repo_dir / "modal_infer.py"
+    modal_infer.write_text(
+        '''
+import modal
+app = modal.App("subtitle-modal")
+def _remote_pipeline(job):
+    if job["enable_batching"]:
+        cmd.append("--enable_batching")
+        if job["batch_size"]:
+            cmd.extend(["--batch_size", str(job["batch_size"])])
+        cmd.extend(["--max_batch_size", str(job["max_batch_size"])])
+
+    cmd.extend(job["remote_inputs"])
+''',
+        encoding="utf-8",
+    )
+    runner = ModalRunner(AppConfig(enable_smart_vad=False), tmp_path)
+
+    runner._patch_modal_infer(repo_dir)
+
+    patched = modal_infer.read_text(encoding="utf-8")
+    assert 'job.get("supports_smart_vad")' in patched
+    assert '"--smart_split_with_vad"' in patched
+    assert 'smart_vad_value = "true" if job.get("smart_split_with_vad") else "false"' in patched
+
+
 def test_modal_runner_disables_supported_smart_vad_config(tmp_path):
     repo_dir = tmp_path / "modal-repo"
     repo_dir.mkdir()
