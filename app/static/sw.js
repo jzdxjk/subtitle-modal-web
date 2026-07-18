@@ -1,4 +1,4 @@
-const CACHE = "subtitle-web-v5";
+const CACHE = "subtitle-web-v6";
 const STATIC = [
   "/",
   "/static/index.html",

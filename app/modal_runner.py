@@ -169,6 +169,7 @@ class ModalRunner:
         work_dir = self.cache_dir / "modal-repo"
         self._ensure_repo(work_dir)
         self._patch_modal_infer(work_dir)
+        self._configure_smart_vad(work_dir)
         bridge = self._write_bridge_script(work_dir)
 
         env = os.environ.copy()
@@ -252,6 +253,42 @@ class ModalRunner:
                 patched = patched[:close] + "include_source=True" + patched[close:]
 
         target.write_text(patched, encoding="utf-8")
+
+    def _configure_smart_vad(self, work_dir: Path) -> None:
+        """Toggle smart VAD in upstream ChickenRice config when that version supports it."""
+        if not self._supports_smart_vad(work_dir):
+            return
+
+        target = work_dir / "generation_config.json5"
+        if not target.exists():
+            return
+
+        enabled = "true" if self.config.enable_smart_vad else "false"
+        source = target.read_text(encoding="utf-8")
+        pattern = r'("smart_split_with_vad"\s*:\s*)(true|false)'
+        if re.search(pattern, source):
+            patched = re.sub(pattern, rf"\g<1>{enabled}", source, count=1)
+        else:
+            close = source.rfind("}")
+            if close == -1:
+                return
+            prefix = source[:close].rstrip()
+            separator = "," if not prefix.endswith("{") else ""
+            patched = source[:close].rstrip() + f'{separator}\n    "smart_split_with_vad": {enabled},\n' + source[close:]
+
+        if patched != source:
+            target.write_text(patched, encoding="utf-8")
+
+    @staticmethod
+    def _supports_smart_vad(work_dir: Path) -> bool:
+        candidates = [
+            work_dir / "src" / "faster_whisper_transwithai_chickenrice" / "infer.py",
+            work_dir / "infer.py",
+        ]
+        for candidate in candidates:
+            if candidate.exists() and "smart_split_with_vad" in candidate.read_text(encoding="utf-8", errors="ignore"):
+                return True
+        return False
 
     def _write_bridge_script(self, repo_dir: Path) -> Path:
         bridge = self.cache_dir / "modal_web_entry.py"

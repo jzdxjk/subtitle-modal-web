@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/styles.css?v=77" />
+  <link rel="stylesheet" href="/static/styles.css?v=78" />
 </head>
 <body>
   <!-- Splash -->
@@ -118,8 +118,21 @@
         <label>Modal Token Secret<input name="modal_token_secret" type="password" placeholder="环境变量优先，留空不覆盖" /></label>
         <label>HuggingFace Token<input name="hf_token" type="password" placeholder="可选" /></label>
         <label>GPU<input name="default_gpu" value="T4" /></label>
-        <label>模型<input name="default_model" value="chickenrice" /></label>
-        <label>ChickenRice 版本<input name="repo_branch" value="main" placeholder="main / v1.10 / v1.9 等" /></label>
+        <label>模型
+          <select name="default_model">
+            <option value="chickenrice">chickenrice</option>
+            <option value="jim-ja-transcribe">jim-ja-transcribe</option>
+          </select>
+        </label>
+        <label>ChickenRice 版本
+          <select name="repo_branch">
+            <option value="v1.10">v1.10</option>
+            <option value="v1.9">v1.9</option>
+            <option value="v1.8">v1.8</option>
+            <option value="v1.7">v1.7</option>
+            <option value="main">main</option>
+          </select>
+        </label>
         <label>默认输出目录<input name="default_output_dir" value="/output" /></label>
         <label>默认格式<input name="default_formats" value="srt" /></label>
         <label>
@@ -136,6 +149,16 @@
         <label>超时秒数<input name="default_timeout_seconds" type="number" value="7200" /></label>
         <label>DBO API 地址<input name="dbo_api_url" placeholder="" /></label>
         <label>DBO API 密钥<input name="dbo_api_key" placeholder="" /></label>
+        <label class="toggle-row">
+          <span class="config-label-row">
+            <span>Smart VAD</span>
+            <small>关闭：只进行一次 VAD；开启：一次 VAD 后再做 smart VAD。v1.10+ 生效</small>
+          </span>
+          <span class="toggle">
+            <input name="enable_smart_vad" type="checkbox" />
+            <span class="toggle-track"><span class="toggle-thumb"></span></span>
+          </span>
+        </label>
         <div class="config-actions">
           <button type="button" id="test-dbo-btn" class="test-btn">测试 DBO 连通性</button>
           <button type="submit" class="config-save-btn">保存配置</button>
@@ -209,7 +232,7 @@
     </button>
   </nav>
 
-  <script src="/static/app.js?v=78"></script>
+  <script src="/static/app.js?v=79"></script>
   <script>if("serviceWorker" in navigator){navigator.serviceWorker.register("/static/sw.js")}</script>
 </body>
 </html>

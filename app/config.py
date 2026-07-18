@@ -23,6 +23,7 @@ class AppConfig:
     enable_watchdog: bool = False
     watchdog_interval_seconds: int = 60
     max_workers: int = 1
+    enable_smart_vad: bool = False
     repo_url: str = "https://github.com/TransWithAI/Faster-Whisper-TransWithAI-ChickenRice.git"
     repo_branch: str = "bec3d22"
     dbo_api_url: str = ""
@@ -51,6 +52,7 @@ class AppConfig:
             "ENABLE_WATCHDOG": "enable_watchdog",
             "WATCHDOG_INTERVAL_SECONDS": "watchdog_interval_seconds",
             "MAX_WORKERS": "max_workers",
+            "ENABLE_SMART_VAD": "enable_smart_vad",
             "REPO_URL": "repo_url",
             "REPO_BRANCH": "repo_branch",
         }
@@ -60,7 +62,7 @@ class AppConfig:
                 continue
             if field_name in ("min_file_size_mb", "default_timeout_seconds", "watchdog_interval_seconds", "max_workers"):
                 data[field_name] = int(value)
-            elif field_name == "enable_watchdog":
+            elif field_name in ("enable_watchdog", "enable_smart_vad"):
                 data[field_name] = value.lower() in ("1", "true", "yes")
             else:
                 data[field_name] = value

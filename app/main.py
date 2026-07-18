@@ -55,6 +55,7 @@ class ConfigPayload(BaseModel):
     enable_watchdog: bool | None = None
     watchdog_interval_seconds: int | None = Field(default=None, ge=10, le=3600)
     max_workers: int | None = Field(default=None, ge=1, le=10)
+    enable_smart_vad: bool | None = None
     dbo_api_url: str | None = None
     dbo_api_key: str | None = None
     enable_transcribe: bool | None = None

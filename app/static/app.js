@@ -91,6 +91,13 @@ async function loadConfig() {
     if (!input) continue;
     if (input.type === "checkbox") {
       input.checked = Boolean(value);
+    } else if (input.tagName === "SELECT") {
+      if (value != null && ![...input.options].some((o) => o.value === value)) {
+        input.appendChild(new Option(value, value));
+      }
+      if (value != null && !String(value).includes("***")) {
+        input.value = value;
+      }
     } else if (value != null && !String(value).includes("***")) {
       input.value = value;
     }
@@ -288,6 +295,7 @@ $("#config-form").addEventListener("submit", async (event) => {
   data.watchdog_interval_seconds = Number(data.watchdog_interval_seconds || 60);
   data.max_workers = Number(data.max_workers || 1);
   data.enable_watchdog = Boolean(event.target.enable_watchdog.checked);
+  data.enable_smart_vad = Boolean(event.target.enable_smart_vad.checked);
   try {
     const saved = await api("/api/config", { method: "POST", body: JSON.stringify(data) });
     showToast("✅ 配置已保存");

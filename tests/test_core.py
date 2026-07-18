@@ -50,6 +50,16 @@ def test_config_store_persists_min_file_size_mb(tmp_path):
     assert loaded.min_file_size_mb == 0
 
 
+def test_config_store_persists_smart_vad_flag(tmp_path):
+    store = ConfigStore(tmp_path / "config.json")
+
+    saved = store.save({"enable_smart_vad": True})
+    loaded = store.load()
+
+    assert saved.enable_smart_vad is True
+    assert loaded.enable_smart_vad is True
+
+
 def test_video_file_detection_is_case_insensitive():
     assert is_video_file(Path("/watch/Movie.MP4"))
     assert is_video_file(Path("/watch/clip.mkv"))
@@ -389,6 +399,52 @@ def test_modal_infer_patch_adds_include_source(tmp_path):
 
     patched = modal_infer.read_text(encoding="utf-8")
     assert "include_source=True" in patched
+
+
+def test_modal_runner_disables_supported_smart_vad_config(tmp_path):
+    repo_dir = tmp_path / "modal-repo"
+    repo_dir.mkdir()
+    infer_dir = repo_dir / "src" / "faster_whisper_transwithai_chickenrice"
+    infer_dir.mkdir(parents=True)
+    (infer_dir / "infer.py").write_text("smart_split_with_vad", encoding="utf-8")
+    config_file = repo_dir / "generation_config.json5"
+    config_file.write_text('{"smart_split_with_vad": true, "target_chunk_duration_s": 30}', encoding="utf-8")
+    runner = ModalRunner(AppConfig(enable_smart_vad=False), tmp_path)
+
+    runner._configure_smart_vad(repo_dir)
+
+    assert '"smart_split_with_vad": false' in config_file.read_text(encoding="utf-8")
+
+
+def test_modal_runner_enables_supported_smart_vad_config(tmp_path):
+    repo_dir = tmp_path / "modal-repo"
+    repo_dir.mkdir()
+    infer_dir = repo_dir / "src" / "faster_whisper_transwithai_chickenrice"
+    infer_dir.mkdir(parents=True)
+    (infer_dir / "infer.py").write_text("smart_split_with_vad", encoding="utf-8")
+    config_file = repo_dir / "generation_config.json5"
+    config_file.write_text('{"smart_split_with_vad": false, "target_chunk_duration_s": 30}', encoding="utf-8")
+    runner = ModalRunner(AppConfig(enable_smart_vad=True), tmp_path)
+
+    runner._configure_smart_vad(repo_dir)
+
+    assert '"smart_split_with_vad": true' in config_file.read_text(encoding="utf-8")
+
+
+def test_modal_runner_leaves_unsupported_smart_vad_repo_unchanged(tmp_path):
+    repo_dir = tmp_path / "modal-repo"
+    repo_dir.mkdir()
+    infer_dir = repo_dir / "src" / "faster_whisper_transwithai_chickenrice"
+    infer_dir.mkdir(parents=True)
+    (infer_dir / "infer.py").write_text("older infer", encoding="utf-8")
+    config_file = repo_dir / "generation_config.json5"
+    original = '{"task": "translate"}'
+    config_file.write_text(original, encoding="utf-8")
+    runner = ModalRunner(AppConfig(enable_smart_vad=True), tmp_path)
+
+    runner._configure_smart_vad(repo_dir)
+
+    assert config_file.read_text(encoding="utf-8") == original
 
 
 def test_normalize_outputs_returns_only_existing_files(tmp_path):
