@@ -190,10 +190,12 @@ def prepare_audio(media_path: Path, cache_dir: Path, on_progress=None, is_cancel
 
     total_duration: float | None = None
     last_report = -1
+    stderr_lines: list[str] = []  # ponytail: collector so error handler reads real stderr, not drained pipe
 
     def _reader() -> None:
         nonlocal total_duration, last_report
         for line in proc.stderr:
+            stderr_lines.append(line)
             if is_cancelled_fn and is_cancelled_fn():
                 proc.kill()
                 return
@@ -215,7 +217,7 @@ def prepare_audio(media_path: Path, cache_dir: Path, on_progress=None, is_cancel
     thread.join(timeout=2)
 
     if proc.returncode != 0:
-        stderr = proc.stderr.read() if proc.stderr else ''
+        stderr = ''.join(stderr_lines[-200:]) if stderr_lines else ''
         if not stderr:
             stderr = f"input path may be unreadable or missing: {media_path}"
         raise RuntimeError(f"ffmpeg failed: {stderr[-2000:]}")

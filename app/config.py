@@ -24,7 +24,7 @@ class AppConfig:
     watchdog_interval_seconds: int = 60
     max_workers: int = 1
     repo_url: str = "https://github.com/TransWithAI/Faster-Whisper-TransWithAI-ChickenRice.git"
-    repo_branch: str = "main"
+    repo_branch: str = "bec3d22"
     dbo_api_url: str = ""
     dbo_api_key: str = ""
     enable_transcribe: bool = False

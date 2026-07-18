@@ -1,22 +1,36 @@
 # Python
 __pycache__/
+**/__pycache__/
 *.py[cod]
 *.so
 *.egg-info/
 dist/
 build/
+.pytest_cache/
 
 # Local test / runtime data
+config/
 config.json
 jobs.sqlite3
 jobs.sqlite3-*
 cache/
 output/
+media/
+watch/
+ja_subs/
+temp-second-instance/
 
 # Environment
 .env
+.env.temp-second-instance
 venv/
 .venv/
+
+# Local assistant/tooling state
+.reasonix/
+.reasonix-logs/
+.reasonix-tasks/
+tmp/
 
 # IDE
 .idea/
@@ -29,4 +43,4 @@ Thumbs.db
 .DS_Store
 
 # Temp scripts
-_*.py
+/_*.py

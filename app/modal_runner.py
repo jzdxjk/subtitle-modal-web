@@ -214,15 +214,16 @@ class ModalRunner:
             if stamp.exists() and now - stamp.stat().st_mtime < 3600:
                 return  # skip fetch if done within the last hour
             subprocess.run(["git", "fetch", "--depth", "1", "origin", self.config.repo_branch], cwd=work_dir, check=False)
-            subprocess.run(["git", "checkout", self.config.repo_branch], cwd=work_dir, check=False)
-            subprocess.run(["git", "pull", "--ff-only"], cwd=work_dir, check=False)
+            subprocess.run(["git", "reset", "--hard", "FETCH_HEAD"], cwd=work_dir, check=False)
             stamp.write_text(str(now))
             return
         work_dir.parent.mkdir(parents=True, exist_ok=True)
         subprocess.run(
-            ["git", "clone", "--depth", "1", "--branch", self.config.repo_branch, self.config.repo_url, str(work_dir)],
+            ["git", "clone", "--depth", "1", self.config.repo_url, str(work_dir)],
             check=True,
         )
+        subprocess.run(["git", "fetch", "--depth", "1", "origin", self.config.repo_branch], cwd=work_dir, check=True)
+        subprocess.run(["git", "reset", "--hard", "FETCH_HEAD"], cwd=work_dir, check=True)
 
     def _patch_modal_infer(self, work_dir: Path) -> None:
         target = work_dir / "modal_infer.py"

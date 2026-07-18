@@ -556,6 +556,9 @@ class JobRunner:
                 candidates[0]
             )
             candidates.remove(source)
+            if source.resolve() == target.resolve():
+                normalized.append(target)
+                continue
             target = JobRunner._unique_path(target)
             target.parent.mkdir(parents=True, exist_ok=True)
             if source.resolve() != target.resolve():
