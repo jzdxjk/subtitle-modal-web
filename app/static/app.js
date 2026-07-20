@@ -46,6 +46,22 @@ let currentTab = "running";
 let pageByTab = { running: 1, queued: 1, failed: 1, completed: 1, cancelled: 1 };
 let allJobs = [];
 
+function queueMatchesSearch(job, query) {
+  if (!query) return true;
+  const haystack = [
+    job.id,
+    job.input_path,
+    job.message,
+    job.status,
+    job.output_dir,
+    ...(job.output_files || []),
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+  return haystack.includes(query);
+}
+
 function fmtDuration(seconds) {
   if (!seconds || seconds <= 0) return "";
   const s = Math.floor(seconds);
@@ -55,9 +71,25 @@ function fmtDuration(seconds) {
   return `${m}m${r}s`;
 }
 
+function fmtDurationClock(seconds) {
+  const total = Math.max(0, Math.floor(seconds || 0));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
 function elapsedSeconds(startedAt) {
   if (!startedAt || startedAt === 0) return 0;
   return Math.floor(Date.now() / 1000 - startedAt);
+}
+
+function livePhaseSeconds(job, kind) {
+  const baseSeconds = Number(job[`${kind}_seconds`] || 0);
+  const phaseStartedAt = Number(job.phase_started_at || 0);
+  if (job.phase !== kind || !phaseStartedAt) return baseSeconds;
+  return baseSeconds + elapsedSeconds(phaseStartedAt);
 }
 
 function fmtClock(ts) {
@@ -76,16 +108,63 @@ function fmtDate(ts) {
 
 function updateRunningTimers() {
   document.querySelectorAll('.elapsed-timer').forEach(el => {
+    const kind = el.dataset.timerKind || "total";
     const startedAt = parseFloat(el.dataset.startedAt);
-    if (startedAt) {
-      el.textContent = '已运行 ' + fmtDuration(elapsedSeconds(startedAt));
+    const baseSeconds = Number(el.dataset.baseSeconds || 0);
+    const phase = el.dataset.phase || "";
+    const phaseStartedAt = parseFloat(el.dataset.phaseStartedAt || 0);
+    const livePhase = kind === "local" ? phase === "local" : kind === "cloud" ? phase === "cloud" : false;
+    if (phase === "waiting_local") {
+      el.textContent = "--:--";
+      return;
     }
+    if (kind === "total" && !startedAt && !baseSeconds) {
+      el.textContent = "--:--";
+      return;
+    }
+    const value = kind === "total" ? (startedAt ? elapsedSeconds(startedAt) : baseSeconds) : livePhaseSeconds({
+      phase: livePhase ? kind : phase,
+      phase_started_at: phaseStartedAt,
+      [`${kind}_seconds`]: baseSeconds,
+    }, kind);
+    el.textContent = fmtDurationClock(value);
+  });
+}
+
+function formatRangeValue(input, mode) {
+  const value = Number(input.value || 0);
+  if (mode === "minutes") return String(Math.round(value / 60));
+  if (mode === "seconds") return `${value}s`;
+  return String(value);
+}
+
+function syncRangeControl(control) {
+  const input = control.querySelector('input[type="range"]');
+  if (!input) return;
+  const valueEl = control.querySelector("[data-range-value]");
+  const min = Number(input.min || 0);
+  const max = Number(input.max || 100);
+  const value = Number(input.value || min);
+  const percent = max === min ? 0 : ((value - min) / (max - min)) * 100;
+  input.style.setProperty("--percent", `${Math.max(0, Math.min(100, percent))}%`);
+  if (valueEl) valueEl.textContent = formatRangeValue(input, control.dataset.display || "raw");
+}
+
+function initRangeControls() {
+  document.querySelectorAll("[data-range-control]").forEach((control) => {
+    const input = control.querySelector('input[type="range"]');
+    if (!input) return;
+    syncRangeControl(control);
+    if (input.dataset.rangeBound === "true") return;
+    input.dataset.rangeBound = "true";
+    input.addEventListener("input", () => syncRangeControl(control));
   });
 }
 
 
 async function loadConfig() {
   const config = await api("/api/config");
+  if (config.repo_branch === "bec3d22") config.repo_branch = "v1.7";
   for (const [key, value] of Object.entries(config)) {
     const input = document.querySelector(`[name="${key}"]`);
     if (!input) continue;
@@ -104,8 +183,89 @@ async function loadConfig() {
   }
   if (config.dbo_api_url) DBO_BASE = config.dbo_api_url;
   if (config.dbo_api_key) DBO_KEY = config.dbo_api_key;
+  initRangeControls();
   $("#config-status").textContent = JSON.stringify(config, null, 2);
 }
+
+let modalAccounts = [];
+let activeModalAccountId = "";
+
+function renderModalAccount() {
+  const select = $("#modal-account-select");
+  const account = modalAccounts.find((item) => item.id === activeModalAccountId);
+  if (select) {
+    select.innerHTML = modalAccounts.map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}</option>`).join("");
+    select.value = activeModalAccountId;
+  }
+  $("#modal-account-name").value = account?.name || "";
+  $("#modal-account-token-id").value = "";
+  $("#modal-account-token-secret").value = "";
+  $("#modal-account-hf-token").value = "";
+  const avatar = $("#topbar-avatar");
+  if (avatar) avatar.textContent = [...(account?.name || "M")].find((char) => char.trim()) || "M";
+}
+
+async function loadModalAccounts() {
+  const data = await api("/api/modal-accounts");
+  modalAccounts = data.accounts || [];
+  activeModalAccountId = data.active_account_id || "";
+  renderModalAccount();
+}
+
+$("#modal-account-select")?.addEventListener("change", async (event) => {
+  try {
+    await api(`/api/modal-accounts/${encodeURIComponent(event.target.value)}/activate`, { method: "POST" });
+    activeModalAccountId = event.target.value;
+    renderModalAccount();
+    showToast("已切换 Modal 账户");
+  } catch (error) {
+    renderModalAccount();
+    showToast(error.message, false);
+  }
+});
+
+$("#modal-account-new")?.addEventListener("click", () => {
+  activeModalAccountId = "";
+  $("#modal-account-name").value = "";
+  $("#modal-account-token-id").value = "";
+  $("#modal-account-token-secret").value = "";
+  $("#modal-account-hf-token").value = "";
+});
+
+$("#modal-account-save")?.addEventListener("click", async () => {
+  const name = $("#modal-account-name").value.trim();
+  if (!name) return showToast("请填写账户名称", false);
+  try {
+    const saved = await api("/api/modal-accounts", { method: "POST", body: JSON.stringify({ id: activeModalAccountId || null, name, token_id: $("#modal-account-token-id").value.trim(), token_secret: $("#modal-account-token-secret").value.trim(), hf_token: $("#modal-account-hf-token").value.trim() }) });
+    modalAccounts = saved.modal_accounts || [];
+    activeModalAccountId = saved.active_modal_account_id || "";
+    renderModalAccount();
+    showToast("Modal 账户已保存");
+  } catch (error) {
+    showToast(error.message, false);
+  }
+});
+
+$("#modal-account-delete")?.addEventListener("click", async () => {
+  if (!activeModalAccountId || !confirm("确定删除当前 Modal 账户？")) return;
+  try {
+    const saved = await api(`/api/modal-accounts/${encodeURIComponent(activeModalAccountId)}`, { method: "DELETE" });
+    modalAccounts = saved.modal_accounts || [];
+    activeModalAccountId = saved.active_modal_account_id || "";
+    renderModalAccount();
+  } catch (error) {
+    showToast(error.message, false);
+  }
+});
+
+$("#modal-monthly-cost")?.addEventListener("click", async () => {
+  try {
+    const result = await api("/api/modal-cost/month");
+    showToast(`本月累计 $${Number(result.cost || 0).toFixed(2)}`);
+  } catch (error) {
+    showToast(error.message, false);
+  }
+});
 
 async function cancelJob(jobId) {
   try {
@@ -151,55 +311,109 @@ async function retryAllFailedJobs() {
   await loadJobs();
 }
 
-function renderJobCard(job) {
-  const cancellable = job.status === "queued" || job.status === "running";
+function renderJobRow(job) {
   const retryable = job.status === "failed" || job.status === "cancelled" || job.status === "cancelling";
   const statusLabel = STATUS_LABELS[job.status] || job.status;
+  const isRunning = job.status === "running";
+  const isQueued = job.status === "queued";
+  const isFailed = job.status === "failed";
+  const isDone = job.status === "done";
+  const isCancelled = job.status === "cancelled" || job.status === "cancelling";
+  const isCancelling = job.status === "cancelling";
+  const avCode = extractAvCode(job.input_path || "");
+  const shortId = avCode || `#${String(job.id).slice(0, 8).toUpperCase()}`;
+  const queueTone = isRunning ? "running" : isQueued ? "queued" : isFailed ? "failed" : isDone ? "done" : isCancelled ? "cancelled" : job.status;
 
-  let timingHtml = "";
-  if (job.status === "running" && job.started_at) {
-    const el = elapsedSeconds(job.started_at);
-    timingHtml = `<span class="timing elapsed-timer" data-started-at="${job.started_at}">已运行 ${fmtDuration(el)}</span>`;
-  }
+  const startedAt = Number(job.started_at || 0);
+  const completedAt = job.completed_at || 0;
+  const durationSeconds = isRunning && startedAt
+    ? elapsedSeconds(startedAt)
+    : completedAt && startedAt
+      ? Math.max(0, completedAt - startedAt)
+      : 0;
+  const localBaseSeconds = Number(job.local_seconds || 0);
+  const cloudBaseSeconds = Number(job.cloud_seconds || 0);
+  const localSeconds = livePhaseSeconds(job, "local");
+  const cloudSeconds = livePhaseSeconds(job, "cloud");
+  const displayTime = durationSeconds ? fmtDurationClock(durationSeconds) : "--:--";
+  const localTime = durationSeconds ? fmtDurationClock(localSeconds) : "--:--";
+  const cloudTime = durationSeconds ? fmtDurationClock(cloudSeconds) : "--:--";
+  const completedAtText = completedAt ? `${fmtDate(completedAt)} ${fmtClock(completedAt)}` : "--";
 
-  let completedHtml = "";
-  if ((job.status === "done" || job.status === "failed" || job.status === "cancelled") && job.completed_at) {
-    const label = job.status === "cancelled" ? "取消时间" : "完成时间";
-    completedHtml = `<span class="completed-time">${label} ${fmtDate(job.completed_at)} ${fmtClock(job.completed_at)}</span>`;
-  }
+  const phaseLabels = {
+    waiting_local: "等待本地处理",
+    local: "本地抽音频中",
+    uploading: "上传云端中",
+    submitting: "提交云端中",
+    cloud: "云端 GPU 转录中",
+    finalizing: "整理字幕中",
+    translating: "翻译字幕中",
+    moving: "移动源文件中",
+  };
+  const statusText = isRunning ? (phaseLabels[job.phase] || "运行中") : statusLabel;
+  const statusDetail = isFailed && job.message ? `<p class="job-status-detail">错误原因: ${escapeHtml(job.message)}</p>` : "";
 
-  let progressHtml = "";
-  if (job.progress > 0 && (job.status === "running" || job.status === "cancelling")) {
+  let progressHtml = '';
+  if (job.phase !== "waiting_local" && job.progress > 0 && (job.status === "running" || job.status === "cancelling")) {
     let phaseClass = "progress-local";
     if (job.progress >= 90) phaseClass = "progress-final";
     else if (job.progress >= 40) phaseClass = "progress-cloud";
-    progressHtml = `<div class="progress-bar"><div class="progress-fill ${phaseClass}" style="width:${Math.min(job.progress, 100)}%"></div></div>`;
+    progressHtml = `
+      <div class="job-progress-line">
+        <div class="progress-bar"><div class="progress-fill ${phaseClass}" style="width:${Math.min(job.progress, 100)}%"></div></div>
+        <span class="job-progress-percent">${Math.min(job.progress, 100)}%</span>
+      </div>
+    `;
   }
 
   const actions = [];
-  if (retryable) {
-    const retryLabel = job.status === "cancelled" ? "重新加入任务队列" : "重试";
-    actions.push(`<button class="retry-btn" data-id="${job.id}">${retryLabel}</button>`);
+  if (isRunning || isQueued || isCancelling) {
+    actions.push(`<button class="cancel-btn job-action" data-id="${job.id}" title="取消"><span class="material-symbols-outlined">stop_circle</span></button>`);
+  } else if (isFailed || job.status === "cancelled" || retryable) {
+    const retryLabel = job.status === "cancelled" ? "重新加入" : "重试";
+    actions.push(`<button class="retry-btn job-action" data-id="${job.id}" title="${retryLabel}"><span class="material-symbols-outlined">refresh</span><span>${retryLabel}</span></button>`);
   }
-  if (cancellable) actions.push(`<button class="cancel-btn" data-id="${job.id}">取消</button>`);
-  actions.push(`<button class="delete-btn" data-id="${job.id}">删除</button>`);
+  if (!isRunning && !isQueued && !isCancelling && !isDone) {
+    actions.push(`<button class="delete-btn job-action" data-id="${job.id}" title="删除"><span class="material-symbols-outlined">delete</span></button>`);
+  }
 
   return `
-    <article class="job ${escapeHtml(job.status)}">
-      <div class="job-head">
-        <strong>${escapeHtml(statusLabel)}</strong>
-        <span>${escapeHtml(job.id.slice(0, 8))}</span>
-        ${timingHtml}
-        <span class="head-spacer"></span>
-        <div class="job-actions">${actions.join("")}</div>
+    <article class="job job-row ${escapeHtml(job.status)}" data-status="${escapeHtml(queueTone)}">
+      <div class="job-row-main">
+        <div class="job-row-left">
+          <span class="job-id">${escapeHtml(shortId)}</span>
+        </div>
+        ${isDone ? `
+          <div class="job-completed-total"><span class="job-duration">${escapeHtml(displayTime)}</span></div>
+          <div class="job-completed-phases">
+            <span class="job-time-detail"><span class="material-symbols-outlined">laptop_mac</span>${escapeHtml(localTime)}</span>
+            <span class="job-time-detail"><span class="material-symbols-outlined">cloud</span>${escapeHtml(cloudTime)}</span>
+          </div>
+          <time class="job-completed-at" datetime="${completedAt ? new Date(completedAt * 1000).toISOString() : ""}">${escapeHtml(completedAtText)}</time>
+        ` : `
+          <div class="job-row-center">
+            <div class="job-status-line ${escapeHtml(queueTone)}">
+              <span class="job-status-dot"></span>
+              <span>${escapeHtml(statusText)}</span>
+            </div>
+            ${progressHtml}
+            ${statusDetail}
+            ${!isRunning && !isQueued && !isFailed && !isCancelled ? `<p class="job-msg">${escapeHtml(job.message || "")}</p>` : ""}
+          </div>
+          <div class="job-time-block">
+            <span class="job-duration elapsed-timer" data-timer-kind="total" data-started-at="${isRunning ? startedAt : ""}" data-base-seconds="${durationSeconds}" data-phase="${escapeHtml(job.phase || "")}">${escapeHtml(displayTime)}</span>
+            <span class="job-time-detail"><span class="material-symbols-outlined">laptop_mac</span><span class="elapsed-timer" data-timer-kind="local" data-base-seconds="${localBaseSeconds}" data-phase="${escapeHtml(job.phase || "")}" data-phase-started-at="${job.phase_started_at || 0}">${escapeHtml(localTime)}</span></span>
+            <span class="job-time-detail"><span class="material-symbols-outlined">cloud</span><span class="elapsed-timer" data-timer-kind="cloud" data-base-seconds="${cloudBaseSeconds}" data-phase="${escapeHtml(job.phase || "")}" data-phase-started-at="${job.phase_started_at || 0}">${escapeHtml(cloudTime)}</span></span>
+          </div>
+          ${actions.length ? `<div class="job-actions">${actions.join("")}</div>` : ""}
+        `}
       </div>
-      ${progressHtml}
-      <p class="job-path">${escapeHtml(job.input_path)}</p>
-      <p class="job-msg">${escapeHtml(job.message || "")}</p>
-      ${completedHtml}
-      <small>${escapeHtml((job.output_files || []).join("\n"))}</small>
     </article>
   `;
+}
+
+function renderJobCard(job) {
+  return renderJobRow(job);
 }
 
 async function loadJobs() {
@@ -207,21 +421,58 @@ async function loadJobs() {
   renderTab(currentTab);
 }
 
-function getJobsForTab(tab) {
+function getQueueJobs(tab) {
   const filtered = allJobs.filter((j) => TABS[tab].statuses.includes(j.status));
-  // 排队中的按创建时间升序（最早的在前，FIFO）
   if (tab === "queued") {
-    return filtered.sort((a, b) => a.created_at - b.created_at);
+    return filtered.sort((a, b) => (a.created_at || 0) - (b.created_at || 0));
   }
-  // 运行中的按开始时间升序（先开始的在上）
   if (tab === "running") {
-    return filtered.sort((a, b) => a.started_at - b.started_at);
+    return filtered.sort((a, b) => {
+      const aStarted = Number(a.started_at || 0);
+      const bStarted = Number(b.started_at || 0);
+      if (Boolean(aStarted) !== Boolean(bStarted)) return aStarted ? -1 : 1;
+      if (aStarted && bStarted && aStarted !== bStarted) return aStarted - bStarted;
+      return (a.created_at || 0) - (b.created_at || 0);
+    });
   }
   return filtered;
 }
 
+function getJobsForTab(tab) {
+  return getQueueJobs(tab);
+}
+
+function renderPager(pagerEl, page, totalPages, tab) {
+  if (!pagerEl) return;
+  if (totalPages <= 1) {
+    pagerEl.innerHTML = "";
+    return;
+  }
+  const buttons = [];
+  const start = Math.max(1, page - 1);
+  const end = Math.min(totalPages, page + 1);
+  buttons.push(`<button type="button" data-action="prev" ${page <= 1 ? "disabled" : ""}><span class="material-symbols-outlined">chevron_left</span></button>`);
+  if (start > 1) buttons.push(`<button type="button" data-page="1">1</button>`);
+  if (start > 2) buttons.push(`<span class="pager-ellipsis">?</span>`);
+  for (let i = start; i <= end; i++) {
+    buttons.push(`<button type="button" data-page="${i}" class="${i === page ? "active" : ""}">${i}</button>`);
+  }
+  if (end < totalPages - 1) buttons.push(`<span class="pager-ellipsis">?</span>`);
+  if (end < totalPages) buttons.push(`<button type="button" data-page="${totalPages}">${totalPages}</button>`);
+  buttons.push(`<button type="button" data-action="next" ${page >= totalPages ? "disabled" : ""}><span class="material-symbols-outlined">chevron_right</span></button>`);
+  pagerEl.innerHTML = `<div class="pager-shell">${buttons.join("")}</div>`;
+  pagerEl.querySelectorAll("button").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      if (btn.dataset.action === "prev" && page > 1) pageByTab[tab] = page - 1;
+      else if (btn.dataset.action === "next" && page < totalPages) pageByTab[tab] = page + 1;
+      else if (btn.dataset.page) pageByTab[tab] = Number(btn.dataset.page);
+      renderTab(tab);
+    });
+  });
+}
+
 function renderTab(tab) {
-  const tabJobs = getJobsForTab(tab);
+  const tabJobs = getQueueJobs(tab);
   const totalPages = Math.ceil(tabJobs.length / PAGE_SIZE) || 1;
   let page = pageByTab[tab];
   if (page > totalPages) page = totalPages;
@@ -229,9 +480,18 @@ function renderTab(tab) {
   const start = (page - 1) * PAGE_SIZE;
   const pageJobs = tabJobs.slice(start, start + PAGE_SIZE);
 
+  const listHead = $(".queue-list-head");
+  if (listHead) {
+    const headers = tab === "completed"
+      ? ["番号", "总耗时", "本地 / 云端", "完成时间"]
+      : ["番号", "状态 / 进度", "耗时", "操作"];
+    listHead.classList.toggle("completed", tab === "completed");
+    listHead.innerHTML = headers.map((header) => `<span>${header}</span>`).join("");
+  }
+
   document.querySelectorAll(".tab-btn").forEach((btn) => {
     const t = btn.dataset.tab;
-    const count = getJobsForTab(t).length;
+    const count = getQueueJobs(t).length;
     btn.textContent = `${TABS[t].label} (${count})`;
     btn.classList.toggle("active", t === currentTab);
   });
@@ -239,7 +499,7 @@ function renderTab(tab) {
   const failedTools = $("#failed-tools");
   const failedToolsText = $("#failed-tools-text");
   if (failedTools && failedToolsText) {
-    const failedCount = getJobsForTab("failed").length;
+    const failedCount = getQueueJobs("failed").length;
     failedToolsText.textContent = `当前有 ${failedCount} 个失败任务`;
     failedTools.classList.toggle("hidden", tab !== "failed");
   }
@@ -250,38 +510,24 @@ function renderTab(tab) {
 
   const jobsEl = pane ? pane.querySelector(".jobs") : null;
   if (jobsEl) {
-    jobsEl.innerHTML = pageJobs.map(renderJobCard).join("") || "<p class='empty'>暂无任务</p>";
+    jobsEl.innerHTML = pageJobs.map(renderJobCard).join("") || '<p class="empty">暂无任务</p>';
   }
 
-  document.querySelectorAll(".cancel-btn").forEach((btn) => {
+  document.querySelectorAll(".cancel-btn[data-id]").forEach((btn) => {
     btn.addEventListener("click", () => cancelJob(btn.dataset.id));
   });
 
-  document.querySelectorAll(".retry-btn").forEach((btn) => {
+  document.querySelectorAll(".retry-btn[data-id]").forEach((btn) => {
     btn.addEventListener("click", () => retryJob(btn.dataset.id));
   });
 
-  document.querySelectorAll(".delete-btn").forEach((btn) => {
+  document.querySelectorAll(".delete-btn[data-id]").forEach((btn) => {
     btn.addEventListener("click", () => deleteJob(btn.dataset.id));
   });
 
   const pagerEl = pane ? pane.querySelector(".pager") : null;
-  if (pagerEl) {
-    pagerEl.innerHTML = totalPages <= 1 ? "" : `
-      <button ${page <= 1 ? "disabled" : ""} data-action="prev">上一页</button>
-      <span>${page} / ${totalPages}</span>
-      <button ${page >= totalPages ? "disabled" : ""} data-action="next">下一页</button>
-    `;
-    pagerEl.querySelectorAll("button").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        if (btn.dataset.action === "prev" && page > 1) pageByTab[currentTab] = page - 1;
-        if (btn.dataset.action === "next" && page < totalPages) pageByTab[currentTab] = page + 1;
-        renderTab(currentTab);
-      });
-    });
-  }
+  renderPager(pagerEl, page, totalPages, tab);
 }
-
 function switchTab(tab) {
   currentTab = tab;
   renderTab(tab);
@@ -294,7 +540,7 @@ $("#config-form").addEventListener("submit", async (event) => {
   data.default_timeout_seconds = Number(data.default_timeout_seconds || 7200);
   data.watchdog_interval_seconds = Number(data.watchdog_interval_seconds || 60);
   data.max_workers = Number(data.max_workers || 1);
-  data.enable_watchdog = Boolean(event.target.enable_watchdog.checked);
+  data.enable_watchdog = Boolean(event.target.enable_watchdog?.checked);
   data.enable_smart_vad = Boolean(event.target.enable_smart_vad.checked);
   try {
     const saved = await api("/api/config", { method: "POST", body: JSON.stringify(data) });
@@ -412,7 +658,7 @@ $("#test-dbo-btn")?.addEventListener("click", async () => {
 });
 
 $("#refresh").addEventListener("click", loadJobs);
-api("/api/version").then(r => { const v = $("#version"); if (v) v.textContent = r.version; });
+api("/api/version").then(r => { const v = $("#version"); if (v) v.textContent = r.version || "v3.01"; });
 
 $("#clear-audio")?.addEventListener("click", async () => {
   if (!confirm("确定清空音频缓存？已缓存的文件下次需要重新提取。")) return;
@@ -425,6 +671,7 @@ $("#clear-audio")?.addEventListener("click", async () => {
 });
 $("#retry-all-failed")?.addEventListener("click", retryAllFailedJobs);
 loadConfig().catch((error) => $("#config-status").textContent = error.message);
+loadModalAccounts().catch((error) => showToast(error.message, false));
 
 // Combined override: gallery refresh + splash hide
 
@@ -577,7 +824,6 @@ loadJobs = async function() {
     const doneJobs = jobs.filter(j => j.status === "done" && (j.output_files || []).length > 0);
     const galleryHash = doneJobs.length + "|" + (doneJobs[0]?.id || "") + "|" + (doneJobs[0]?.completed_at || "");
     allJobs = jobs;
-
     if (tabHash !== _lastTabHash) {
       _lastTabHash = tabHash;
       renderTab(currentTab);
@@ -615,6 +861,8 @@ document.querySelectorAll(".tab-btn").forEach((btn) => {
   btn.addEventListener("click", () => switchTab(btn.dataset.tab));
 });
 
+initRangeControls();
+
 
 
 
@@ -623,6 +871,11 @@ function switchView(viewId) {
   document.querySelectorAll(".dock-item, .dock-mobile-item").forEach((item) => {
     item.classList.toggle("active", item.dataset.view === viewId);
   });
+  localStorage.setItem("subtitle-active-view", viewId);
+  document.body.dataset.view = viewId;
+  const heading = document.getElementById("topbar-heading");
+  const headingTitle = heading ? heading.querySelector(".topbar-title-text") : null;
+  if (headingTitle) headingTitle.textContent = "Subtitle Cloud";
   document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
   const view = document.getElementById("view-" + viewId);
   if (view) view.classList.add("active");
@@ -637,7 +890,7 @@ function switchView(viewId) {
   }
 }
 
-document.querySelectorAll(".dock-item, .dock-mobile-item").forEach((btn) => {
+document.querySelectorAll(".dock-item[data-view], .dock-mobile-item[data-view]").forEach((btn) => {
   btn.addEventListener("click", () => switchView(btn.dataset.view));
 });
 
@@ -651,6 +904,15 @@ function downloadPack(ts) {
   a.remove();
 }
 
+function downloadGalleryFile(jobId, fileIndex) {
+  const a = document.createElement("a");
+  a.href = "/api/jobs/" + encodeURIComponent(jobId) + "/download?file_index=" + fileIndex;
+  a.download = "";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
 /* ═══ HOME GALLERY — 按日期归组 ═══ */
 function renderHome() {
   const gallery = $("#gallery");
@@ -658,9 +920,6 @@ function renderHome() {
 
   const done = allJobs.filter((j) => j.status === "done" && (j.output_files || []).length > 0);
   const sorted = done.sort((a, b) => (b.completed_at || 0) - (a.completed_at || 0));
-
-  const count = $("#home-count");
-  if (count) count.textContent = done.length + " 部已完成";
 
   if (sorted.length === 0) {
     gallery.innerHTML = '<div class="gallery-empty">尚无已完成字幕</div>';
@@ -689,9 +948,9 @@ function renderHome() {
     groups.get(key).push(job);
   });
 
-  // 按天数分页：每页 10 个有海报的日期
+  // 按天数分页：每页 5 个有海报的日期
   const allDates = [...groups.keys()].sort((a, b) => b - a);
-  const daysPerPage = 10;
+  const daysPerPage = 5;
   const totalPages = Math.ceil(allDates.length / daysPerPage);
   if (galleryPageIndex >= totalPages) galleryPageIndex = Math.max(0, totalPages - 1);
   const pagedDates = allDates.slice(galleryPageIndex * daysPerPage, (galleryPageIndex + 1) * daysPerPage);
@@ -735,7 +994,7 @@ function renderHome() {
         '<div class="gallery-footer">' +
         '<div class="av">' + escapeHtml(av) + '</div>' +
         '<div class="meta">' + escapeHtml(fmtDate(job.completed_at)) + '</div>' +
-        '<span class="fmt-badge">' + escapeHtml(fmt) + '</span>' +
+        '<div class="gallery-actions"><button type="button" class="gallery-download" title="下载字幕" onclick="downloadGalleryFile(\'' + escapeHtml(job.id) + '\', 0)"><span class="material-symbols-outlined">download</span></button><span class="fmt-badge">' + escapeHtml(fmt) + '</span></div>' +
         '</div></div>';
     }
     html += '</div></div>';
@@ -811,24 +1070,25 @@ setTimeout(hideSplash, 3000);
 /* ═══ THEME TOGGLE ═══ */
 function setTheme(theme) {
   const root = document.documentElement;
-  document.getElementById("theme-toggle-mobile");
-  if (theme === "light") {
-    root.classList.add("light");
-  } else {
-    root.classList.remove("light");
-  }
-  localStorage.setItem("subtitle-theme", theme);
+  const normalized = theme === "dark" ? "dark" : "light";
+  root.classList.toggle("dark", normalized === "dark");
+  localStorage.setItem("subtitle-theme", normalized);
+  const themeColor = document.querySelector('meta[name="theme-color"]');
+  if (themeColor) themeColor.setAttribute("content", normalized === "dark" ? "#000000" : "#fcfcfc");
 }
 
 function toggleTheme() {
-  const isLight = document.documentElement.classList.contains("light");
-  setTheme(isLight ? "dark" : "light");
+  const isDark = document.documentElement.classList.contains("dark");
+  setTheme(isDark ? "light" : "dark");
 }
 
-// Restore saved theme
-const saved = localStorage.getItem("subtitle-theme");
-if (saved) setTheme(saved);
+// Stitch reference is light-themed; default to light for this dashboard.
+const savedTheme = localStorage.getItem("subtitle-theme") || "light";
+setTheme(savedTheme);
 
 document.getElementById("theme-toggle")?.addEventListener("click", toggleTheme);
 document.getElementById("theme-toggle-mobile")?.addEventListener("click", toggleTheme);
+
+const initialView = localStorage.getItem("subtitle-active-view") || "home";
+switchView(initialView);
 

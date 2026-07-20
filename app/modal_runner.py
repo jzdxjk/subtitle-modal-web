@@ -29,6 +29,7 @@ class ModalRunHandle:
         self._formats = formats
         self._before = before
         self._submitted_lines: list[str] = []
+        self._stderr_lines: list[str] = []
         self._submitted = False
 
     def wait_for_submit(self, timeout_seconds: int = 600) -> None:
@@ -44,6 +45,7 @@ class ModalRunHandle:
         def _stderr_reader() -> None:
             for _line in self._proc.stderr:
                 if _line.strip():
+                    self._stderr_lines.append(_line.rstrip("\n"))
                     logging.getLogger("subtitle.modal").warning("[bridge-stderr] %s", _line.rstrip("\n"))
 
         thread = threading.Thread(target=_reader, daemon=True)
@@ -61,9 +63,11 @@ class ModalRunHandle:
 
         # If process exited during submission, it's an error
         if self._proc.poll() is not None:
+            stderr_thread.join(timeout=1)
             stderr_remainder = self._proc.stderr.read()
             stdout_tail = "\n".join(self._submitted_lines[-30:])
-            raise RuntimeError(f"Modal bridge failed before cloud submission:\n{stdout_tail}\n{stderr_remainder}")
+            stderr_text = "\n".join([*self._stderr_lines, stderr_remainder or ""]).strip()
+            raise RuntimeError(f"Modal bridge failed before cloud submission:\n{stdout_tail}\n{stderr_text}")
 
         self._submitted = True
 
@@ -95,8 +99,9 @@ class ModalRunHandle:
             detail = f"stage={last_stage}"
             if stdout_tail.strip():
                 detail += f"\n--- stdout tail ---\n{stdout_tail.strip()}"
-            if stderr_tail.strip():
-                detail += f"\n--- stderr tail ---\n{stderr_tail.strip()}"
+            stderr_combined = "\n".join([*self._stderr_lines, stderr_tail or ""]).strip()
+            if stderr_combined:
+                detail += f"\n--- stderr tail ---\n{stderr_combined[-3000:]}"
             raise RuntimeError(f"Modal run failed at stage [{last_stage}]: {detail}")
 
         after = ModalRunner._snapshot(self._output_dir, self._formats)

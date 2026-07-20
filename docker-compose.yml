@@ -12,13 +12,10 @@ services:
       - ./cache:/cache
       - ./config:/config
     environment:
-      MODAL_TOKEN_ID: ${MODAL_TOKEN_ID}
-      MODAL_TOKEN_SECRET: ${MODAL_TOKEN_SECRET}
       HF_TOKEN: ${HF_TOKEN:-}
       APP_PORT: "8898"
       DEFAULT_GPU: "T4"
       DEFAULT_MODEL: "chickenrice"
-      REPO_BRANCH: "bec3d22"
       DEFAULT_FORMATS: "srt"
       WATCH_DIR: "/mnt/media"
       DEFAULT_MOVE_TARGET_DIR: ""

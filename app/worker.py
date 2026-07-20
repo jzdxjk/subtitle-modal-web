@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import replace
 import json
 import logging
 import shutil
@@ -171,7 +172,7 @@ class JobRunner:
                         logger.info("worker-%d finished job %s", worker_id, job.id)
                     except Exception as exc:
                         logger.exception("worker-%d processing job %s failed", worker_id, job.id)
-                        self.store.update_job(job.id, status="failed", message=str(exc), completed_at=time.time())
+                        self.store.update_job(job.id, status="failed", message=self._format_error_message(exc), completed_at=time.time())
 
         def _new_worker() -> asyncio.Task:
             nonlocal worker_counter
@@ -230,15 +231,32 @@ class JobRunner:
 
         logger.info("_run_forever: all workers stopped")
 
+    @staticmethod
+    def _format_error_message(exc: Exception) -> str:
+        message = str(exc)
+        if "Token validation failed" in message or "AuthError" in message:
+            return "Modal Token 验证失败：请在配置页检查当前 Modal 账户的 Token ID / Token Secret，保存后重试。"
+        return message
+
     async def _process_job_pipelined(self, job: Job, local_lock: asyncio.Lock) -> None:
         """Pipeline: serial local phase (ffmpeg+submit), parallel cloud phase."""
         stage = ""
         phase_timings: dict[str, int] = {}
         t0: float | None = None
         try:
-            self.store.update_job(job.id, progress=0)
+            self.store.update_job(job.id, progress=0, phase="waiting_local", phase_started_at=0.0)
 
             config = self.config_store.load()
+            account_id = job.modal_account_id or config.active_modal_account_id
+            account = self.config_store.get_modal_account(account_id)
+            if account is None:
+                raise RuntimeError("任务绑定的 Modal 账户不存在")
+            config = replace(
+                config,
+                modal_token_id=account.get("token_id", ""),
+                modal_token_secret=account.get("token_secret", ""),
+                hf_token=account.get("hf_token", "") or config.hf_token,
+            )
             is_transcribe = config.enable_transcribe and all([
                 config.openai_api_url, config.openai_api_key, config.openai_model, config.transcribe_model
             ])
@@ -255,7 +273,7 @@ class JobRunner:
             audio_paths: list[Path] = []
             for index, media_path in enumerate(media_files, start=1):
                 if self.store.is_cancelling(job.id):
-                    self.store.update_job(job.id, status="cancelled", message=f"用户已取消（文件 {index}/{total_media}）")
+                    self.store.update_job(job.id, status="cancelled", phase="cancelled", phase_started_at=0.0, message=f"用户已取消（文件 {index}/{total_media}）")
                     return
 
                 # Skip check (no cloud needed)
@@ -273,13 +291,15 @@ class JobRunner:
                     self.store.update_job(
                         job.id,
                         status="running",
+                        phase="waiting_local",
+                        phase_started_at=0.0,
                         message=f"⏳ 等待本地处理通道（{index}/{total_media}）",
-                        progress=max(1, (index - 1) * 35 // total_media),
+                        progress=0,
                     )
 
                 async with local_lock:
                     if self.store.is_cancelling(job.id):
-                        self.store.update_job(job.id, status="cancelled", message=f"用户已取消（文件 {index}/{total_media}）")
+                        self.store.update_job(job.id, status="cancelled", phase="cancelled", phase_started_at=0.0, message=f"用户已取消（文件 {index}/{total_media}）")
                         return
 
                     if t0 is None:
@@ -297,7 +317,14 @@ class JobRunner:
                         return cb
 
                     stage = f"正在提取音频 {index}/{total_media}"
-                    self.store.update_job(job.id, status="running", message=f"🎵 正在提取音频 {index}/{total_media}", progress=max(1, (index - 1) * 35 // total_media))
+                    self.store.update_job(
+                        job.id,
+                        status="running",
+                        phase="local",
+                        phase_started_at=t_local_start,
+                        message=f"🎵 正在提取音频 {index}/{total_media}",
+                        progress=max(1, (index - 1) * 35 // total_media),
+                    )
                     audio_path = await asyncio.to_thread(
                         prepare_audio, media_path, self.cache_dir,
                         on_progress=_mk_cb(job.id, self.store, index, total_media, t_local_start),
@@ -305,7 +332,7 @@ class JobRunner:
                     )
 
                     if self.store.is_cancelling(job.id):
-                        self.store.update_job(job.id, status="cancelled", message=f"用户已取消（文件 {index}/{total_media}）")
+                        self.store.update_job(job.id, status="cancelled", phase="cancelled", phase_started_at=0.0, message=f"用户已取消（文件 {index}/{total_media}）")
                         return
 
                     audio_paths.append(audio_path)
@@ -316,18 +343,31 @@ class JobRunner:
                     stage = f"正在上传到云端 {index}/{total_media}"
                     base_prog = 35 + (index - 1) * 55 // total_media if total_media > 0 else 35
 
-                    self.store.update_job(job.id, message=f"☁️ 正在上传音频到云端GPU...（{index}/{total_media}）", progress=base_prog)
+                    self.store.update_job(
+                        job.id,
+                        phase="uploading",
+                        phase_started_at=0.0,
+                        local_seconds=phase_timings["local"],
+                        message=f"☁️ 正在上传音频到云端GPU...（{index}/{total_media}）",
+                        progress=base_prog,
+                    )
                     transcribe_model = config.transcribe_model if is_transcribe else None
                     handle = await asyncio.to_thread(runner.launch, audio_path, item_output_dir, job.formats, config.default_timeout_seconds, model=transcribe_model)
 
-                    self.store.update_job(job.id, message=f"☁️ 正在提交到云端GPU...（{index}/{total_media}）", progress=base_prog + 5)
+                    self.store.update_job(job.id, phase="submitting", message=f"☁️ 正在提交到云端GPU...（{index}/{total_media}）", progress=base_prog + 5)
                     await asyncio.to_thread(handle.wait_for_submit, 600)
 
                 # --- Parallel phase: cloud runs, next job can start local ---
                 t_cloud_start = time.time()
                 stage = f"云端推理中 {index}/{total_media}"
                 cloud_prog = 40 + (index - 1) * 50 // total_media if total_media > 0 else 40
-                self.store.update_job(job.id, message=f"🧠 云端推理中...（{index}/{total_media}）（下一个任务可同时进行）", progress=cloud_prog)
+                self.store.update_job(
+                    job.id,
+                    phase="cloud",
+                    phase_started_at=t_cloud_start,
+                    message=f"🧠 云端推理中...（{index}/{total_media}）（下一个任务可同时进行）",
+                    progress=cloud_prog,
+                )
 
                 result = await asyncio.to_thread(handle.wait, config.default_timeout_seconds)
                 t_cloud_end = time.time()
@@ -339,7 +379,14 @@ class JobRunner:
                 # --- Finalize ---
                 stage = f"正在整理输出 {index}/{total_media}"
                 final_prog = 90 + (index - 1) * 10 // total_media if total_media > 0 else 90
-                self.store.update_job(job.id, message=f"📦 正在整理输出文件...（{index}/{total_media}）", progress=final_prog)
+                self.store.update_job(
+                    job.id,
+                    phase="finalizing",
+                    phase_started_at=0.0,
+                    cloud_seconds=phase_timings["cloud"],
+                    message=f"📦 正在整理输出文件...（{index}/{total_media}）",
+                    progress=final_prog,
+                )
                 logger.info("[normalize] job=%s media=%s produced=%s expected=%s",
                             job.id, media_path.name,
                             [str(p) for p in result.output_files],
@@ -358,7 +405,7 @@ class JobRunner:
                         ja_path = JobRunner._unique_path(ja_subs_dir / f"{av_code}.ja.srt")
                         shutil.move(str(srt_path), str(ja_path))
                         zh_path = JobRunner._unique_path(item_output_dir / f"{av_code}.srt")
-                        self.store.update_job(job.id, message=f"🤖 LLM 翻译中...（{av_code}）", progress=final_prog)
+                        self.store.update_job(job.id, phase="translating", message=f"🤖 LLM 翻译中...（{av_code}）", progress=final_prog)
                         t_tl_start = time.time()
                         await asyncio.to_thread(
                             translate_srt,
@@ -379,7 +426,7 @@ class JobRunner:
             move_target = job.move_target_dir or config.default_move_target_dir
             if move_target:
                 stage = "正在移动源文件夹"
-                self.store.update_job(job.id, message=f"📂 正在移动源文件夹到 {move_target}", progress=95)
+                self.store.update_job(job.id, phase="moving", phase_started_at=0.0, message=f"📂 正在移动源文件夹到 {move_target}", progress=95)
                 output_parents = {Path(f).parent for f in output_files}
                 for parent in sorted(media_parents):
                     if not parent.exists():
@@ -421,8 +468,18 @@ class JobRunner:
                                job.id, len(output_files) - len(verified_files), len(output_files), missing)
             else:
                 logger.info("job %s: all %d output files verified: %s", job.id, len(verified_files), verified_files)
-            self.store.update_job(job.id, status="done", message=timing_msg,
-                                  output_files=verified_files, completed_at=t_end, progress=100)
+            self.store.update_job(
+                job.id,
+                status="done",
+                phase="done",
+                phase_started_at=0.0,
+                local_seconds=local_secs,
+                cloud_seconds=cloud_secs,
+                message=timing_msg,
+                output_files=verified_files,
+                completed_at=t_end,
+                progress=100,
+            )
 
             for p in audio_paths:
                 try:
@@ -430,7 +487,7 @@ class JobRunner:
                 except Exception:
                     pass
         except Exception as exc:
-            self.store.update_job(job.id, status="failed", message=f"❌ {stage}: {exc}", completed_at=time.time())
+            self.store.update_job(job.id, status="failed", phase="failed", phase_started_at=0.0, message=f"❌ {stage}: {exc}", completed_at=time.time())
 
     async def _watchdog_loop(self) -> None:
         while self._running:

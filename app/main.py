@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import subprocess
 from dataclasses import asdict
 from pathlib import Path
 
@@ -75,6 +76,14 @@ class JobPayload(BaseModel):
     move_target_dir: str = ""
 
 
+class ModalAccountPayload(BaseModel):
+    id: str | None = None
+    name: str = Field(min_length=1, max_length=64)
+    token_id: str = ""
+    token_secret: str = ""
+    hf_token: str = ""
+
+
 @app.on_event("startup")
 async def startup() -> None:
     asyncio.create_task(runner.start())
@@ -128,7 +137,7 @@ def test_dbo() -> dict:
 
 @app.get("/api/version")
 def get_version() -> dict:
-    return {"version": "v2.10"}
+    return {"version": "v3.01"}
 
 
 @app.get("/api/config")
@@ -142,6 +151,57 @@ def save_config(payload: ConfigPayload) -> dict:
     return config_store.save(data).redacted()
 
 
+@app.get("/api/modal-accounts")
+def list_modal_accounts() -> dict:
+    config = config_store.load().redacted()
+    return {"accounts": config["modal_accounts"], "active_account_id": config["active_modal_account_id"]}
+
+
+@app.post("/api/modal-accounts")
+def save_modal_account(payload: ModalAccountPayload) -> dict:
+    if not payload.token_id or not payload.token_secret:
+        existing = config_store.get_modal_account(payload.id or "")
+        if existing is None:
+            raise HTTPException(status_code=400, detail="Modal Token ID 和 Token Secret 不能为空")
+    config = config_store.save_modal_account(payload.dict())
+    return config.redacted()
+
+
+@app.post("/api/modal-accounts/{account_id}/activate")
+def activate_modal_account(account_id: str) -> dict:
+    try:
+        return config_store.set_active_modal_account(account_id).redacted()
+    except KeyError:
+        raise HTTPException(status_code=404, detail="账户不存在")
+
+
+@app.delete("/api/modal-accounts/{account_id}")
+def delete_modal_account(account_id: str) -> dict:
+    if job_store.has_active_jobs_for_modal_account(account_id):
+        raise HTTPException(status_code=409, detail="该账户仍有排队或运行中的任务，暂不能删除")
+    if config_store.get_modal_account(account_id) is None:
+        raise HTTPException(status_code=404, detail="账户不存在")
+    return config_store.delete_modal_account(account_id).redacted()
+
+
+@app.get("/api/modal-cost/month")
+def modal_monthly_cost() -> dict:
+    config = config_store.load()
+    account = config_store.get_modal_account(config.active_modal_account_id)
+    if account is None:
+        raise HTTPException(status_code=400, detail="请先配置并选择 Modal 账户")
+    env = os.environ.copy()
+    env["MODAL_TOKEN_ID"] = account["token_id"]
+    env["MODAL_TOKEN_SECRET"] = account["token_secret"]
+    try:
+        result = subprocess.run(["modal", "billing", "report", "--for", "this month", "--json"], env=env, capture_output=True, text=True, timeout=30, check=True)
+        report = json.loads(result.stdout)
+        total = sum(float(item.get("cost", 0) or 0) for item in report if isinstance(item, dict))
+        return {"account_name": account["name"], "cost": total}
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"无法查询 Modal 本月费用: {exc}")
+
+
 # ═══ TRANSCRIBE API ═══
 
 class TranscribeConfigPayload(BaseModel):
@@ -150,6 +210,7 @@ class TranscribeConfigPayload(BaseModel):
     openai_api_key: str | None = None
     openai_model: str | None = None
     transcribe_prompt: str | None = None
+    transcribe_model: str | None = None
 
 
 @app.post("/api/transcribe-config")
@@ -214,7 +275,11 @@ def create_job(payload: JobPayload) -> dict:
     formats = [fmt.strip().lstrip(".").lower() for fmt in payload.formats if fmt.strip()]
     if not formats:
         raise HTTPException(status_code=400, detail="at least one subtitle format is required")
-    job = job_store.create_job(payload.input_path, payload.output_dir, formats, payload.overwrite, payload.move_target_dir)
+    config = config_store.load()
+    account = config_store.get_modal_account(config.active_modal_account_id)
+    if account is None or not account.get("token_id") or not account.get("token_secret"):
+        raise HTTPException(status_code=400, detail="请先在配置页选择并保存有效的 Modal 账户")
+    job = job_store.create_job(payload.input_path, payload.output_dir, formats, payload.overwrite, payload.move_target_dir, config.active_modal_account_id)
     return asdict(job)
 
 
@@ -229,6 +294,22 @@ def get_job(job_id: str) -> dict:
     if job is None:
         raise HTTPException(status_code=404, detail="job not found")
     return asdict(job)
+
+
+@app.get("/api/jobs/{job_id}/download")
+def download_job_output(job_id: str, file_index: int = 0) -> FileResponse:
+    job = job_store.get_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="job not found")
+    if job.status != "done":
+        raise HTTPException(status_code=409, detail="job output is not ready")
+    if file_index < 0 or file_index >= len(job.output_files):
+        raise HTTPException(status_code=404, detail="output file not found")
+
+    output_file = Path(job.output_files[file_index])
+    if not output_file.is_file():
+        raise HTTPException(status_code=404, detail="output file is missing")
+    return FileResponse(output_file, filename=output_file.name)
 
 
 @app.post("/api/jobs/{job_id}/retry")
@@ -248,6 +329,11 @@ def retry_failed_jobs() -> dict:
 
 @app.delete("/api/jobs/{job_id}")
 def delete_job(job_id: str) -> dict:
+    job = job_store.get_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="job not found")
+    if job.status in ("queued", "running", "cancelling"):
+        raise HTTPException(status_code=409, detail="active job must be cancelled before deletion")
     ok = job_store.delete_job(job_id)
     if not ok:
         raise HTTPException(status_code=404, detail="job not found")

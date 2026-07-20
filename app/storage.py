@@ -25,6 +25,11 @@ class Job:
     started_at: float = 0.0
     completed_at: float = 0.0
     progress: int = 0
+    modal_account_id: str = ""
+    phase: str = "queued"
+    phase_started_at: float = 0.0
+    local_seconds: float = 0.0
+    cloud_seconds: float = 0.0
 
 
 class JobStore:
@@ -89,8 +94,22 @@ class JobStore:
                 conn.execute("ALTER TABLE jobs ADD COLUMN progress INTEGER NOT NULL DEFAULT 0")
             except sqlite3.OperationalError:
                 pass
+            try:
+                conn.execute("ALTER TABLE jobs ADD COLUMN modal_account_id TEXT NOT NULL DEFAULT ''")
+            except sqlite3.OperationalError:
+                pass
+            for column, definition in (
+                ("phase", "TEXT NOT NULL DEFAULT 'queued'"),
+                ("phase_started_at", "REAL NOT NULL DEFAULT 0.0"),
+                ("local_seconds", "REAL NOT NULL DEFAULT 0.0"),
+                ("cloud_seconds", "REAL NOT NULL DEFAULT 0.0"),
+            ):
+                try:
+                    conn.execute(f"ALTER TABLE jobs ADD COLUMN {column} {definition}")
+                except sqlite3.OperationalError:
+                    pass
 
-    def create_job(self, input_path: str, output_dir: str, formats: Iterable[str], overwrite: bool, move_target_dir: str = "") -> Job:
+    def create_job(self, input_path: str, output_dir: str, formats: Iterable[str], overwrite: bool, move_target_dir: str = "", modal_account_id: str = "") -> Job:
         now = time.time()
         job = Job(
             id=str(uuid.uuid4()),
@@ -104,10 +123,11 @@ class JobStore:
             output_files=[],
             created_at=now,
             updated_at=now,
+            modal_account_id=modal_account_id,
         )
         with self._connect() as conn:
             conn.execute(
-                "INSERT INTO jobs VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO jobs (id, input_path, output_dir, formats, overwrite, move_target_dir, status, message, output_files, created_at, updated_at, started_at, completed_at, progress, modal_account_id, phase, phase_started_at, local_seconds, cloud_seconds) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     job.id,
                     job.input_path,
@@ -123,12 +143,20 @@ class JobStore:
                     job.started_at,
                     job.completed_at,
                     job.progress,
+                    job.modal_account_id,
+                    job.phase,
+                    job.phase_started_at,
+                    job.local_seconds,
+                    job.cloud_seconds,
                 ),
             )
         return job
 
     def update_job(self, job_id: str, **fields: object) -> None:
-        allowed = {"status", "message", "output_files", "started_at", "completed_at", "progress"}
+        allowed = {
+            "status", "message", "output_files", "started_at", "completed_at", "progress",
+            "phase", "phase_started_at", "local_seconds", "cloud_seconds",
+        }
         updates = {key: value for key, value in fields.items() if key in allowed}
         if not updates:
             return
@@ -169,13 +197,13 @@ class JobStore:
             status = job["status"]
             if status == "queued":
                 conn.execute(
-                    "UPDATE jobs SET status = 'cancelled', message = '用户已取消', updated_at = ? WHERE id = ?",
+                    "UPDATE jobs SET status = 'cancelled', phase = 'cancelled', phase_started_at = 0.0, message = '用户已取消', updated_at = ? WHERE id = ?",
                     (time.time(), job_id),
                 )
                 return True
             if status == "running":
                 conn.execute(
-                    "UPDATE jobs SET status = 'cancelling', message = '取消中...', updated_at = ? WHERE id = ?",
+                    "UPDATE jobs SET status = 'cancelling', phase = 'cancelling', phase_started_at = 0.0, message = '取消中...', updated_at = ? WHERE id = ?",
                     (time.time(), job_id),
                 )
                 return True
@@ -194,7 +222,7 @@ class JobStore:
                 return False
             message = "重试已提交，等待中" if row["status"] == "failed" else "已重新加入队列，等待中"
             conn.execute(
-                "UPDATE jobs SET status = 'queued', message = ?, output_files = ?, started_at = 0.0, completed_at = 0.0, progress = 0, updated_at = ? WHERE id = ?",
+                "UPDATE jobs SET status = 'queued', phase = 'queued', phase_started_at = 0.0, local_seconds = 0.0, cloud_seconds = 0.0, message = ?, output_files = ?, started_at = 0.0, completed_at = 0.0, progress = 0, updated_at = ? WHERE id = ?",
                 (message, json.dumps([]), time.time(), job_id),
             )
         return True
@@ -203,7 +231,7 @@ class JobStore:
         """Retry all failed jobs and return affected row count."""
         with self._connect() as conn:
             cur = conn.execute(
-                "UPDATE jobs SET status = 'queued', message = ?, output_files = ?, started_at = 0.0, completed_at = 0.0, progress = 0, updated_at = ? WHERE status = 'failed'",
+                "UPDATE jobs SET status = 'queued', phase = 'queued', phase_started_at = 0.0, local_seconds = 0.0, cloud_seconds = 0.0, message = ?, output_files = ?, started_at = 0.0, completed_at = 0.0, progress = 0, updated_at = ? WHERE status = 'failed'",
                 ("批量重试已提交，等待中", json.dumps([]), time.time()),
             )
         return cur.rowcount
@@ -225,6 +253,14 @@ class JobStore:
             ).fetchone()
         return row is not None
 
+    def has_active_jobs_for_modal_account(self, account_id: str) -> bool:
+        with self._connect() as conn:
+            if account_id == "default":
+                row = conn.execute("SELECT 1 FROM jobs WHERE (modal_account_id = ? OR modal_account_id = '') AND status IN ('queued', 'running', 'cancelling') LIMIT 1", (account_id,)).fetchone()
+            else:
+                row = conn.execute("SELECT 1 FROM jobs WHERE modal_account_id = ? AND status IN ('queued', 'running', 'cancelling') LIMIT 1", (account_id,)).fetchone()
+        return row is not None
+
     def claim_next_queued(self) -> Job | None:
         """Atomically claim the next queued job. Returns the job or None."""
         now = time.time()
@@ -237,7 +273,7 @@ class JobStore:
                 return None
             job_id = row["id"]
             conn.execute(
-                "UPDATE jobs SET status = 'running', message = '', updated_at = ? WHERE id = ?",
+                "UPDATE jobs SET status = 'running', phase = 'waiting_local', phase_started_at = 0.0, message = '', updated_at = ? WHERE id = ?",
                 (now, job_id),
             )
             row = conn.execute(
@@ -268,5 +304,10 @@ class JobStore:
             started_at=row["started_at"],
             completed_at=row["completed_at"],
             progress=row["progress"],
+            modal_account_id=row["modal_account_id"] if "modal_account_id" in row.keys() else "",
+            phase=row["phase"] if "phase" in row.keys() else row["status"],
+            phase_started_at=row["phase_started_at"] if "phase_started_at" in row.keys() else 0.0,
+            local_seconds=row["local_seconds"] if "local_seconds" in row.keys() else 0.0,
+            cloud_seconds=row["cloud_seconds"] if "cloud_seconds" in row.keys() else 0.0,
         )
 

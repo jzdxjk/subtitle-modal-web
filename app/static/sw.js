@@ -1,4 +1,4 @@
-const CACHE = "subtitle-web-v6";
+const CACHE = "subtitle-web-v30";
 const STATIC = [
   "/",
   "/static/index.html",
@@ -27,9 +27,10 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
-  // API 请求不缓存，走网络
+  // API requests are not cached.
   if (url.pathname.startsWith("/api/")) return;
-  // HTML/CSS/JS：network-first（保证更新及时）
+
+  // HTML/CSS/JS use network-first so updates appear quickly.
   if (/\.(html|css|js)$/.test(url.pathname) || url.pathname === "/") {
     event.respondWith(
       fetch(event.request)
@@ -42,7 +43,8 @@ self.addEventListener("fetch", (event) => {
     );
     return;
   }
-  // 其他静态资源（图标等）：cache-first
+
+  // Other static resources use cache-first.
   event.respondWith(
     caches.match(event.request).then((cached) => cached || fetch(event.request))
   );

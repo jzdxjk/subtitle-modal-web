@@ -1,238 +1,316 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>字幕云翻译</title>
   <link rel="manifest" href="/static/manifest.json" />
-  <meta name="theme-color" content="#161b22" />
+  <link rel="icon" href="/static/icons/icon-192.svg" type="image/svg+xml" />
+  <meta name="theme-color" content="#fcfcfc" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/styles.css?v=78" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+SC:wght@400;500;600;700&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/styles.css?v=105" />
 </head>
 <body>
-  <!-- Splash -->
   <div id="splash" class="splash">
-    <div class="splash-box">
-      <div class="splash-icon">字</div>
-      <div class="splash-title">字幕云翻译</div>
+    <div class="splash-box neu-convex">
+      <div class="splash-icon neu-concave">字</div>
+      <div class="splash-title">字幕云</div>
       <div class="splash-dot"></div>
     </div>
   </div>
-  <!-- 桌面 Dock -->
+
   <nav class="dock" id="dock">
-    <div class="dock-icon"><span class="dock-icon-badge">字</span>字幕云 <small id="version" style="opacity:.35;font-size:10px"></small></div>
+    <div class="brand">
+      <div class="brand-mark neu-convex"><span class="material-symbols-outlined">cloud_sync</span></div>
+      <h1 class="brand-title">
+        <span class="brand-word"><span>Subtitle</span><small>字幕云</small></span>
+        <span class="brand-word"><span>Cloud</span><small id="version">v3.01</small></span>
+      </h1>
+    </div>
     <button class="dock-item active" data-view="home">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-      <span>主界面</span>
+      <span class="material-symbols-outlined">dashboard</span>
+      <span>字幕画廊</span>
     </button>
     <button class="dock-item" data-view="queue">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+      <span class="material-symbols-outlined">queue</span>
       <span>任务队列</span>
     </button>
     <button class="dock-item" data-view="submit">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+      <span class="material-symbols-outlined">add_circle</span>
       <span>提交任务</span>
     </button>
     <button class="dock-item" data-view="config">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      <span class="material-symbols-outlined">settings</span>
       <span>配置</span>
     </button>
     <button class="dock-item" data-view="transcribe">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+      <span class="material-symbols-outlined">mic</span>
       <span>转录</span>
     </button>
-    <div style="flex:1"></div>
     <button class="dock-item theme-btn" id="theme-toggle" title="切换主题">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="sun-icon"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="moon-icon"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      <span class="material-symbols-outlined sun-icon">light_mode</span>
+      <span class="material-symbols-outlined moon-icon">dark_mode</span>
       <span>主题</span>
     </button>
   </nav>
 
-  <!-- 主内容区 -->
-  <main class="main-content" id="main-content">
+  <header class="topbar">
+    <h2 id="topbar-heading"><span class="topbar-title-text">Subtitle Cloud</span><small>v3.01</small></h2>
+    <div class="topbar-actions">
+      <button class="icon-button neu-convex notify-button" id="modal-monthly-cost" type="button" title="查询本月 Modal 费用"><span class="material-symbols-outlined">notifications</span></button>
+      <div class="topbar-avatar neu-convex" id="topbar-avatar" aria-label="当前 Modal 账户">M</div>
+    </div>
+  </header>
 
-    <!-- 主界面 -->
+  <main class="main-content" id="main-content">
     <section class="view active" id="view-home">
-      <div class="view-header">
-        <h1>字幕画廊</h1>
-        <span class="view-badge" id="home-count">0 部已完成</span>
+      <div class="view-header home-header">
+        <div>
+          <h1>字幕画廊</h1>
+        </div>
       </div>
       <div class="gallery" id="gallery">
-        <div class="gallery-empty">尚无已完成字幕</div>
+        <div class="gallery-empty neu-concave">尚无已完成字幕</div>
       </div>
     </section>
 
-    <!-- 任务队列 -->
     <section class="view" id="view-queue">
-      <div class="view-header">
-        <h1>任务队列</h1>
+      <div class="view-header queue-hero">
+        <div>
+          <h1>任务队列</h1>
+        </div>
         <div class="header-actions">
-          <button id="refresh" type="button">刷新</button>
-          <button id="clear-audio" type="button" class="btn-danger">清除音频缓存</button>
+          <button id="refresh" type="button"><span class="material-symbols-outlined">refresh</span>刷新</button>
+          <button id="clear-audio" type="button" class="btn-danger"><span class="material-symbols-outlined">delete_sweep</span>清除音频缓存</button>
         </div>
       </div>
-      <div class="tabs" id="job-tabs">
-        <button class="tab-btn active" data-tab="running">运行中</button>
-        <button class="tab-btn" data-tab="queued">排队中</button>
-        <button class="tab-btn" data-tab="failed">失败任务</button>
-        <button class="tab-btn" data-tab="completed">已完成</button>
-        <button class="tab-btn" data-tab="cancelled">已取消</button>
+      <div class="queue-tabs-bar">
+        <div class="tabs queue-tabs" id="job-tabs">
+          <button class="tab-btn active" data-tab="running">运行中</button>
+          <button class="tab-btn" data-tab="queued">排队中</button>
+          <button class="tab-btn" data-tab="failed">失败任务</button>
+          <button class="tab-btn" data-tab="completed">已完成</button>
+          <button class="tab-btn" data-tab="cancelled">已取消</button>
+        </div>
       </div>
       <div id="failed-tools" class="jobs-tools hidden">
         <span id="failed-tools-text">当前有 0 个失败任务</span>
         <button id="retry-all-failed" type="button" class="retry-all-btn">一键重试全部失败</button>
       </div>
-      <div id="tab-running" class="tab-pane active"><div class="jobs jobs-running"></div><div class="pager"></div></div>
-      <div id="tab-queued" class="tab-pane"><div class="jobs jobs-queued"></div><div class="pager"></div></div>
-      <div id="tab-failed" class="tab-pane"><div class="jobs jobs-failed"></div><div class="pager"></div></div>
-      <div id="tab-completed" class="tab-pane"><div class="jobs jobs-completed"></div><div class="pager"></div></div>
-      <div id="tab-cancelled" class="tab-pane"><div class="jobs jobs-cancelled"></div><div class="pager"></div></div>
+      <div class="queue-surface neu-concave">
+        <div class="queue-list-head">
+          <span>番号</span>
+          <span>状态 / 进度</span>
+          <span>耗时</span>
+          <span>操作</span>
+        </div>
+        <div id="tab-running" class="tab-pane active"><div class="jobs jobs-running"></div><div class="pager"></div></div>
+        <div id="tab-queued" class="tab-pane"><div class="jobs jobs-queued"></div><div class="pager"></div></div>
+        <div id="tab-failed" class="tab-pane"><div class="jobs jobs-failed"></div><div class="pager"></div></div>
+        <div id="tab-completed" class="tab-pane"><div class="jobs jobs-completed"></div><div class="pager"></div></div>
+        <div id="tab-cancelled" class="tab-pane"><div class="jobs jobs-cancelled"></div><div class="pager"></div></div>
+      </div>
     </section>
 
-    <!-- 提交任务 -->
     <section class="view" id="view-submit">
       <div class="view-header">
-        <h1>提交任务</h1>
+        <div>
+          <h1>提交任务</h1>
+        </div>
       </div>
-      <form id="job-form" class="card">
+      <form id="job-form" class="card neu-concave">
         <label>视频或文件夹路径<input name="input_path" value="/mnt/115/中字制作区" required /></label>
         <label>输出目录<input name="output_dir" value="/output" /></label>
         <label>字幕格式<input name="formats" value="srt" /></label>
         <label>视频移动目录<input name="move_target_dir" placeholder="留空则使用默认配置" /></label>
         <label class="check"><input name="overwrite" type="checkbox" /> 覆盖已有字幕</label>
-        <button type="submit">加入队列</button>
+        <button type="submit"><span class="material-symbols-outlined">add_task</span>加入队列</button>
         <pre id="job-status"></pre>
       </form>
     </section>
 
-    <!-- 配置 -->
     <section class="view" id="view-config">
       <div class="view-header">
-        <h1>配置</h1>
-      </div>
-      <form id="config-form" class="card">
-        <label>Modal Token ID<input name="modal_token_id" placeholder="环境变量优先，留空不覆盖" /></label>
-        <label>Modal Token Secret<input name="modal_token_secret" type="password" placeholder="环境变量优先，留空不覆盖" /></label>
-        <label>HuggingFace Token<input name="hf_token" type="password" placeholder="可选" /></label>
-        <label>GPU<input name="default_gpu" value="T4" /></label>
-        <label>模型
-          <select name="default_model">
-            <option value="chickenrice">chickenrice</option>
-            <option value="jim-ja-transcribe">jim-ja-transcribe</option>
-          </select>
-        </label>
-        <label>ChickenRice 版本
-          <select name="repo_branch">
-            <option value="v1.10">v1.10</option>
-            <option value="v1.9">v1.9</option>
-            <option value="v1.8">v1.8</option>
-            <option value="v1.7">v1.7</option>
-            <option value="main">main</option>
-          </select>
-        </label>
-        <label>默认输出目录<input name="default_output_dir" value="/output" /></label>
-        <label>默认格式<input name="default_formats" value="srt" /></label>
-        <label>
-          <span class="config-label-row">
-            <span>文件大小过滤(MB)</span>
-            <small>小于此大小的文件将被忽略，填 0 可关闭</small>
-          </span>
-          <input name="min_file_size_mb" type="number" value="100" min="0" />
-        </label>
-        <label>默认视频移动目录<input name="default_move_target_dir" placeholder="翻译完成后移走源文件夹，留空则不移" /></label>
-        <label class="check"><input name="enable_watchdog" type="checkbox" /> 启用目录监控</label>
-        <label>监控轮询间隔（秒）<input name="watchdog_interval_seconds" type="number" value="60" min="10" max="3600" /></label>
-        <label>最大并行线程（1-10）<input name="max_workers" type="number" value="1" min="1" max="10" /></label>
-        <label>超时秒数<input name="default_timeout_seconds" type="number" value="7200" /></label>
-        <label>DBO API 地址<input name="dbo_api_url" placeholder="" /></label>
-        <label>DBO API 密钥<input name="dbo_api_key" placeholder="" /></label>
-        <label class="toggle-row">
-          <span class="config-label-row">
-            <span>Smart VAD</span>
-            <small>关闭：只进行一次 VAD；开启：一次 VAD 后再做 smart VAD。v1.10+ 生效</small>
-          </span>
-          <span class="toggle">
-            <input name="enable_smart_vad" type="checkbox" />
-            <span class="toggle-track"><span class="toggle-thumb"></span></span>
-          </span>
-        </label>
-        <div class="config-actions">
-          <button type="button" id="test-dbo-btn" class="test-btn">测试 DBO 连通性</button>
-          <button type="submit" class="config-save-btn">保存配置</button>
+        <div>
+          <h1>配置</h1>
         </div>
-        <small style="display:block;margin-top:8px;color:var(--text-dim);font-size:11px;">⚠ 请勿同时在多个标签页保存配置，后保存的会覆盖前者。</small>
+      </div>
+      <form id="config-form" class="config-canvas">
+        <div class="config-grid">
+          <section class="config-panel neu-concave">
+            <div class="config-section-title">
+              <span class="material-symbols-outlined config-icon info">cloud_off</span>
+              <h3>Cloud Credentials</h3>
+            </div>
+            <div class="config-stack">
+              <label>当前 Modal 账户<select id="modal-account-select"></select></label>
+              <label>账户名称<input id="modal-account-name" placeholder="例如：主账户" /></label>
+              <label>Modal Token ID<input id="modal-account-token-id" placeholder="ak-..." /></label>
+              <label>Modal Token Secret<input id="modal-account-token-secret" type="password" autocomplete="current-password" placeholder="as-..." /></label>
+              <label>HuggingFace Token<input id="modal-account-hf-token" type="password" autocomplete="current-password" placeholder="可选" /></label>
+              <div class="config-actions"><button id="modal-account-save" type="button" class="test-btn">保存账户</button><button id="modal-account-new" type="button" class="test-btn">新建账户</button><button id="modal-account-delete" type="button" class="test-btn">删除账户</button></div>
+            </div>
+          </section>
+
+          <section class="config-panel neu-concave">
+            <div class="config-section-title">
+              <span class="material-symbols-outlined config-icon warning">neurology</span>
+              <h3>Model Settings</h3>
+            </div>
+            <div class="config-stack">
+              <label>默认 GPU (Default GPU)
+                <select name="default_gpu">
+                  <option value="T4" selected>T4</option>
+                  <option value="L4">L4</option>
+                  <option value="A10">A10</option>
+                  <option value="L40S">L40S</option>
+                  <option value="A100">A100</option>
+                  <option value="A100-40GB">A100 40GB</option>
+                  <option value="A100-80GB">A100 80GB</option>
+                  <option value="RTX-PRO-6000">RTX PRO 6000</option>
+                  <option value="H100">H100</option>
+                  <option value="H100!">H100 SXM</option>
+                  <option value="H200">H200</option>
+                  <option value="B200">B200</option>
+                  <option value="B200+">B200 SXM</option>
+                  <option value="B300">B300</option>
+                </select>
+              </label>
+              <label>默认海南鸡模型
+                <select name="repo_branch">
+                  <option value="v1.10" selected>ChickenRice v1.10</option>
+                  <option value="v1.9">ChickenRice v1.9</option>
+                  <option value="v1.8">ChickenRice v1.8</option>
+                  <option value="v1.7">ChickenRice v1.7</option>
+                  <option value="v1.6">ChickenRice v1.6</option>
+                  <option value="v1.5">ChickenRice v1.5</option>
+                  <option value="v1.4">ChickenRice v1.4</option>
+                  <option value="v1.3">ChickenRice v1.3</option>
+                  <option value="v1.2">ChickenRice v1.2</option>
+                  <option value="v1.1">ChickenRice v1.1</option>
+                  <option value="v1.0">ChickenRice v1.0</option>
+                </select>
+              </label>
+              <input type="hidden" name="default_model" value="chickenrice" />
+              <label class="toggle-row smart-vad-card">
+                <span class="config-label-row">
+                  <span>Smart VAD 开关</span>
+                  <small>优化长音频分段，v1.10+ 生效</small>
+                </span>
+                <span class="toggle">
+                  <input name="enable_smart_vad" type="checkbox" />
+                  <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                </span>
+              </label>
+            </div>
+          </section>
+
+          <section class="config-panel config-panel-wide neu-concave">
+            <div class="config-section-title split">
+              <div>
+                <span class="material-symbols-outlined config-icon success">api</span>
+                <h3>DBO API 配置</h3>
+              </div>
+              <button type="button" id="test-dbo-btn" class="test-btn"><span class="material-symbols-outlined">wifi_tethering</span>测试连接</button>
+            </div>
+            <div class="config-fields-two">
+              <label>DBO API 地址<input name="dbo_api_url" placeholder="https://dbo.example.com" /></label>
+              <label>DBO API 密钥<input name="dbo_api_key" type="password" autocomplete="current-password" placeholder="环境变量优先，留空不覆盖" /></label>
+              <input type="hidden" name="default_output_dir" value="/output" />
+              <input type="hidden" name="default_formats" value="srt" />
+            </div>
+          </section>
+
+          <section class="config-panel config-panel-wide neu-concave">
+            <div class="config-section-title">
+              <span class="material-symbols-outlined config-icon tertiary">tune</span>
+              <h3>System Tuning</h3>
+            </div>
+            <div class="config-tuning-grid">
+              <label class="tuning-control" data-range-control data-display="raw">
+                <span class="config-label-row"><span>最大并行任务数</span><strong data-range-value>1</strong></span>
+                <input class="range-proxy info" name="max_workers" type="range" value="1" min="1" max="10" step="1" />
+              </label>
+              <label class="tuning-control" data-range-control data-display="minutes">
+                <span class="config-label-row"><span>任务超时时间 (min)</span><strong data-range-value>120</strong></span>
+                <input class="range-proxy warning" name="default_timeout_seconds" type="range" value="7200" min="60" max="14400" step="60" />
+              </label>
+              <label class="tuning-control" data-range-control data-display="raw">
+                <span class="config-label-row"><span>文件大小过滤阈值 (MB)</span><strong data-range-value>100</strong></span>
+                <input class="range-proxy success" name="min_file_size_mb" type="range" value="100" min="0" max="500" step="10" />
+              </label>
+              <label class="toggle-row tuning-toggle-card">
+                <span class="config-label-row">
+                  <span>目录监控</span>
+                  <small>开启后自动扫描监控目录</small>
+                </span>
+                <span class="toggle">
+                  <input name="enable_watchdog" type="checkbox" />
+                  <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                </span>
+              </label>
+              <label class="tuning-control tuning-wide" data-range-control data-display="seconds">
+                <span class="config-label-row"><span>监控轮询时间</span><strong data-range-value>60s</strong></span>
+                <input class="range-proxy tertiary" name="watchdog_interval_seconds" type="range" value="60" min="30" max="600" step="30" />
+              </label>
+            </div>
+          </section>
+        </div>
+
+        <div class="config-global-actions">
+          <small class="form-note">请勿同时在多个标签页保存配置，后保存的会覆盖前者。</small>
+          <button type="submit" class="config-save-btn"><span class="material-symbols-outlined">save</span>保存配置</button>
+        </div>
         <pre id="config-status"></pre>
       </form>
     </section>
 
-    <!-- 转录 -->
     <section class="view" id="view-transcribe">
       <div class="view-header">
-        <h1>转录设置</h1>
+        <div>
+          <h1>转录设置</h1>
+        </div>
       </div>
-      <form id="transcribe-form" class="card">
-        <label class="check" style="margin-bottom:16px">
+      <form id="transcribe-form" class="card neu-concave">
+        <label class="check check-block">
           <input name="enable_transcribe" type="checkbox" /> 启用日文转录 + LLM 翻译
-          <small style="display:block;color:var(--text-dim);margin-top:4px">勾选后，云端使用下方配置的 Whisper 转录模型做日文转录，再用 LLM 翻译为中文。日文原文保存在 /ja_subs/ 目录。</small>
+          <small>勾选后，云端使用下方配置的 Whisper 转录模型做日文转录，再用 LLM 翻译为中文。日文原文保存在 /ja_subs/ 目录。</small>
         </label>
         <label>Whisper 转录模型<input name="transcribe_model" value="jim-ja-transcribe" placeholder="jim-ja-transcribe 或留空" /></label>
         <label>OpenAI API URL<input name="openai_api_url" placeholder="https://api.openai.com/v1" /></label>
-        <label>OpenAI API Key<input name="openai_api_key" type="password" placeholder="sk-..." /></label>
+        <label>OpenAI API Key<input name="openai_api_key" type="password" autocomplete="current-password" placeholder="sk-..." /></label>
         <label>
           <span class="config-label-row">
             <span>模型</span>
-            <button type="button" id="fetch-models-btn" class="test-btn" style="margin-left:auto">获取模型</button>
+            <button type="button" id="fetch-models-btn" class="test-btn compact">获取模型</button>
           </span>
           <select name="openai_model" id="openai-model-select">
             <option value="">请先获取模型列表</option>
           </select>
         </label>
-        <label>自定义翻译提示词（system prompt）
-          <textarea name="transcribe_prompt" rows="6" style="width:100%;font-family:monospace;font-size:13px" placeholder="你是一个专业的日文→中文字幕翻译助手..."></textarea>
+        <label>自定义翻译提示词(system prompt)
+          <textarea name="transcribe_prompt" rows="6" placeholder="你是一个专业的日文到中文字幕翻译助手..."></textarea>
         </label>
         <div class="config-actions">
           <button type="button" id="test-openai-btn" class="test-btn">测试连接</button>
           <button type="submit" class="config-save-btn">保存配置</button>
         </div>
-        <pre id="transcribe-status"></pre>
       </form>
     </section>
-
   </main>
 
-  <!-- 移动端底部 Dock -->
   <nav class="dock-mobile" id="dock-mobile">
-    <button class="dock-mobile-item active" data-view="home">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-      <span>主界面</span>
-    </button>
-    <button class="dock-mobile-item" data-view="queue">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
-      <span>任务</span>
-    </button>
-    <button class="dock-mobile-item" data-view="submit">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
-      <span>提交</span>
-    </button>
-    <button class="dock-mobile-item" data-view="config">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-      <span>配置</span>
-    </button>
-    <button class="dock-mobile-item" data-view="transcribe">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
-      <span>转录</span>
-    </button>
-    <button class="dock-mobile-item theme-btn" id="theme-toggle-mobile">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="sun-icon"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="moon-icon"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
-      <span>主题</span>
-    </button>
+    <button class="dock-mobile-item active" data-view="home"><span class="material-symbols-outlined">dashboard</span><span>画廊</span></button>
+    <button class="dock-mobile-item" data-view="queue"><span class="material-symbols-outlined">queue</span><span>任务</span></button>
+    <button class="dock-mobile-item" data-view="submit"><span class="material-symbols-outlined">add_circle</span><span>提交</span></button>
+    <button class="dock-mobile-item" data-view="config"><span class="material-symbols-outlined">settings</span><span>配置</span></button>
+    <button class="dock-mobile-item" data-view="transcribe"><span class="material-symbols-outlined">mic</span><span>转录</span></button>
+    <button class="dock-mobile-item theme-btn" id="theme-toggle-mobile"><span class="material-symbols-outlined sun-icon">light_mode</span><span class="material-symbols-outlined moon-icon">dark_mode</span><span>主题</span></button>
   </nav>
 
-  <script src="/static/app.js?v=79"></script>
-  <script>if("serviceWorker" in navigator){navigator.serviceWorker.register("/static/sw.js")}</script>
+  <script src="/static/app.js?v=105"></script>
+  <script>if("serviceWorker" in navigator){navigator.serviceWorker.register("/static/sw.js",{updateViaCache:"none"})}</script>
 </body>
 </html>

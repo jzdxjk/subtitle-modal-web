@@ -1,11 +1,11 @@
 {
   "name": "字幕云翻译",
   "short_name": "字幕云",
-  "description": "云端 GPU 字幕工作台 — NAS + Modal 自动字幕",
+  "description": "云端 GPU 字幕工作台，NAS + Modal 自动字幕",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0d1117",
-  "theme_color": "#161b22",
+  "background_color": "#020305",
+  "theme_color": "#020305",
   "icons": [
     {
       "src": "/static/icons/icon-192.svg",

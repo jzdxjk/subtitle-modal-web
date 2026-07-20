@@ -1,7 +1,9 @@
 ﻿import os
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
+from fastapi import HTTPException
 
 from app.config import AppConfig, ConfigStore
 from app.media import (
@@ -14,12 +16,12 @@ from app.media import (
     output_subtitle_path,
     prepare_audio,
 )
-from app.modal_runner import ModalRunner
+from app.modal_runner import ModalRunHandle, ModalRunner
 from app.storage import JobStore
 from app.worker import JobRunner, SmallFileIgnoreStore
 
 
-def test_config_env_overrides_file(tmp_path, monkeypatch):
+def test_modal_credentials_only_use_webui_config(tmp_path, monkeypatch):
     config_path = tmp_path / "config.json"
     config_path.write_text('{"modal_token_id":"file-id","default_gpu":"A10G"}', encoding="utf-8")
     monkeypatch.setenv("MODAL_TOKEN_ID", "env-id")
@@ -27,17 +29,97 @@ def test_config_env_overrides_file(tmp_path, monkeypatch):
 
     config = ConfigStore(config_path).load()
 
-    assert config.modal_token_id == "env-id"
-    assert config.modal_token_secret == "env-secret"
+    assert config.modal_token_id == "file-id"
+    assert config.modal_token_secret == ""
     assert config.default_gpu == "A10G"
-    assert config.redacted()["modal_token_id"] == "***"
-    assert config.redacted()["modal_token_secret"] == "env***ret"
+    assert config.redacted()["modal_token_id"] == "fil***-id"
+    assert config.redacted()["modal_token_secret"] == ""
 
 
 def test_config_defaults_include_min_file_size_mb():
     config = AppConfig()
 
     assert config.min_file_size_mb == 100
+    assert config.repo_branch == "v1.10"
+
+
+def test_config_migrates_legacy_modal_credentials_to_a_default_account(tmp_path):
+    store = ConfigStore(tmp_path / "config.json")
+    store.path.write_text('{"modal_token_id":"legacy-id","modal_token_secret":"legacy-secret"}', encoding="utf-8")
+
+    config = store.load()
+
+    assert config.active_modal_account_id == "default"
+    assert config.modal_accounts[0]["name"] == "默认账户"
+    assert config.modal_accounts[0]["token_id"] == "legacy-id"
+
+
+def test_jobs_remember_the_modal_account_and_block_its_deletion(tmp_path):
+    store = JobStore(tmp_path / "jobs.sqlite3")
+    job = store.create_job("/watch/a.mp4", "/output", ["srt"], False, modal_account_id="account-a")
+    store.create_job("/watch/legacy.mp4", "/output", ["srt"], False)
+
+    assert job.modal_account_id == "account-a"
+    assert store.has_active_jobs_for_modal_account("account-a") is True
+    assert store.has_active_jobs_for_modal_account("default") is True
+
+
+def test_download_job_output_returns_a_completed_subtitle_as_attachment(tmp_path, monkeypatch):
+    monkeypatch.setenv("CONFIG_DIR", str(tmp_path))
+    monkeypatch.setenv("CACHE_DIR", str(tmp_path))
+    monkeypatch.setenv("WATCH_DIR", str(tmp_path))
+    monkeypatch.setenv("OUTPUT_DIR", str(tmp_path))
+    from app import main
+
+    subtitle = tmp_path / "FNS-192.srt"
+    subtitle.write_text("1\n00:00:00,000 --> 00:00:01,000\ntext\n", encoding="utf-8")
+    job = SimpleNamespace(id="done-job", status="done", output_files=[str(subtitle)])
+    monkeypatch.setattr(main.job_store, "get_job", lambda job_id: job if job_id == job.id else None)
+
+    response = main.download_job_output("done-job", 0)
+
+    assert response.path == subtitle
+    assert response.filename == subtitle.name
+
+
+def test_delete_job_rejects_active_tasks(tmp_path, monkeypatch):
+    monkeypatch.setenv("CONFIG_DIR", str(tmp_path))
+    monkeypatch.setenv("CACHE_DIR", str(tmp_path))
+    monkeypatch.setenv("WATCH_DIR", str(tmp_path))
+    monkeypatch.setenv("OUTPUT_DIR", str(tmp_path))
+    from app import main
+
+    active_job = SimpleNamespace(id="active-job", status="running")
+    monkeypatch.setattr(main.job_store, "get_job", lambda job_id: active_job if job_id == active_job.id else None)
+    monkeypatch.setattr(main.job_store, "delete_job", lambda job_id: True)
+
+    with pytest.raises(HTTPException) as exc_info:
+        main.delete_job(active_job.id)
+
+    assert getattr(exc_info.value, "status_code", None) == 409
+
+
+def test_public_version_endpoint_reports_v301(tmp_path, monkeypatch):
+    monkeypatch.setenv("CONFIG_DIR", str(tmp_path))
+    monkeypatch.setenv("CACHE_DIR", str(tmp_path))
+    monkeypatch.setenv("WATCH_DIR", str(tmp_path))
+    monkeypatch.setenv("OUTPUT_DIR", str(tmp_path))
+    from app import main
+
+    assert main.get_version() == {"version": "v3.01"}
+
+
+def test_docker_compose_does_not_override_repo_branch():
+    compose = Path("docker-compose.yml").read_text(encoding="utf-8")
+
+    assert "REPO_BRANCH:" not in compose
+
+
+def test_dockerignore_excludes_local_runtime_and_verification_artifacts():
+    dockerignore = Path(".dockerignore").read_text(encoding="utf-8")
+
+    for pattern in ("stitch-*", ".playwright-cli/", ".pytest_cache/", "output/", "cache/", "config/", "media/"):
+        assert pattern in dockerignore
 
 
 def test_config_store_persists_min_file_size_mb(tmp_path):
@@ -275,6 +357,26 @@ def test_job_store_persists_and_updates_jobs(tmp_path):
     assert store.list_jobs()[0].id == job.id
 
 
+def test_job_store_persists_live_phase_timings(tmp_path):
+    store = JobStore(tmp_path / "jobs.sqlite3")
+    job = store.create_job("/watch/FNS-192.mp4", "/output", ["srt"], False)
+
+    store.update_job(
+        job.id,
+        phase="cloud",
+        phase_started_at=123.5,
+        local_seconds=17.0,
+        cloud_seconds=9.0,
+    )
+    loaded = store.get_job(job.id)
+
+    assert loaded is not None
+    assert loaded.phase == "cloud"
+    assert loaded.phase_started_at == 123.5
+    assert loaded.local_seconds == 17.0
+    assert loaded.cloud_seconds == 9.0
+
+
 def test_job_store_move_target_dir(tmp_path):
     db_path = tmp_path / "jobs.sqlite3"
     store = JobStore(db_path)
@@ -472,6 +574,45 @@ def test_modal_runner_skips_recent_fetch_only_for_same_repo_ref(tmp_path, monkey
     assert calls == []
 
 
+def test_modal_bridge_submit_failure_includes_stderr(tmp_path):
+    class FakeStream:
+        def __init__(self, lines):
+            self._lines = iter(lines)
+
+        def __iter__(self):
+            return self
+
+        def __next__(self):
+            return next(self._lines)
+
+        def read(self):
+            return ""
+
+    class FakeProc:
+        def __init__(self):
+            self.stdout = FakeStream(["[modal_stage] import_modal\n"])
+            self.stderr = FakeStream(["actual modal auth failure\n"])
+            self._polled = True
+
+        def poll(self):
+            return 1
+
+        def kill(self):
+            pass
+
+        def wait(self):
+            pass
+
+    proc = FakeProc()
+    handle = ModalRunHandle(proc, tmp_path, ["srt"], {})
+
+    with pytest.raises(RuntimeError) as exc:
+        handle.wait_for_submit(timeout_seconds=5)
+
+    assert "Modal bridge failed before cloud submission" in str(exc.value)
+    assert "actual modal auth failure" in str(exc.value)
+
+
 def test_modal_runner_fetches_when_repo_ref_changes(tmp_path, monkeypatch):
     repo_dir = tmp_path / "modal-repo"
     git_dir = repo_dir / ".git"
@@ -531,6 +672,19 @@ def test_modal_runner_leaves_unsupported_smart_vad_repo_unchanged(tmp_path):
     runner._configure_smart_vad(repo_dir)
 
     assert config_file.read_text(encoding="utf-8") == original
+
+
+def test_job_runner_formats_modal_token_validation_errors():
+    raw = (
+        "Modal bridge failed before cloud submission:\n"
+        "[modal_stage] import_modal\n"
+        "Traceback (most recent call last):\n"
+        "modal.exception.AuthError: Token validation failed"
+    )
+
+    assert JobRunner._format_error_message(RuntimeError(raw)) == (
+        "Modal Token 验证失败：请在配置页检查当前 Modal 账户的 Token ID / Token Secret，保存后重试。"
+    )
 
 
 def test_normalize_outputs_returns_only_existing_files(tmp_path):

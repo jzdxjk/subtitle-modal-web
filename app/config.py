@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import os
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -11,6 +11,8 @@ from typing import Any
 class AppConfig:
     modal_token_id: str = ""
     modal_token_secret: str = ""
+    modal_accounts: list[dict[str, str]] = field(default_factory=list)
+    active_modal_account_id: str = ""
     hf_token: str = ""
     default_gpu: str = "T4"
     default_model: str = "chickenrice"
@@ -25,7 +27,7 @@ class AppConfig:
     max_workers: int = 1
     enable_smart_vad: bool = False
     repo_url: str = "https://github.com/TransWithAI/Faster-Whisper-TransWithAI-ChickenRice.git"
-    repo_branch: str = "bec3d22"
+    repo_branch: str = "v1.10"
     dbo_api_url: str = ""
     dbo_api_key: str = ""
     enable_transcribe: bool = False
@@ -38,8 +40,6 @@ class AppConfig:
     def merged_with_env(self) -> "AppConfig":
         data = asdict(self)
         env_map = {
-            "MODAL_TOKEN_ID": "modal_token_id",
-            "MODAL_TOKEN_SECRET": "modal_token_secret",
             "HF_TOKEN": "hf_token",
             "DEFAULT_GPU": "default_gpu",
             "DEFAULT_MODEL": "default_model",
@@ -75,6 +75,10 @@ class AppConfig:
         data["has_modal_token"] = bool(self.modal_token_id and self.modal_token_secret)
         data["has_hf_token"] = bool(self.hf_token)
         data["has_openai"] = bool(self.openai_api_url and self.openai_api_key)
+        data["modal_accounts"] = [
+            {"id": account["id"], "name": account["name"], "has_token": bool(account.get("token_id") and account.get("token_secret"))}
+            for account in self.modal_accounts
+        ]
         return data
 
 
@@ -94,6 +98,13 @@ class ConfigStore:
         if not self.path.exists():
             return AppConfig().merged_with_env()
         raw = json.loads(self.path.read_text(encoding="utf-8"))
+        if not raw.get("modal_accounts") and raw.get("modal_token_id") and raw.get("modal_token_secret"):
+            raw["modal_accounts"] = [{
+                "id": "default", "name": "默认账户", "token_id": raw["modal_token_id"],
+                "token_secret": raw["modal_token_secret"], "hf_token": raw.get("hf_token", ""),
+            }]
+            raw["active_modal_account_id"] = "default"
+            self.path.write_text(json.dumps(raw, ensure_ascii=False, indent=2), encoding="utf-8")
         allowed = {field.name for field in AppConfig.__dataclass_fields__.values()}
         clean = {key: value for key, value in raw.items() if key in allowed}
         return AppConfig(**clean).merged_with_env()
@@ -107,3 +118,37 @@ class ConfigStore:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.path.write_text(json.dumps(current, ensure_ascii=False, indent=2), encoding="utf-8")
         return AppConfig(**current).merged_with_env()
+
+    def get_modal_account(self, account_id: str) -> dict[str, str] | None:
+        for account in self.load().modal_accounts:
+            if account.get("id") == account_id:
+                return account
+        return None
+
+    def save_modal_account(self, payload: dict[str, str]) -> AppConfig:
+        config = self.load()
+        account_id = payload.get("id") or __import__("uuid").uuid4().hex
+        accounts = list(config.modal_accounts)
+        existing = next((account for account in accounts if account.get("id") == account_id), {})
+        account = {
+            "id": account_id,
+            "name": payload["name"].strip(),
+            "token_id": payload.get("token_id") or existing.get("token_id", ""),
+            "token_secret": payload.get("token_secret") or existing.get("token_secret", ""),
+            "hf_token": payload.get("hf_token") or existing.get("hf_token", ""),
+        }
+        accounts = [account if item.get("id") == account_id else item for item in accounts]
+        if not existing:
+            accounts.append(account)
+        return self.save({"modal_accounts": accounts, "active_modal_account_id": config.active_modal_account_id or account_id})
+
+    def set_active_modal_account(self, account_id: str) -> AppConfig:
+        if self.get_modal_account(account_id) is None:
+            raise KeyError(account_id)
+        return self.save({"active_modal_account_id": account_id})
+
+    def delete_modal_account(self, account_id: str) -> AppConfig:
+        config = self.load()
+        accounts = [account for account in config.modal_accounts if account.get("id") != account_id]
+        active = config.active_modal_account_id if config.active_modal_account_id != account_id else (accounts[0]["id"] if accounts else "")
+        return self.save({"modal_accounts": accounts, "active_modal_account_id": active})

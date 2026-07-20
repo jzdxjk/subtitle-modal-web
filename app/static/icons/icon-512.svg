@@ -1,5 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="85" fill="#161b22"/>
-  <rect x="42" y="42" width="428" height="428" rx="64" fill="#0d1117"/>
-  <text x="256" y="316" font-family="system-ui, sans-serif" font-size="220" font-weight="700" fill="#58a6ff" text-anchor="middle">字</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 192 192" role="img" aria-label="Subtitle Cloud">
+  <rect width="192" height="192" fill="#020305"/>
+  <circle cx="96" cy="96" r="59" fill="#0a0d13" stroke="#171d27" stroke-width="2"/>
+  <circle cx="96" cy="96" r="56" fill="none" stroke="#2b313b" stroke-width="1.5"/>
+  <path class="sync-arrow" d="M76 108a24 24 0 0 1 4-37l1-1v11h-2a14 14 0 0 0 0 24h4v11h-7v-8Z" fill="#f8fbff"/>
+  <path class="sync-arrow" d="M98 67h18v18h-10v-4a14 14 0 0 1 3 10h-11a25 25 0 0 0-5-15l5-9Z" fill="#f8fbff"/>
+  <path class="sync-arrow" d="M78 120h10v6H67v-21h6a27 27 0 0 0 5 15Z" fill="#f8fbff"/>
+  <path class="cloud" d="M113.6 114.6H93.2a13.2 13.2 0 0 1-1.5-26.3 18 18 0 0 1 34.1 5.3 10.8 10.8 0 0 1-1.6 21H113.6Z" fill="#f8fbff"/>
 </svg>
