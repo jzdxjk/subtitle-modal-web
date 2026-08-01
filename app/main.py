@@ -176,7 +176,7 @@ def test_dbo() -> dict:
 
 @app.get("/api/version")
 def get_version() -> dict:
-    return {"version": "v3.03"}
+    return {"version": "v3.04"}
 
 
 @app.get("/api/config")
@@ -460,6 +460,7 @@ _ALLOWED_IMAGE_DOMAINS = {
     "pics.dmm.co.jp", "image.mgstage.com",
     "pics.r18.com", "imgr18.shemalejapanhardcore.com",
 }
+_POSTER_CACHE_CONTROL = "public, max-age=604800, stale-while-revalidate=2592000"
 
 
 def _public_javdb_image_url(url: str) -> str:
@@ -507,7 +508,11 @@ def poster_proxy(url: str):
             content_type = r.headers.get("Content-Type", "image/jpeg").split(";", 1)[0]
             if not content_type.startswith("image/"):
                 raise ValueError(f"unexpected content type: {content_type}")
-            return Response(content=r.read(), media_type=content_type)
+            return Response(
+                content=r.read(),
+                media_type=content_type,
+                headers={"Cache-Control": _POSTER_CACHE_CONTROL},
+            )
         except Exception as e:
             last_error = e
     raise HTTPException(status_code=502, detail=f"image fetch failed: {last_error}")

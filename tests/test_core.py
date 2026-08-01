@@ -231,14 +231,14 @@ def test_delete_job_rejects_active_tasks(tmp_path, monkeypatch):
     assert getattr(exc_info.value, "status_code", None) == 409
 
 
-def test_public_version_endpoint_reports_v303(tmp_path, monkeypatch):
+def test_public_version_endpoint_reports_v304(tmp_path, monkeypatch):
     monkeypatch.setenv("CONFIG_DIR", str(tmp_path))
     monkeypatch.setenv("CACHE_DIR", str(tmp_path))
     monkeypatch.setenv("WATCH_DIR", str(tmp_path))
     monkeypatch.setenv("OUTPUT_DIR", str(tmp_path))
     from app import main
 
-    assert main.get_version() == {"version": "v3.03"}
+    assert main.get_version() == {"version": "v3.04"}
 
 
 def test_docker_compose_does_not_override_repo_branch():
@@ -320,6 +320,9 @@ def test_javdb_posters_rewrite_encrypted_cdn_url_to_public_jpeg(tmp_path, monkey
     response = main.poster_proxy("https://tp.spfcas.com/rhe951l4q/covers/mo/movie.jpg")
 
     assert response.body == b"decoded-jpeg"
+    assert response.headers["cache-control"] == (
+        "public, max-age=604800, stale-while-revalidate=2592000"
+    )
     assert requests[0].full_url == "https://c0.jdbstatic.com/covers/mo/movie.jpg"
     assert requests[0].get_header("X-api-key") is None
 

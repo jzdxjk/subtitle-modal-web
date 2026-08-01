@@ -47,10 +47,10 @@ def test_config_has_five_node_metadata_selector_dialog():
     assert '"ip ip latency"' in styles
 
 
-def test_static_shell_displays_v303_consistently():
+def test_static_shell_displays_v304_consistently():
     index = INDEX.read_text(encoding="utf-8")
 
-    assert "v3.03" in index
+    assert "v3.04" in index
     assert "v3.01" not in index
 
 
