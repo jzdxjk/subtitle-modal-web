@@ -1,6 +1,8 @@
 ﻿import os
+import asyncio
+import sys
 from pathlib import Path
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
 
 import pytest
 from fastapi import HTTPException
@@ -16,7 +18,12 @@ from app.media import (
     output_subtitle_path,
     prepare_audio,
 )
-from app.modal_runner import ModalRunHandle, ModalRunner
+from app.modal_runner import (
+    ModalRunHandle,
+    ModalRunner,
+    is_transient_modal_connection_error,
+    modal_client_wait_timeout,
+)
 from app.storage import JobStore
 from app.worker import JobRunner, SmallFileIgnoreStore
 
@@ -424,6 +431,42 @@ def test_job_runner_small_file_entry_rechecks_after_growth(tmp_path):
     assert discover_media(entry, min_file_size_mb=100) == [media]
 
 
+def test_watchdog_jobs_bind_the_active_modal_account(tmp_path, monkeypatch):
+    watch_root = tmp_path / "watch"
+    media_dir = watch_root / "HAWA-375"
+    media_dir.mkdir(parents=True)
+    (media_dir / "HAWA-375.mp4").write_bytes(b"media")
+    output_dir = tmp_path / "output"
+    output_dir.mkdir()
+    config_store = ConfigStore(tmp_path / "config.json")
+    config_store.save({
+        "enable_watchdog": True,
+        "min_file_size_mb": 0,
+        "default_output_dir": str(output_dir),
+        "active_modal_account_id": "old-account",
+        "modal_accounts": [{
+            "id": "old-account",
+            "name": "old",
+            "token_id": "token-id",
+            "token_secret": "token-secret",
+            "hf_token": "",
+        }],
+    })
+    store = JobStore(tmp_path / "jobs.sqlite3")
+    runner = JobRunner(store, config_store, watch_root, tmp_path / "cache")
+    runner._running = True
+
+    async def stop_after_first_scan(_seconds):
+        runner._running = False
+
+    monkeypatch.setattr("app.worker.asyncio.sleep", stop_after_first_scan)
+    asyncio.run(runner._watchdog_loop())
+
+    jobs = store.list_jobs()
+    assert len(jobs) == 1
+    assert jobs[0].modal_account_id == "old-account"
+
+
 def test_build_ffmpeg_command_targets_cache_audio(tmp_path):
     command = build_ffmpeg_command(Path("/watch/movie.mp4"), tmp_path / "movie.m4a")
 
@@ -657,6 +700,98 @@ def _remote_pipeline(job):
     assert 'smart_vad_value = "true" if job.get("smart_split_with_vad") else "false"' in patched
 
 
+@pytest.mark.parametrize(
+    ("disconnect_type", "failed_gets", "expect_success"),
+    [("modal", 1, True), ("grpclib", 1, True), ("modal", 2, False)],
+)
+def test_modal_infer_patch_retries_the_same_function_call_after_disconnect(
+    tmp_path, monkeypatch, disconnect_type, failed_gets, expect_success
+):
+    repo_dir = tmp_path / "modal-repo"
+    repo_dir.mkdir()
+    modal_infer = repo_dir / "modal_infer.py"
+    modal_infer.write_text(
+        '''
+def run_remote_pipeline(payload, selection):
+    with app.run():
+        result = modal_pipeline.remote(payload)
+    return result
+''',
+        encoding="utf-8",
+    )
+    runner = ModalRunner(AppConfig(), tmp_path)
+
+    runner._patch_modal_infer(repo_dir)
+
+    patched = modal_infer.read_text(encoding="utf-8")
+    assert "function_call = modal_pipeline.spawn(payload)" in patched
+    assert "function_call.get(timeout=selection.timeout_minutes * 60)" in patched
+    assert "modal.exception.ConnectionError" in patched
+    assert "grpclib.exceptions" in patched
+    assert patched.count("modal_pipeline.spawn(payload)") == 1
+    assert "modal_pipeline.remote(payload)" not in patched
+
+    class ModalConnectionError(Exception):
+        pass
+
+    class StreamTerminatedError(Exception):
+        pass
+
+    grpclib_package = ModuleType("grpclib")
+    grpclib_exceptions = ModuleType("grpclib.exceptions")
+    grpclib_exceptions.StreamTerminatedError = StreamTerminatedError
+    grpclib_package.exceptions = grpclib_exceptions
+    monkeypatch.setitem(sys.modules, "grpclib", grpclib_package)
+    monkeypatch.setitem(sys.modules, "grpclib.exceptions", grpclib_exceptions)
+    monkeypatch.setattr("time.sleep", lambda _seconds: None)
+
+    disconnect_error = ModalConnectionError if disconnect_type == "modal" else StreamTerminatedError
+    calls = {"spawn": 0, "get": 0}
+
+    class FunctionCall:
+        def get(self, timeout):
+            calls["get"] += 1
+            assert timeout == 60
+            if calls["get"] <= failed_gets:
+                raise disconnect_error("connection dropped")
+            return "finished"
+
+    class Pipeline:
+        def spawn(self, payload):
+            calls["spawn"] += 1
+            assert payload == {"job": "same-invocation"}
+            return FunctionCall()
+
+    class App:
+        def run(self):
+            class Context:
+                def __enter__(self):
+                    return self
+
+                def __exit__(self, *_args):
+                    return False
+
+            return Context()
+
+    namespace = {
+        "app": App(),
+        "logging": SimpleNamespace(warning=lambda *_args: None),
+        "modal": SimpleNamespace(exception=SimpleNamespace(ConnectionError=ModalConnectionError)),
+        "modal_pipeline": Pipeline(),
+    }
+    exec(compile(patched, str(modal_infer), "exec"), namespace)
+
+    run_remote_pipeline = namespace["run_remote_pipeline"]
+    args = ({"job": "same-invocation"}, SimpleNamespace(timeout_minutes=1))
+    if expect_success:
+        assert run_remote_pipeline(*args) == "finished"
+    else:
+        with pytest.raises(disconnect_error, match="connection dropped"):
+            run_remote_pipeline(*args)
+
+    assert calls == {"spawn": 1, "get": 2}
+
+
 def test_modal_runner_skips_recent_fetch_only_for_same_repo_ref(tmp_path, monkeypatch):
     repo_dir = tmp_path / "modal-repo"
     git_dir = repo_dir / ".git"
@@ -707,6 +842,25 @@ def test_modal_bridge_submit_failure_includes_stderr(tmp_path):
 
     assert "Modal bridge failed before cloud submission" in str(exc.value)
     assert "actual modal auth failure" in str(exc.value)
+
+
+def test_modal_connection_error_detection_only_matches_transient_disconnects():
+    assert is_transient_modal_connection_error(
+        RuntimeError("modal.exception.ConnectionError: Connection lost")
+    ) is True
+    assert is_transient_modal_connection_error(
+        RuntimeError("grpclib.exceptions.StreamTerminatedError: connection closed")
+    ) is True
+    assert is_transient_modal_connection_error(
+        RuntimeError("Modal Token validation failed")
+    ) is False
+    assert is_transient_modal_connection_error(
+        RuntimeError("database connection closed")
+    ) is False
+
+
+def test_modal_client_wait_timeout_includes_reconnect_margin():
+    assert modal_client_wait_timeout(7200) == 7500
 
 
 def test_modal_runner_fetches_when_repo_ref_changes(tmp_path, monkeypatch):
@@ -781,6 +935,33 @@ def test_job_runner_formats_modal_token_validation_errors():
     assert JobRunner._format_error_message(RuntimeError(raw)) == (
         "Modal Token 验证失败：请在配置页检查当前 Modal 账户的 Token ID / Token Secret，保存后重试。"
     )
+
+
+def test_job_runner_formats_retried_modal_connection_errors():
+    raw = "Modal run failed: modal.exception.ConnectionError: Connection lost"
+
+    message = JobRunner._format_error_message(RuntimeError(raw))
+
+    assert "已自动重试 1 次" in message
+    assert "重新生成旧账号 Token" in message
+    assert "Traceback" not in message
+
+
+def test_job_runner_persists_formatted_modal_connection_failure(tmp_path):
+    store = JobStore(tmp_path / "jobs.sqlite3")
+    job = store.create_job("/watch/HAWA-375.mp4", "/output", ["srt"], False)
+    runner = JobRunner(store, ConfigStore(tmp_path / "config.json"), tmp_path, tmp_path / "cache")
+
+    runner._record_job_failure(
+        job.id,
+        "云端推理中 1/1",
+        RuntimeError("modal.exception.ConnectionError: Connection lost\nTraceback: noisy"),
+    )
+
+    failed = store.get_job(job.id)
+    assert failed.status == "failed"
+    assert "已自动重试 1 次" in failed.message
+    assert "Traceback" not in failed.message
 
 
 def test_normalize_outputs_returns_only_existing_files(tmp_path):

@@ -27,7 +27,7 @@ def _output_exists_for_media(media_path: Path, output_dir: Path, formats: list[s
     return all(output_subtitle_path(media_path, output_dir, fmt).exists() for fmt in formats)
 
 
-from app.modal_runner import ModalRunner
+from app.modal_runner import ModalRunner, is_transient_modal_connection_error, modal_client_wait_timeout
 from app.storage import Job, JobStore
 from app.translator import translate_srt
 from app.media import extract_av_code
@@ -172,7 +172,7 @@ class JobRunner:
                         logger.info("worker-%d finished job %s", worker_id, job.id)
                     except Exception as exc:
                         logger.exception("worker-%d processing job %s failed", worker_id, job.id)
-                        self.store.update_job(job.id, status="failed", message=self._format_error_message(exc), completed_at=time.time())
+                        self._record_job_failure(job.id, "", exc)
 
         def _new_worker() -> asyncio.Task:
             nonlocal worker_counter
@@ -236,7 +236,21 @@ class JobRunner:
         message = str(exc)
         if "Token validation failed" in message or "AuthError" in message:
             return "Modal Token 验证失败：请在配置页检查当前 Modal 账户的 Token ID / Token Secret，保存后重试。"
+        if is_transient_modal_connection_error(exc):
+            return "Modal 连接中断：已自动重试 1 次仍失败。请重新生成旧账号 Token 后保存，或切换其他 Modal 账号重试。"
         return message
+
+    def _record_job_failure(self, job_id: str, stage: str, exc: Exception) -> None:
+        detail = self._format_error_message(exc)
+        message = f"❌ {stage}: {detail}" if stage else detail
+        self.store.update_job(
+            job_id,
+            status="failed",
+            phase="failed",
+            phase_started_at=0.0,
+            message=message,
+            completed_at=time.time(),
+        )
 
     async def _process_job_pipelined(self, job: Job, local_lock: asyncio.Lock) -> None:
         """Pipeline: serial local phase (ffmpeg+submit), parallel cloud phase."""
@@ -369,7 +383,10 @@ class JobRunner:
                     progress=cloud_prog,
                 )
 
-                result = await asyncio.to_thread(handle.wait, config.default_timeout_seconds)
+                result = await asyncio.to_thread(
+                    handle.wait,
+                    modal_client_wait_timeout(config.default_timeout_seconds),
+                )
                 t_cloud_end = time.time()
                 cloud_dur = int(t_cloud_end - t_cloud_start)
                 phase_timings["cloud"] = phase_timings.get("cloud", 0) + cloud_dur
@@ -487,7 +504,7 @@ class JobRunner:
                 except Exception:
                     pass
         except Exception as exc:
-            self.store.update_job(job.id, status="failed", phase="failed", phase_started_at=0.0, message=f"❌ {stage}: {exc}", completed_at=time.time())
+            self._record_job_failure(job.id, stage, exc)
 
     async def _watchdog_loop(self) -> None:
         while self._running:
@@ -553,6 +570,7 @@ class JobRunner:
                         formats=formats,
                         overwrite=False,
                         move_target_dir=config.default_move_target_dir,
+                        modal_account_id=config.active_modal_account_id,
                         min_file_size_mb=min_file_size_mb,
                     )
             except Exception:

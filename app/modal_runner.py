@@ -20,6 +20,21 @@ class ModalResult:
     message: str
 
 
+MODAL_RECONNECT_GRACE_SECONDS = 300
+
+
+def modal_client_wait_timeout(remote_timeout_seconds: int) -> int:
+    return max(1, int(remote_timeout_seconds)) + MODAL_RECONNECT_GRACE_SECONDS
+
+
+def is_transient_modal_connection_error(exc: Exception) -> bool:
+    message = str(exc).lower()
+    return any(marker in message for marker in (
+        "modal.exception.connectionerror",
+        "grpclib.exceptions.streamterminatederror",
+    ))
+
+
 class ModalRunHandle:
     """Handle to a running Modal cloud job started via ModalRunner.launch()."""
 
@@ -215,6 +230,32 @@ def _patch_remote_smart_vad_arg(source: str) -> str:
     return re.sub(pattern, repl, source, count=1)
 
 
+def _patch_remote_call_retry(source: str) -> str:
+    """Retry result retrieval for the same Modal FunctionCall after a transient disconnect."""
+    replacement = textwrap.dedent('''
+        function_call = modal_pipeline.spawn(payload)
+        for reconnect_attempt in range(2):
+            try:
+                result = function_call.get(timeout=selection.timeout_minutes * 60)
+                break
+            except (
+                modal.exception.ConnectionError,
+                __import__("grpclib.exceptions", fromlist=["StreamTerminatedError"]).StreamTerminatedError,
+            ):
+                if reconnect_attempt >= 1:
+                    raise
+                logging.warning("Modal connection interrupted; retrying the same function call in 5 seconds")
+                __import__("time").sleep(5)
+    ''').strip()
+    pattern = r'(?P<indent>[ \t]*)result = modal_pipeline\.remote\(payload\)'
+
+    def repl(match: re.Match) -> str:
+        indent = match.group("indent")
+        return "\n".join(indent + line if line else line for line in replacement.splitlines())
+
+    return re.sub(pattern, repl, source)
+
+
 class ModalRunner:
     def __init__(self, config: AppConfig, cache_dir: Path):
         self.config = config
@@ -224,7 +265,7 @@ class ModalRunner:
         """All-in-one blocking run (kept for backward compatibility)."""
         handle = self.launch(audio_path, output_dir, formats, timeout_seconds)
         handle.wait_for_submit()
-        return handle.wait(timeout_seconds=(timeout_seconds or self.config.default_timeout_seconds) + 300)
+        return handle.wait(timeout_seconds=modal_client_wait_timeout(timeout_seconds or self.config.default_timeout_seconds))
 
     def launch(self, audio_path: Path, output_dir: Path, formats: list[str], timeout_seconds: int | None = None, model: str | None = None) -> ModalRunHandle:
         """Launch Modal bridge script, return handle after local prep work is done."""
@@ -308,6 +349,7 @@ class ModalRunner:
 
         patched = _patch_remote_repo_ref(source)
         patched = _patch_remote_smart_vad_arg(patched)
+        patched = _patch_remote_call_retry(patched)
 
         if _all_apps_have_include_source(patched):
             if patched != source:
