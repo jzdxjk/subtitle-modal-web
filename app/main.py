@@ -17,6 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from app.config import ConfigStore
+from app.metadata_api import JAVDB_NODES, MetadataClient
 from app.storage import JobStore
 from app.worker import JobRunner
 
@@ -62,6 +63,8 @@ class ConfigPayload(BaseModel):
     watchdog_interval_seconds: int | None = Field(default=None, ge=10, le=3600)
     max_workers: int | None = Field(default=None, ge=1, le=10)
     enable_smart_vad: bool | None = None
+    metadata_provider: str | None = None
+    javdb_api_url: str | None = None
     dbo_api_url: str | None = None
     dbo_api_key: str | None = None
     enable_transcribe: bool | None = None
@@ -89,6 +92,10 @@ class ModalAccountPayload(BaseModel):
     hf_token: str = ""
 
 
+class MetadataNodeSelection(BaseModel):
+    node_id: str
+
+
 @app.on_event("startup")
 async def startup() -> None:
     asyncio.create_task(runner.start())
@@ -106,19 +113,46 @@ def index() -> FileResponse:
 
 @app.get("/api/dbo-search")
 def dbo_search(q: str, limit: int = 1) -> dict:
-    """DBO 搜索代理 — 浏览器不直连内网，走后端转发"""
+    """Provider-neutral metadata search kept under the legacy browser route."""
     cfg = config_store.load()
-    if not cfg.dbo_api_url or not cfg.dbo_api_key:
-        raise HTTPException(status_code=503, detail="DBO 未配置")
     try:
-        req = urllib.request.Request(
-            f"{cfg.dbo_api_url}/api/search?q={urllib.parse.quote(q)}&limit={limit}",
-            headers={"X-API-Key": cfg.dbo_api_key},
-        )
-        r = urllib.request.urlopen(req, timeout=10)
-        return json.loads(r.read())
+        return MetadataClient(cfg).search(q, limit)
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"DBO search failed: {e}")
+        raise HTTPException(status_code=502, detail=f"Metadata search failed: {e}")
+
+
+@app.get("/api/metadata-nodes")
+def list_metadata_nodes() -> dict:
+    return {"nodes": MetadataClient(config_store.load()).nodes()}
+
+
+@app.post("/api/metadata-nodes/probe")
+def probe_metadata_nodes() -> dict:
+    return {"nodes": MetadataClient(config_store.load()).probe_nodes()}
+
+
+@app.post("/api/metadata-nodes/{node_id}/probe")
+def probe_metadata_node(node_id: str) -> dict:
+    try:
+        return MetadataClient(config_store.load()).probe_node(node_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="API 节点不存在")
+
+
+@app.post("/api/metadata-nodes/select")
+def select_metadata_node(payload: MetadataNodeSelection) -> dict:
+    config = config_store.load()
+    if payload.node_id == "dbo":
+        if not config.dbo_api_url or not config.dbo_api_key:
+            raise HTTPException(status_code=400, detail="请先保存 DBO API 地址和密钥")
+        return config_store.save({"metadata_provider": "dbo"}).redacted()
+    node = next((item for item in JAVDB_NODES if item["id"] == payload.node_id), None)
+    if node is None:
+        raise HTTPException(status_code=404, detail="API 节点不存在")
+    return config_store.save({
+        "metadata_provider": "javdb",
+        "javdb_api_url": node["url"],
+    }).redacted()
 
 
 @app.post("/api/test-dbo")
@@ -142,7 +176,7 @@ def test_dbo() -> dict:
 
 @app.get("/api/version")
 def get_version() -> dict:
-    return {"version": "v3.01"}
+    return {"version": "v3.02"}
 
 
 @app.get("/api/config")
@@ -421,6 +455,7 @@ def pack_jobs(date: str):
 
 # 允许代理的图片 CDN 域名白名单
 _ALLOWED_IMAGE_DOMAINS = {
+    "jdbstatic.com", "c0.jdbstatic.com",
     "tp.cmastd.com", "tp.spfcas.com",
     "pics.dmm.co.jp", "image.mgstage.com",
     "pics.r18.com", "imgr18.shemalejapanhardcore.com",
@@ -429,8 +464,6 @@ _ALLOWED_IMAGE_DOMAINS = {
 @app.get("/api/poster-proxy")
 def poster_proxy(url: str):
     cfg = config_store.load()
-    if not cfg.dbo_api_url or not cfg.dbo_api_key:
-        raise HTTPException(status_code=503, detail="DBO 未配置")
     if not url or not url.startswith("https://"):
         raise HTTPException(status_code=400, detail="invalid url")
     # SSRF 防护：只允许白名单域名
@@ -440,10 +473,21 @@ def poster_proxy(url: str):
         raise HTTPException(status_code=400, detail="invalid url")
     if not any(host == d or host.endswith("." + d) for d in _ALLOWED_IMAGE_DOMAINS):
         raise HTTPException(status_code=400, detail="domain not allowed")
-    dbo_url = f"{cfg.dbo_api_url}/api/image?url={urllib.parse.quote(url)}"
-    req = urllib.request.Request(dbo_url, headers={"X-API-Key": cfg.dbo_api_key})
+    if cfg.metadata_provider == "dbo":
+        if not cfg.dbo_api_url or not cfg.dbo_api_key:
+            raise HTTPException(status_code=503, detail="DBO 未配置")
+        image_url = f"{cfg.dbo_api_url.rstrip('/')}/api/image?url={urllib.parse.quote(url)}"
+        headers = {"X-API-Key": cfg.dbo_api_key}
+    else:
+        image_url = url
+        headers = {
+            "User-Agent": "Dart/3.5 (dart:io)",
+            "Referer": cfg.javdb_api_url.rstrip("/") + "/",
+        }
+    req = urllib.request.Request(image_url, headers=headers)
     try:
         r = urllib.request.urlopen(req, timeout=10)
-        return Response(content=r.read(), media_type="image/jpeg")
+        content_type = r.headers.get("Content-Type", "image/jpeg").split(";", 1)[0]
+        return Response(content=r.read(), media_type=content_type)
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"dbo image fetch failed: {e}")
+        raise HTTPException(status_code=502, detail=f"image fetch failed: {e}")

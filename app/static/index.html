@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+SC:wght@400;500;600;700&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/styles.css?v=117" />
+  <link rel="stylesheet" href="/static/styles.css?v=118" />
 </head>
 <body>
   <div id="splash" class="splash">
@@ -27,7 +27,7 @@
       <div class="brand-mark neu-convex"><span class="material-symbols-outlined">cloud_sync</span></div>
       <h1 class="brand-title">
         <span class="brand-word"><span>Subtitle</span><small>字幕云</small></span>
-        <span class="brand-word"><span>Cloud</span><small id="version">v3.01</small></span>
+        <span class="brand-word"><span>Cloud</span><small id="version">v3.02</small></span>
       </h1>
     </div>
     <button class="dock-item active" data-view="home">
@@ -58,7 +58,7 @@
   </nav>
 
   <header class="topbar">
-    <h2 id="topbar-heading"><span class="topbar-title-text">Subtitle Cloud</span><small>v3.01</small></h2>
+    <h2 id="topbar-heading"><span class="topbar-title-text">Subtitle Cloud</span><small>v3.02</small></h2>
     <div class="topbar-actions">
       <button class="icon-button neu-convex notify-button" id="modal-monthly-cost" type="button" title="查询本月 Modal 费用"><span class="material-symbols-outlined">notifications</span></button>
       <div class="topbar-avatar neu-convex" id="topbar-avatar" aria-label="当前 Modal 账户">M</div>
@@ -209,16 +209,28 @@
           </section>
 
           <section class="config-panel config-panel-wide neu-concave">
-            <div class="config-section-title split">
-              <div>
-                <span class="material-symbols-outlined config-icon success">api</span>
-                <h3>DBO API 配置</h3>
-              </div>
-              <button type="button" id="test-dbo-btn" class="test-btn"><span class="material-symbols-outlined">wifi_tethering</span>测试连接</button>
+            <div class="config-section-title metadata-config-title">
+              <span class="material-symbols-outlined config-icon info">link</span>
+              <h3>JavDB API 配置</h3>
+              <span class="metadata-hot-badge">热更新</span>
             </div>
-            <div class="config-fields-two">
-              <label>DBO API 地址<input name="dbo_api_url" placeholder="https://dbo.example.com" /></label>
-              <label>DBO API 密钥<input name="dbo_api_key" type="password" autocomplete="current-password" placeholder="环境变量优先，留空不覆盖" /></label>
+            <input name="metadata_provider" type="hidden" value="dbo" />
+            <input name="javdb_api_url" type="hidden" value="https://jdforrepam.com" />
+            <div class="metadata-api-field">
+              <label>API 地址 <span class="required-mark">*</span>
+                <input id="metadata-api-url" readonly value="" placeholder="请选择 API 节点" />
+              </label>
+              <button type="button" id="choose-metadata-node" class="metadata-choose-btn">
+                <span class="material-symbols-outlined">format_list_bulleted</span>
+                <span>选择地址</span>
+              </button>
+            </div>
+            <div class="dbo-custom-fields">
+              <div class="dbo-custom-heading"><span class="material-symbols-outlined">dns</span><span>自定义 DBO 节点</span></div>
+              <div class="config-fields-two">
+                <label>DBO API 地址<input name="dbo_api_url" placeholder="https://dbo.example.com" /></label>
+                <label>DBO API 密钥<input name="dbo_api_key" type="password" autocomplete="current-password" placeholder="留空保留已保存密钥" /></label>
+              </div>
               <input type="hidden" name="default_output_dir" value="/output" />
               <input type="hidden" name="default_formats" value="srt" />
             </div>
@@ -302,6 +314,22 @@
     </section>
   </main>
 
+  <dialog id="metadata-node-dialog" class="metadata-node-dialog">
+    <div class="metadata-dialog-shell">
+      <header class="metadata-dialog-header">
+        <h2><span class="material-symbols-outlined">language</span>选择 API 节点</h2>
+        <div class="metadata-dialog-actions">
+          <button type="button" id="probe-all-metadata-nodes" class="metadata-refresh-all"><span class="material-symbols-outlined">refresh</span>重新探测</button>
+          <button type="button" id="close-metadata-dialog" class="metadata-dialog-close" title="关闭"><span class="material-symbols-outlined">close</span></button>
+        </div>
+      </header>
+      <div class="metadata-node-table">
+        <div class="metadata-node-head"><span>状态</span><span>名称</span><span>地址</span><span>IP</span><span>延迟</span><span></span></div>
+        <div id="metadata-node-list" class="metadata-node-list"></div>
+      </div>
+    </div>
+  </dialog>
+
   <nav class="dock-mobile" id="dock-mobile">
     <button class="dock-mobile-item active" data-view="home"><span class="material-symbols-outlined">dashboard</span><span>画廊</span></button>
     <button class="dock-mobile-item" data-view="queue"><span class="material-symbols-outlined">queue</span><span>任务</span></button>
@@ -311,7 +339,7 @@
     <button class="dock-mobile-item theme-btn" id="theme-toggle-mobile"><span class="material-symbols-outlined sun-icon">light_mode</span><span class="material-symbols-outlined moon-icon">dark_mode</span><span>主题</span></button>
   </nav>
 
-  <script src="/static/app.js?v=117"></script>
+  <script src="/static/app.js?v=118"></script>
   <script>if("serviceWorker" in navigator){navigator.serviceWorker.register("/static/sw.js",{updateViaCache:"none"})}</script>
 </body>
 </html>

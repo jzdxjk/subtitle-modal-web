@@ -194,11 +194,115 @@ async function loadConfig() {
       input.value = value;
     }
   }
-  if (config.dbo_api_url) DBO_BASE = config.dbo_api_url;
+  DBO_BASE = config.metadata_provider === "javdb" ? config.javdb_api_url : config.dbo_api_url;
   if (config.dbo_api_key) DBO_KEY = config.dbo_api_key;
+  const activeApiUrl = config.metadata_provider === "javdb" ? config.javdb_api_url : config.dbo_api_url;
+  const activeApiInput = $("#metadata-api-url");
+  if (activeApiInput) activeApiInput.value = activeApiUrl || "";
   initRangeControls();
   $("#config-status").textContent = JSON.stringify(config, null, 2);
 }
+
+let metadataNodes = [];
+
+function latencyLabel(latency) {
+  if (latency == null) return { text: "--", tone: "unknown" };
+  if (latency < 500) return { text: `${latency} ms  良`, tone: "good" };
+  if (latency < 1200) return { text: `${latency} ms  慢`, tone: "slow" };
+  return { text: `${latency} ms  极慢`, tone: "bad" };
+}
+
+function renderMetadataNodes(nodes) {
+  metadataNodes = nodes || [];
+  const list = $("#metadata-node-list");
+  if (!list) return;
+  list.innerHTML = metadataNodes.map((node) => {
+    const latency = latencyLabel(node.latency_ms);
+    const statusClass = node.ok === true ? "online" : node.ok === false ? "offline" : "pending";
+    const statusTitle = node.error ? ` title="${escapeHtml(node.error)}"` : "";
+    return `<button type="button" class="metadata-node-row${node.current ? " current" : ""}" data-node-id="${escapeHtml(node.id)}">
+      <span class="metadata-node-status ${statusClass}"${statusTitle}></span>
+      <span class="metadata-node-name"><strong>${escapeHtml(node.name)}</strong>${node.current ? '<em><span class="material-symbols-outlined">check</span>当前</em>' : ""}</span>
+      <code>${escapeHtml(node.url || "未配置")}</code>
+      <span class="metadata-node-ip">${escapeHtml(node.ip || "--")}</span>
+      <span class="metadata-node-latency ${latency.tone}">${latency.text}</span>
+      <span class="metadata-node-probe material-symbols-outlined" data-probe-node="${escapeHtml(node.id)}" title="重新探测">refresh</span>
+    </button>`;
+  }).join("");
+}
+
+async function loadMetadataNodes(probe = false) {
+  const path = probe ? "/api/metadata-nodes/probe" : "/api/metadata-nodes";
+  const data = probe ? await api(path, { method: "POST" }) : await api("/api/metadata-nodes");
+  renderMetadataNodes(data.nodes || []);
+}
+
+async function selectMetadataNode(nodeId) {
+  if (nodeId === "dbo") {
+    const dboUrl = document.querySelector('[name="dbo_api_url"]').value.trim();
+    const dboKey = document.querySelector('[name="dbo_api_key"]').value.trim();
+    if (!dboUrl) throw new Error("请先填写 DBO API 地址");
+    const payload = { dbo_api_url: dboUrl };
+    if (dboKey) payload.dbo_api_key = dboKey;
+    await api("/api/config", { method: "POST", body: JSON.stringify(payload) });
+  }
+  const saved = await api("/api/metadata-nodes/select", {
+    method: "POST",
+    body: JSON.stringify({ node_id: nodeId }),
+  });
+  document.querySelector('[name="metadata_provider"]').value = saved.metadata_provider;
+  document.querySelector('[name="javdb_api_url"]').value = saved.javdb_api_url;
+  DBO_BASE = saved.metadata_provider === "javdb" ? saved.javdb_api_url : saved.dbo_api_url;
+  $("#metadata-api-url").value = DBO_BASE || "";
+  localStorage.removeItem("poster_provider_version");
+  posterCache.clear();
+  $("#metadata-node-dialog").close();
+  showToast(`已切换到 ${nodeId === "dbo" ? "DBO" : "JavDB"} 节点`);
+}
+
+$("#choose-metadata-node")?.addEventListener("click", async () => {
+  const dialog = $("#metadata-node-dialog");
+  dialog.showModal();
+  renderMetadataNodes([{ id: "loading", name: "正在加载节点", url: "", current: false }]);
+  try {
+    await loadMetadataNodes(false);
+    await loadMetadataNodes(true);
+  } catch (error) {
+    showToast("节点探测失败: " + error.message, false);
+  }
+});
+
+$("#close-metadata-dialog")?.addEventListener("click", () => $("#metadata-node-dialog").close());
+$("#metadata-node-dialog")?.addEventListener("click", (event) => {
+  if (event.target === event.currentTarget) event.currentTarget.close();
+});
+$("#probe-all-metadata-nodes")?.addEventListener("click", async (event) => {
+  const button = event.currentTarget;
+  button.disabled = true;
+  try {
+    await loadMetadataNodes(true);
+  } catch (error) {
+    showToast(error.message, false);
+  } finally {
+    button.disabled = false;
+  }
+});
+$("#metadata-node-list")?.addEventListener("click", async (event) => {
+  const probe = event.target.closest("[data-probe-node]");
+  const row = event.target.closest(".metadata-node-row");
+  if (!row || row.dataset.nodeId === "loading") return;
+  try {
+    if (probe) {
+      event.stopPropagation();
+      const updated = await api(`/api/metadata-nodes/${encodeURIComponent(probe.dataset.probeNode)}/probe`, { method: "POST" });
+      renderMetadataNodes(metadataNodes.map((node) => node.id === updated.id ? updated : node));
+      return;
+    }
+    await selectMetadataNode(row.dataset.nodeId);
+  } catch (error) {
+    showToast(error.message, false);
+  }
+});
 
 let modalAccounts = [];
 let activeModalAccountId = "";
@@ -682,7 +786,7 @@ $("#test-dbo-btn")?.addEventListener("click", async () => {
 });
 
 $("#refresh").addEventListener("click", loadJobs);
-api("/api/version").then(r => { const v = $("#version"); if (v) v.textContent = r.version || "v3.01"; });
+api("/api/version").then(r => { const v = $("#version"); if (v) v.textContent = r.version || "v3.02"; });
 
 $("#clear-audio")?.addEventListener("click", async () => {
   if (!confirm("确定清空音频缓存？已缓存的文件下次需要重新提取。")) return;
@@ -772,7 +876,9 @@ async function _doFetch(av) {
     }
     if (movies) {
       const match = movies.find(m => m.number === av) || movies[0];
-      const remoteUrl = new URL(match.cover_url, DBO_BASE).searchParams.get("url");
+      const coverUrl = match.cover_url || match.thumb_url;
+      const parsedUrl = new URL(coverUrl, DBO_BASE || window.location.origin);
+      const remoteUrl = parsedUrl.searchParams.get("url") || parsedUrl.href;
       if (remoteUrl) {
         return "/api/poster-proxy?url=" + encodeURIComponent(remoteUrl);
       }

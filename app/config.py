@@ -28,6 +28,8 @@ class AppConfig:
     enable_smart_vad: bool = False
     repo_url: str = "https://github.com/TransWithAI/Faster-Whisper-TransWithAI-ChickenRice.git"
     repo_branch: str = "v1.10"
+    metadata_provider: str = "javdb"
+    javdb_api_url: str = "https://jdforrepam.com"
     dbo_api_url: str = ""
     dbo_api_key: str = ""
     enable_transcribe: bool = False
@@ -70,7 +72,7 @@ class AppConfig:
 
     def redacted(self) -> dict[str, Any]:
         data = asdict(self)
-        for key in ("modal_token_id", "modal_token_secret", "hf_token", "openai_api_key"):
+        for key in ("modal_token_id", "modal_token_secret", "hf_token", "dbo_api_key", "openai_api_key"):
             data[key] = redact_secret(data.get(key, ""))
         data["has_modal_token"] = bool(self.modal_token_id and self.modal_token_secret)
         data["has_hf_token"] = bool(self.hf_token)
@@ -98,6 +100,8 @@ class ConfigStore:
         if not self.path.exists():
             return AppConfig().merged_with_env()
         raw = json.loads(self.path.read_text(encoding="utf-8"))
+        if "metadata_provider" not in raw:
+            raw["metadata_provider"] = "dbo" if raw.get("dbo_api_url") and raw.get("dbo_api_key") else "javdb"
         if not raw.get("modal_accounts") and raw.get("modal_token_id") and raw.get("modal_token_secret"):
             raw["modal_accounts"] = [{
                 "id": "default", "name": "默认账户", "token_id": raw["modal_token_id"],
@@ -111,7 +115,7 @@ class ConfigStore:
 
     def save(self, payload: dict[str, Any]) -> AppConfig:
         current = asdict(self.load())
-        for key in ("modal_token_id", "modal_token_secret", "hf_token", "openai_api_key"):
+        for key in ("modal_token_id", "modal_token_secret", "hf_token", "dbo_api_key", "openai_api_key"):
             if key in payload and (not payload[key] or "***" in str(payload[key])):
                 payload.pop(key)
         current.update({key: value for key, value in payload.items() if key in current})

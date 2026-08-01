@@ -48,6 +48,35 @@ def test_config_defaults_include_min_file_size_mb():
 
     assert config.min_file_size_mb == 100
     assert config.repo_branch == "v1.10"
+    assert config.metadata_provider == "javdb"
+    assert config.javdb_api_url == "https://jdforrepam.com"
+
+
+def test_config_store_persists_metadata_provider_and_redacts_dbo_key(tmp_path):
+    store = ConfigStore(tmp_path / "config.json")
+
+    saved = store.save({
+        "metadata_provider": "javdb",
+        "javdb_api_url": "https://javdb.com",
+        "dbo_api_url": "https://dbo.example.com",
+        "dbo_api_key": "private-key",
+    })
+
+    assert saved.metadata_provider == "javdb"
+    assert saved.javdb_api_url == "https://javdb.com"
+    assert saved.redacted()["dbo_api_key"] == "pri***key"
+
+
+def test_legacy_config_with_dbo_credentials_keeps_dbo_as_provider(tmp_path):
+    store = ConfigStore(tmp_path / "config.json")
+    store.path.write_text(
+        '{"dbo_api_url":"https://dbo.example.com","dbo_api_key":"key"}',
+        encoding="utf-8",
+    )
+
+    config = store.load()
+
+    assert config.metadata_provider == "dbo"
 
 
 def test_config_migrates_legacy_modal_credentials_to_a_default_account(tmp_path):
@@ -202,14 +231,14 @@ def test_delete_job_rejects_active_tasks(tmp_path, monkeypatch):
     assert getattr(exc_info.value, "status_code", None) == 409
 
 
-def test_public_version_endpoint_reports_v301(tmp_path, monkeypatch):
+def test_public_version_endpoint_reports_v302(tmp_path, monkeypatch):
     monkeypatch.setenv("CONFIG_DIR", str(tmp_path))
     monkeypatch.setenv("CACHE_DIR", str(tmp_path))
     monkeypatch.setenv("WATCH_DIR", str(tmp_path))
     monkeypatch.setenv("OUTPUT_DIR", str(tmp_path))
     from app import main
 
-    assert main.get_version() == {"version": "v3.01"}
+    assert main.get_version() == {"version": "v3.02"}
 
 
 def test_docker_compose_does_not_override_repo_branch():
@@ -223,6 +252,40 @@ def test_dockerignore_excludes_local_runtime_and_verification_artifacts():
 
     for pattern in ("stitch-*", ".playwright-cli/", ".pytest_cache/", "output/", "cache/", "config/", "media/"):
         assert pattern in dockerignore
+
+
+def test_metadata_node_routes_list_five_nodes_and_select_javdb(tmp_path, monkeypatch):
+    monkeypatch.setenv("CONFIG_DIR", str(tmp_path))
+    monkeypatch.setenv("CACHE_DIR", str(tmp_path))
+    monkeypatch.setenv("WATCH_DIR", str(tmp_path))
+    monkeypatch.setenv("OUTPUT_DIR", str(tmp_path))
+    from app import main
+
+    store = ConfigStore(tmp_path / "metadata-config.json")
+    monkeypatch.setattr(main, "config_store", store)
+
+    listed = main.list_metadata_nodes()
+    selected = main.select_metadata_node(main.MetadataNodeSelection(node_id="javdb-official"))
+
+    assert len(listed["nodes"]) == 5
+    assert selected["metadata_provider"] == "javdb"
+    assert selected["javdb_api_url"] == "https://javdb.com"
+
+
+def test_metadata_node_route_rejects_unconfigured_dbo(tmp_path, monkeypatch):
+    monkeypatch.setenv("CONFIG_DIR", str(tmp_path))
+    monkeypatch.setenv("CACHE_DIR", str(tmp_path))
+    monkeypatch.setenv("WATCH_DIR", str(tmp_path))
+    monkeypatch.setenv("OUTPUT_DIR", str(tmp_path))
+    from app import main
+
+    monkeypatch.setattr(main, "config_store", ConfigStore(tmp_path / "metadata-config.json"))
+
+    with pytest.raises(HTTPException) as exc_info:
+        main.select_metadata_node(main.MetadataNodeSelection(node_id="dbo"))
+
+    assert exc_info.value.status_code == 400
+    assert "DBO" in str(exc_info.value.detail)
 
 
 def test_config_store_persists_min_file_size_mb(tmp_path):

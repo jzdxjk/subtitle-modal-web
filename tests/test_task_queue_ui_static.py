@@ -26,6 +26,34 @@ def test_queue_ui_contains_neumorphic_shell_and_interactions():
     assert "renderJobRow" in app_js
 
 
+def test_config_has_five_node_metadata_selector_dialog():
+    index = INDEX.read_text(encoding="utf-8")
+    app_js = APP_JS.read_text(encoding="utf-8")
+    styles = STYLES.read_text(encoding="utf-8")
+
+    assert "JavDB API 配置" in index
+    assert 'id="metadata-node-dialog"' in index
+    assert 'id="choose-metadata-node"' in index
+    assert 'name="metadata_provider"' in index
+    assert 'name="javdb_api_url"' in index
+    assert 'name="dbo_api_url"' in index
+    assert 'name="dbo_api_key"' in index
+    assert "renderMetadataNodes" in app_js
+    assert 'api("/api/metadata-nodes")' in app_js
+    assert "/api/metadata-nodes/probe" in app_js
+    assert "/api/metadata-nodes/select" in app_js
+    assert ".metadata-node-dialog" in styles
+    assert ".metadata-node-row" in styles
+    assert '"ip ip latency"' in styles
+
+
+def test_static_shell_displays_v302_consistently():
+    index = INDEX.read_text(encoding="utf-8")
+
+    assert "v3.02" in index
+    assert "v3.01" not in index
+
+
 def test_desktop_queue_tabs_do_not_inherit_button_dividers_or_shadows():
     styles = STYLES.read_text(encoding="utf-8")
 
