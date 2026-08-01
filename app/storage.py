@@ -8,6 +8,15 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
+from app.media import discover_media
+
+
+def media_size_bytes(path: Path, min_file_size_mb: int = 0) -> int:
+    try:
+        return sum(item.stat().st_size for item in discover_media(path, min_file_size_mb))
+    except OSError:
+        return 0
+
 
 @dataclass
 class Job:
@@ -30,6 +39,7 @@ class Job:
     phase_started_at: float = 0.0
     local_seconds: float = 0.0
     cloud_seconds: float = 0.0
+    input_size_bytes: int = 0
 
 
 class JobStore:
@@ -48,8 +58,10 @@ class JobStore:
             ).fetchall()
         return [self._row_to_job(r) for r in rows]
 
-    def __init__(self, db_path: Path):
+    def __init__(self, db_path: Path, min_file_size_mb: int = 0, default_move_target_dir: str = ""):
         self.db_path = db_path
+        self.min_file_size_mb = max(0, min_file_size_mb)
+        self.default_move_target_dir = default_move_target_dir
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._init()
 
@@ -103,14 +115,39 @@ class JobStore:
                 ("phase_started_at", "REAL NOT NULL DEFAULT 0.0"),
                 ("local_seconds", "REAL NOT NULL DEFAULT 0.0"),
                 ("cloud_seconds", "REAL NOT NULL DEFAULT 0.0"),
+                ("input_size_bytes", "INTEGER NOT NULL DEFAULT 0"),
             ):
                 try:
                     conn.execute(f"ALTER TABLE jobs ADD COLUMN {column} {definition}")
                 except sqlite3.OperationalError:
                     pass
 
-    def create_job(self, input_path: str, output_dir: str, formats: Iterable[str], overwrite: bool, move_target_dir: str = "", modal_account_id: str = "") -> Job:
+            legacy_rows = conn.execute(
+                "SELECT id, input_path, move_target_dir FROM jobs WHERE input_size_bytes <= 0"
+            ).fetchall()
+            for row in legacy_rows:
+                source = Path(row["input_path"])
+                candidates = [source]
+                move_target = row["move_target_dir"] or self.default_move_target_dir
+                if move_target:
+                    target = Path(move_target)
+                    candidates.extend((target / source.name, target / source.parent.name / source.name))
+                size = 0
+                for path in candidates:
+                    size = media_size_bytes(path, self.min_file_size_mb)
+                    if size > 0:
+                        break
+                if size > 0:
+                    conn.execute(
+                        "UPDATE jobs SET input_size_bytes = ? WHERE id = ?",
+                        (size, row["id"]),
+                    )
+
+    def create_job(self, input_path: str, output_dir: str, formats: Iterable[str], overwrite: bool, move_target_dir: str = "", modal_account_id: str = "", input_size_bytes: int | None = None, min_file_size_mb: int | None = None) -> Job:
         now = time.time()
+        if input_size_bytes is None:
+            threshold_mb = self.min_file_size_mb if min_file_size_mb is None else max(0, min_file_size_mb)
+            input_size_bytes = media_size_bytes(Path(input_path), threshold_mb)
         job = Job(
             id=str(uuid.uuid4()),
             input_path=input_path,
@@ -124,10 +161,11 @@ class JobStore:
             created_at=now,
             updated_at=now,
             modal_account_id=modal_account_id,
+            input_size_bytes=max(0, int(input_size_bytes)),
         )
         with self._connect() as conn:
             conn.execute(
-                "INSERT INTO jobs (id, input_path, output_dir, formats, overwrite, move_target_dir, status, message, output_files, created_at, updated_at, started_at, completed_at, progress, modal_account_id, phase, phase_started_at, local_seconds, cloud_seconds) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO jobs (id, input_path, output_dir, formats, overwrite, move_target_dir, status, message, output_files, created_at, updated_at, started_at, completed_at, progress, modal_account_id, phase, phase_started_at, local_seconds, cloud_seconds, input_size_bytes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     job.id,
                     job.input_path,
@@ -148,6 +186,7 @@ class JobStore:
                     job.phase_started_at,
                     job.local_seconds,
                     job.cloud_seconds,
+                    job.input_size_bytes,
                 ),
             )
         return job
@@ -309,5 +348,6 @@ class JobStore:
             phase_started_at=row["phase_started_at"] if "phase_started_at" in row.keys() else 0.0,
             local_seconds=row["local_seconds"] if "local_seconds" in row.keys() else 0.0,
             cloud_seconds=row["cloud_seconds"] if "cloud_seconds" in row.keys() else 0.0,
+            input_size_bytes=row["input_size_bytes"] if "input_size_bytes" in row.keys() else 0,
         )
 

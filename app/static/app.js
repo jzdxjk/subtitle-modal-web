@@ -80,6 +80,19 @@ function fmtDurationClock(seconds) {
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
+function fmtFileSize(bytes) {
+  const value = Number(bytes || 0);
+  if (!Number.isFinite(value) || value <= 0) return "--";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let size = value;
+  let unit = 0;
+  while (size >= 1024 && unit < units.length - 1) {
+    size /= 1024;
+    unit += 1;
+  }
+  return `${size >= 10 || unit === 0 ? size.toFixed(0) : size.toFixed(2)} ${units[unit]}`;
+}
+
 function elapsedSeconds(startedAt) {
   if (!startedAt || startedAt === 0) return 0;
   return Math.floor(Date.now() / 1000 - startedAt);
@@ -322,6 +335,7 @@ function renderJobRow(job) {
   const isCancelling = job.status === "cancelling";
   const avCode = extractAvCode(job.input_path || "");
   const shortId = avCode || `#${String(job.id).slice(0, 8).toUpperCase()}`;
+  const fileSize = fmtFileSize(job.input_size_bytes);
   const queueTone = isRunning ? "running" : isQueued ? "queued" : isFailed ? "failed" : isDone ? "done" : isCancelled ? "cancelled" : job.status;
 
   const startedAt = Number(job.started_at || 0);
@@ -383,6 +397,7 @@ function renderJobRow(job) {
         <div class="job-row-left">
           <span class="job-id">${escapeHtml(shortId)}</span>
         </div>
+        <span class="job-size">${escapeHtml(fileSize)}</span>
         ${isDone ? `
           <div class="job-completed-total"><span class="job-duration">${escapeHtml(displayTime)}</span></div>
           <div class="job-completed-phases">
@@ -392,9 +407,12 @@ function renderJobRow(job) {
           <time class="job-completed-at" datetime="${completedAt ? new Date(completedAt * 1000).toISOString() : ""}">${escapeHtml(completedAtText)}</time>
         ` : `
           <div class="job-row-center">
-            <div class="job-status-line ${escapeHtml(queueTone)}">
-              <span class="job-status-dot"></span>
-              <span>${escapeHtml(statusText)}</span>
+            <div class="job-status-meta">
+              <div class="job-status-line ${escapeHtml(queueTone)}">
+                <span class="job-status-dot"></span>
+                <span>${escapeHtml(statusText)}</span>
+              </div>
+              <span class="job-size-mobile">${escapeHtml(fileSize)}</span>
             </div>
             ${progressHtml}
             ${statusDetail}
@@ -452,13 +470,19 @@ function renderPager(pagerEl, page, totalPages, tab) {
   const start = Math.max(1, page - 1);
   const end = Math.min(totalPages, page + 1);
   buttons.push(`<button type="button" data-action="prev" ${page <= 1 ? "disabled" : ""}><span class="material-symbols-outlined">chevron_left</span></button>`);
-  if (start > 1) buttons.push(`<button type="button" data-page="1">1</button>`);
-  if (start > 2) buttons.push(`<span class="pager-ellipsis">?</span>`);
-  for (let i = start; i <= end; i++) {
-    buttons.push(`<button type="button" data-page="${i}" class="${i === page ? "active" : ""}">${i}</button>`);
+  if (totalPages <= 7) {
+    for (let i = 1; i <= totalPages; i++) {
+      buttons.push(`<button type="button" data-page="${i}" class="${i === page ? "active" : ""}">${i}</button>`);
+    }
+  } else {
+    if (start > 1) buttons.push(`<button type="button" data-page="1">1</button>`);
+    if (start > 2) buttons.push(`<span class="pager-ellipsis">&hellip;</span>`);
+    for (let i = start; i <= end; i++) {
+      buttons.push(`<button type="button" data-page="${i}" class="${i === page ? "active" : ""}">${i}</button>`);
+    }
+    if (end < totalPages - 1) buttons.push(`<span class="pager-ellipsis">&hellip;</span>`);
+    if (end < totalPages) buttons.push(`<button type="button" data-page="${totalPages}">${totalPages}</button>`);
   }
-  if (end < totalPages - 1) buttons.push(`<span class="pager-ellipsis">?</span>`);
-  if (end < totalPages) buttons.push(`<button type="button" data-page="${totalPages}">${totalPages}</button>`);
   buttons.push(`<button type="button" data-action="next" ${page >= totalPages ? "disabled" : ""}><span class="material-symbols-outlined">chevron_right</span></button>`);
   pagerEl.innerHTML = `<div class="pager-shell">${buttons.join("")}</div>`;
   pagerEl.querySelectorAll("button").forEach((btn) => {
@@ -483,8 +507,8 @@ function renderTab(tab) {
   const listHead = $(".queue-list-head");
   if (listHead) {
     const headers = tab === "completed"
-      ? ["番号", "总耗时", "本地 / 云端", "完成时间"]
-      : ["番号", "状态 / 进度", "耗时", "操作"];
+      ? ["番号", "大小", "总耗时", "本地 / 云端", "完成时间"]
+      : ["番号", "大小", "状态 / 进度", "耗时", "操作"];
     listHead.classList.toggle("completed", tab === "completed");
     listHead.innerHTML = headers.map((header) => `<span>${header}</span>`).join("");
   }
@@ -994,7 +1018,7 @@ function renderHome() {
         '<div class="gallery-footer">' +
         '<div class="av">' + escapeHtml(av) + '</div>' +
         '<div class="meta">' + escapeHtml(fmtDate(job.completed_at)) + '</div>' +
-        '<div class="gallery-actions"><button type="button" class="gallery-download" title="下载字幕" onclick="downloadGalleryFile(\'' + escapeHtml(job.id) + '\', 0)"><span class="material-symbols-outlined">download</span></button><span class="fmt-badge">' + escapeHtml(fmt) + '</span></div>' +
+        '<div class="gallery-actions"><span class="fmt-badge">' + escapeHtml(fmt) + '</span><button type="button" class="gallery-download" title="下载字幕" onclick="downloadGalleryFile(\'' + escapeHtml(job.id) + '\', 0)"><span class="material-symbols-outlined">download</span></button></div>' +
         '</div></div>';
     }
     html += '</div></div>';

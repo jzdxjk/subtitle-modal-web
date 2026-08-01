@@ -1,12 +1,12 @@
-const CACHE = "subtitle-web-v30";
+const CACHE = "subtitle-web-v42";
 const STATIC = [
   "/",
   "/static/index.html",
   "/static/styles.css",
   "/static/app.js",
   "/static/manifest.json",
-  "/static/icons/icon-192.svg",
-  "/static/icons/icon-512.svg",
+  "/static/icons/icon-reference-192.png",
+  "/static/icons/icon-reference-512.png",
 ];
 
 self.addEventListener("install", (event) => {

@@ -64,6 +64,102 @@ def test_jobs_remember_the_modal_account_and_block_its_deletion(tmp_path):
     assert store.has_active_jobs_for_modal_account("default") is True
 
 
+def test_jobs_persist_input_size_bytes(tmp_path):
+    store = JobStore(tmp_path / "jobs.sqlite3")
+
+    job = store.create_job("/watch/a.mp4", "/output", ["srt"], False, input_size_bytes=1420000000)
+
+    assert job.input_size_bytes == 1420000000
+    assert store.get_job(job.id).input_size_bytes == 1420000000
+
+
+def test_job_store_backfills_size_for_legacy_jobs_when_media_still_exists(tmp_path):
+    media = tmp_path / "SEVEN-035.mp4"
+    media.write_bytes(b"x" * 4096)
+    database = tmp_path / "jobs.sqlite3"
+    store = JobStore(database)
+    job = store.create_job(str(media), "/output", ["srt"], False, input_size_bytes=0)
+
+    reloaded = JobStore(database).get_job(job.id)
+
+    assert reloaded.input_size_bytes == 4096
+
+
+def test_job_store_backfills_size_from_move_target_for_completed_legacy_jobs(tmp_path):
+    moved = tmp_path / "done"
+    moved.mkdir()
+    media = moved / "SEVEN-035.mp4"
+    media.write_bytes(b"x" * 8192)
+    database = tmp_path / "jobs.sqlite3"
+    store = JobStore(database)
+    job = store.create_job(
+        str(tmp_path / "watch" / media.name),
+        "/output",
+        ["srt"],
+        False,
+        move_target_dir=str(moved),
+        input_size_bytes=0,
+    )
+
+    reloaded = JobStore(database).get_job(job.id)
+
+    assert reloaded.input_size_bytes == 8192
+
+
+def test_job_store_backfills_size_from_default_move_target_for_legacy_jobs(tmp_path):
+    moved = tmp_path / "done" / "HAWA-375"
+    moved.mkdir(parents=True)
+    media = moved / "HAWA-375.mp4"
+    media.write_bytes(b"x" * 8192)
+    database = tmp_path / "jobs.sqlite3"
+    source = tmp_path / "watch" / "HAWA-375"
+    store = JobStore(database)
+    job = store.create_job(
+        str(source),
+        "/output",
+        ["srt"],
+        False,
+        input_size_bytes=0,
+    )
+
+    reloaded = JobStore(
+        database,
+        default_move_target_dir=str(tmp_path / "done"),
+    ).get_job(job.id)
+
+    assert reloaded.input_size_bytes == 8192
+
+
+def test_job_store_records_total_media_size_for_directory_jobs(tmp_path):
+    media_dir = tmp_path / "HAWA-375"
+    media_dir.mkdir()
+    (media_dir / "HAWA-375.mp4").write_bytes(b"x" * 4096)
+    (media_dir / "poster.jpg").write_bytes(b"x" * 1024)
+
+    job = JobStore(tmp_path / "jobs.sqlite3").create_job(
+        str(media_dir), "/output", ["srt"], False
+    )
+
+    assert job.input_size_bytes == 4096
+
+
+def test_job_store_excludes_media_below_configured_size_threshold(tmp_path):
+    media_dir = tmp_path / "HAWA-375"
+    media_dir.mkdir()
+    large = media_dir / "HAWA-375.mp4"
+    small = media_dir / "HAWA-375-preview.mp4"
+    unrelated = media_dir / "trailer.mp4"
+    large.write_bytes(b"x" * (2 * 1024 * 1024))
+    small.write_bytes(b"x" * (512 * 1024))
+    unrelated.write_bytes(b"x" * (3 * 1024 * 1024))
+
+    job = JobStore(tmp_path / "jobs.sqlite3").create_job(
+        str(media_dir), "/output", ["srt"], False, min_file_size_mb=1
+    )
+
+    assert job.input_size_bytes == large.stat().st_size
+
+
 def test_download_job_output_returns_a_completed_subtitle_as_attachment(tmp_path, monkeypatch):
     monkeypatch.setenv("CONFIG_DIR", str(tmp_path))
     monkeypatch.setenv("CACHE_DIR", str(tmp_path))

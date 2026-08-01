@@ -67,7 +67,7 @@ def test_completed_rows_replace_status_and_actions_with_completion_details():
 def test_completed_tab_uses_semantic_headers_without_status_or_actions():
     app_js = APP_JS.read_text(encoding="utf-8")
 
-    assert '["番号", "总耗时", "本地 / 云端", "完成时间"]' in app_js
+    assert '["番号", "大小", "总耗时", "本地 / 云端", "完成时间"]' in app_js
     assert "listHead.classList.toggle(\"completed\", tab === \"completed\")" in app_js
 
 
@@ -101,6 +101,48 @@ def test_desktop_status_detail_rule_closes_before_time_block_rules():
     assert ".job-time-block {\n  display: flex;\n  flex-direction: column;" in styles
 
 
+def test_desktop_running_row_time_block_is_centered_under_time_header():
+    styles = STYLES.read_text(encoding="utf-8")
+    desktop = styles.split("@media (max-width: 900px)", 1)[0]
+    time_block = desktop.split(".job-time-block {", 1)[1].split("}", 1)[0]
+
+    assert "justify-self: center;" in time_block
+
+
+def test_queue_desktop_uses_quarter_point_columns_and_renders_size_for_all_rows():
+    styles = STYLES.read_text(encoding="utf-8")
+    app_js = APP_JS.read_text(encoding="utf-8")
+
+    assert "--queue-grid-columns: 12.5% 25% 25% 25% 12.5%;" in styles
+    assert "--queue-completed-columns: 12.5% 25% 25% 25% 12.5%;" in styles
+    assert 'class="job-size"' in app_js
+    assert '"大小"' in app_js
+    assert "input_size_bytes" in app_js
+
+
+def test_queue_quarter_point_tracks_clear_legacy_grid_gaps():
+    styles = STYLES.read_text(encoding="utf-8")
+    desktop = styles.split("@media (max-width: 900px)", 1)[0]
+    head = desktop.rsplit(".queue-list-head {", 1)[1].split("}", 1)[0]
+    rows = desktop.rsplit("\n.job-row-main {", 1)[1].split("}", 1)[0]
+
+    assert "gap: 0;" in head
+    assert "gap: 0;" in rows
+
+
+def test_queue_mobile_places_size_on_status_row_and_keeps_timing_group():
+    styles = STYLES.read_text(encoding="utf-8")
+    app_js = APP_JS.read_text(encoding="utf-8")
+    mobile = styles.split("@media (max-width: 900px)", 1)[1]
+
+    assert '"status status"' in mobile
+    assert 'class="job-status-meta"' in app_js
+    assert 'class="job-size-mobile"' in app_js
+    assert ".job-status-meta" in mobile
+    assert ".job-size-mobile" in mobile
+    assert ".job-time-block" in mobile
+
+
 def test_running_jobs_sort_started_tasks_first_in_start_order():
     app_js = APP_JS.read_text(encoding="utf-8")
 
@@ -130,6 +172,31 @@ def test_mobile_pager_is_one_compact_aligned_control():
     assert "height: 36px;" in styles
 
 
+def test_phone_pager_scrolls_inside_its_own_track_instead_of_overflowing_page():
+    styles = STYLES.read_text(encoding="utf-8")
+    phone = styles.split("@media (max-width: 520px)", 1)[1]
+    pager = phone.split(".pager-shell {", 1)[1].split("}", 1)[0]
+
+    assert "max-width: 100%;" in pager
+    assert "overflow-x: auto;" in pager
+    assert "justify-content: start;" in pager
+    assert ".pager-shell::-webkit-scrollbar" in phone
+
+
+def test_queue_pager_uses_ellipsis_instead_of_question_marks():
+    app_js = APP_JS.read_text(encoding="utf-8")
+
+    assert 'class="pager-ellipsis">?</span>' not in app_js
+    assert 'class="pager-ellipsis">&hellip;</span>' in app_js
+
+
+def test_queue_pager_expands_small_page_counts_before_collapsing():
+    app_js = APP_JS.read_text(encoding="utf-8")
+
+    assert "if (totalPages <= 7)" in app_js
+    assert "for (let i = 1; i <= totalPages; i++)" in app_js
+
+
 def test_queue_rows_use_av_code_and_live_backend_phase_timings():
     app_js = APP_JS.read_text(encoding="utf-8")
 
@@ -157,6 +224,35 @@ def test_phone_gallery_sizes_cards_to_two_per_viewport():
     phone = styles.split("@media (max-width: 520px)", 1)[1]
 
     assert "flex-basis: calc((100vw - 56px) / 2);" in phone
+
+
+def test_phone_gallery_gives_av_full_width_and_uses_compact_download_pill():
+    styles = STYLES.read_text(encoding="utf-8")
+    phone = styles.split("@media (max-width: 520px)", 1)[1]
+
+    assert "grid-template-columns: minmax(0, 1fr) auto;" in phone
+    assert "grid-column: 1 / -1;" in phone
+    assert "-webkit-line-clamp: 1;" in phone
+    assert "min-height: 0;" in phone
+    assert "width: 44px;" in phone
+    assert "height: 28px;" in phone
+    assert "border-radius: 999px;" in phone
+    assert "box-shadow: inset 3px 3px 6px" in phone
+
+
+def test_gallery_places_format_badge_before_download_action():
+    app_js = APP_JS.read_text(encoding="utf-8")
+    actions = app_js.split('<div class="gallery-actions">', 1)[1].split("</div>", 1)[0]
+
+    assert actions.index("fmt-badge") < actions.index("gallery-download")
+
+
+def test_mobile_completed_size_is_right_aligned_instead_of_centered_row():
+    styles = STYLES.read_text(encoding="utf-8")
+    mobile = styles.split("@media (max-width: 900px)", 1)[1]
+    completed = mobile.split(".job-row.done .job-size", 1)[1].split("}", 1)[0]
+
+    assert "justify-self: end;" in completed
 
 
 def test_frontend_visible_text_is_not_mojibake():

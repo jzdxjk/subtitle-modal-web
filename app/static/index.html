@@ -4,18 +4,19 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>字幕云翻译</title>
-  <link rel="manifest" href="/static/manifest.json" />
-  <link rel="icon" href="/static/icons/icon-192.svg" type="image/svg+xml" />
+  <link rel="manifest" href="/static/manifest.json?v=42" />
+  <link rel="icon" href="/static/icons/icon-reference-192.png" type="image/png" />
+  <link rel="apple-touch-icon" href="/static/icons/icon-reference-192.png" />
   <meta name="theme-color" content="#fcfcfc" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+SC:wght@400;500;600;700&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/styles.css?v=105" />
+  <link rel="stylesheet" href="/static/styles.css?v=117" />
 </head>
 <body>
   <div id="splash" class="splash">
     <div class="splash-box neu-convex">
-      <div class="splash-icon neu-concave">字</div>
+      <img class="splash-icon" src="/static/icons/icon-reference-192.png" alt="" />
       <div class="splash-title">字幕云</div>
       <div class="splash-dot"></div>
     </div>
@@ -310,7 +311,7 @@
     <button class="dock-mobile-item theme-btn" id="theme-toggle-mobile"><span class="material-symbols-outlined sun-icon">light_mode</span><span class="material-symbols-outlined moon-icon">dark_mode</span><span>主题</span></button>
   </nav>
 
-  <script src="/static/app.js?v=105"></script>
+  <script src="/static/app.js?v=117"></script>
   <script>if("serviceWorker" in navigator){navigator.serviceWorker.register("/static/sw.js",{updateViaCache:"none"})}</script>
 </body>
 </html>

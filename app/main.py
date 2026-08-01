@@ -34,7 +34,12 @@ for _dir, _name in [(WATCH_DIR, "WATCH_DIR"), (OUTPUT_DIR, "OUTPUT_DIR"), (CACHE
         )
 
 config_store = ConfigStore(CONFIG_DIR / "config.json")
-job_store = JobStore(CONFIG_DIR / "jobs.sqlite3")
+initial_config = config_store.load()
+job_store = JobStore(
+    CONFIG_DIR / "jobs.sqlite3",
+    min_file_size_mb=initial_config.min_file_size_mb,
+    default_move_target_dir=initial_config.default_move_target_dir,
+)
 runner = JobRunner(job_store, config_store, WATCH_DIR, CACHE_DIR)
 
 app = FastAPI(title="Subtitle Modal Web")
@@ -279,7 +284,15 @@ def create_job(payload: JobPayload) -> dict:
     account = config_store.get_modal_account(config.active_modal_account_id)
     if account is None or not account.get("token_id") or not account.get("token_secret"):
         raise HTTPException(status_code=400, detail="请先在配置页选择并保存有效的 Modal 账户")
-    job = job_store.create_job(payload.input_path, payload.output_dir, formats, payload.overwrite, payload.move_target_dir, config.active_modal_account_id)
+    job = job_store.create_job(
+        payload.input_path,
+        payload.output_dir,
+        formats,
+        payload.overwrite,
+        payload.move_target_dir,
+        config.active_modal_account_id,
+        min_file_size_mb=config.min_file_size_mb,
+    )
     return asdict(job)
 
 

@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 
@@ -52,8 +53,10 @@ def test_pwa_icons_use_sync_cloud_symbol():
     icon_192 = ICON_192.read_text(encoding="utf-8")
     icon_512 = ICON_512.read_text(encoding="utf-8")
 
-    assert "/static/icons/icon-192.svg" in manifest
-    assert "/static/icons/icon-512.svg" in manifest
+    assert "/static/icons/icon-reference-192.png" in manifest
+    assert "/static/icons/icon-reference-512.png" in manifest
+    assert (ROOT / "app" / "static" / "icons" / "icon-reference-192.png").is_file()
+    assert (ROOT / "app" / "static" / "icons" / "icon-reference-512.png").is_file()
     for icon in (icon_192, icon_512):
         assert 'fill="#020305"' in icon
         assert 'stroke="#2b313b"' in icon
@@ -323,16 +326,36 @@ def test_static_assets_are_versioned_with_the_current_service_worker_cache():
     html = INDEX.read_text(encoding="utf-8")
     service_worker = (ROOT / "app" / "static" / "sw.js").read_text(encoding="utf-8")
 
-    assert 'styles.css?v=105' in html
-    assert 'app.js?v=105' in html
-    assert 'const CACHE = "subtitle-web-v30";' in service_worker
+    assert 'styles.css?v=117' in html
+    assert 'app.js?v=117' in html
+    assert 'const CACHE = "subtitle-web-v42";' in service_worker
 
 
 def test_frontend_declares_a_pwa_favicon_and_password_autocomplete_hints():
     html = INDEX.read_text(encoding="utf-8")
 
-    assert '<link rel="icon" href="/static/icons/icon-192.svg"' in html
+    assert '<link rel="manifest" href="/static/manifest.json?v=42"' in html
+    assert '<link rel="icon" href="/static/icons/icon-reference-192.png"' in html
+    assert '<link rel="apple-touch-icon" href="/static/icons/icon-reference-192.png"' in html
+    assert 'class="splash-icon" src="/static/icons/icon-reference-192.png"' in html
     assert html.count('autocomplete="current-password"') >= 4
+
+
+def test_pwa_icons_use_safe_padding_and_split_maskable_purpose():
+    manifest_text = (ROOT / "app" / "static" / "manifest.json").read_text(encoding="utf-8")
+    manifest = json.loads(manifest_text)
+    service_worker = (ROOT / "app" / "static" / "sw.js").read_text(encoding="utf-8")
+
+    assert manifest["name"] == "字幕云翻译"
+    assert manifest["short_name"] == "字幕云"
+    assert "icon-reference-192.png" in manifest_text
+    assert "icon-reference-512.png" in manifest_text
+    assert "icon-reference-maskable-512.png" not in manifest_text
+    assert '"purpose": "any"' in manifest_text
+    assert '"purpose": "maskable"' not in manifest_text
+    assert "icon-reference-192.png" in service_worker
+    assert "icon-reference-512.png" in service_worker
+    assert "icon-reference-maskable-512.png" not in service_worker
 
 
 def test_transcribe_page_does_not_render_unused_status_placeholder():

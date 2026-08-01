@@ -553,6 +553,7 @@ class JobRunner:
                         formats=formats,
                         overwrite=False,
                         move_target_dir=config.default_move_target_dir,
+                        min_file_size_mb=min_file_size_mb,
                     )
             except Exception:
                 logger.exception("watchdog scan error")

@@ -242,12 +242,10 @@ pre {
 .splash-icon {
   width: 64px;
   height: 64px;
-  display: grid;
-  place-items: center;
-  color: var(--primary);
-  font-size: 30px;
-  font-weight: 800;
+  display: block;
+  object-fit: contain;
   border-radius: 50%;
+  box-shadow: 0 0 0 1px var(--outline-variant), 0 0 22px rgba(157, 208, 255, .16);
 }
 
 .splash-title {
@@ -1620,8 +1618,8 @@ pre {
 
 /* Stitch task queue card recreation */
 :root {
-  --queue-grid-columns: minmax(180px, 2.2fr) minmax(280px, 3fr) minmax(190px, 1.7fr) minmax(64px, .7fr);
-  --queue-completed-columns: minmax(180px, 2.2fr) minmax(100px, .9fr) minmax(190px, 1.5fr) minmax(170px, 1.4fr);
+  --queue-grid-columns: 12.5% 25% 25% 25% 12.5%;
+  --queue-completed-columns: 12.5% 25% 25% 25% 12.5%;
 }
 
 .queue-toolbar {
@@ -1663,7 +1661,7 @@ pre {
 
 .queue-list-head {
   grid-template-columns: var(--queue-grid-columns);
-  gap: 16px;
+  gap: 0;
   padding: 0 24px 10px;
   color: var(--on-surface-variant);
   font-size: 12px;
@@ -1672,15 +1670,11 @@ pre {
   text-transform: none;
 }
 
-.queue-list-head span:nth-child(4) {
+.queue-list-head span {
   justify-self: center;
-  padding-right: 0;
 }
 
-.queue-list-head span:nth-child(2),
-.queue-list-head span:nth-child(3) {
-  justify-self: center;
-}
+.queue-list-head span:first-child { justify-self: start; }
 
 .queue-list-head.completed {
   grid-template-columns: var(--queue-completed-columns);
@@ -1727,7 +1721,7 @@ pre {
 .job-row-main {
   display: grid;
   grid-template-columns: var(--queue-grid-columns);
-  gap: 16px;
+  gap: 0;
   align-items: center;
 }
 
@@ -1738,6 +1732,15 @@ pre {
 
 .job-row.done .job-row-main {
   grid-template-columns: var(--queue-completed-columns);
+}
+
+.job-size {
+  justify-self: center;
+  color: var(--on-surface-variant);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  white-space: nowrap;
 }
 
 .job-completed-total,
@@ -1768,6 +1771,7 @@ pre {
 }
 
 .job-row-left,
+.job-size,
 .job-row-center,
 .job-time-block,
 .job-actions {
@@ -1796,6 +1800,17 @@ pre {
 .job-row:not(.done) .job-row-center {
   align-items: center;
   text-align: center;
+}
+
+.job-status-meta {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+}
+
+.job-size-mobile {
+  display: none;
 }
 
 .job-row:not(.done) .job-progress-line {
@@ -1895,9 +1910,16 @@ pre {
 .job-time-block {
   display: flex;
   flex-direction: column;
+  justify-self: center;
+  align-items: center;
   gap: 3px;
   color: var(--on-surface-variant);
   font-weight: 500;
+}
+
+.job-row:not(.done) .job-size,
+.job-row.done .job-size {
+  grid-column: auto;
 }
 
 .job-duration {
@@ -2245,8 +2267,33 @@ pre {
     grid-template-columns: minmax(0, 1fr) auto;
     grid-template-areas:
       "identity completed"
+      "size size"
       "total phases";
     gap: 12px 10px;
+  }
+
+  .job-row:not(.done) .job-size {
+    display: none;
+  }
+
+  .job-status-meta {
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .job-size-mobile {
+    display: block;
+    flex: 0 0 auto;
+    color: var(--on-surface-variant);
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .job-row.done .job-size {
+    grid-area: size;
+    align-self: center;
+    justify-self: end;
   }
 
   .job-row.done .job-completed-total {
@@ -2443,6 +2490,17 @@ pre {
 }
 
 @media (max-width: 520px) {
+  .pager-shell {
+    max-width: 100%;
+    justify-content: start;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .pager-shell::-webkit-scrollbar {
+    display: none;
+  }
+
   .gallery-card {
     flex-basis: calc((100vw - 56px) / 2);
     padding: 8px;
@@ -2454,19 +2512,56 @@ pre {
   }
 
   .gallery-footer {
+    grid-template-columns: minmax(0, 1fr) auto;
     gap: 6px;
     padding-top: 8px;
   }
 
+  .gallery-footer .av {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    display: -webkit-box;
+    min-height: 0;
+    overflow: hidden;
+    line-height: 18px;
+    overflow-wrap: anywhere;
+    white-space: normal;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 1;
+  }
+
+  .gallery-footer .meta {
+    grid-column: 1;
+    grid-row: 2;
+    align-self: center;
+  }
+
   .gallery-actions {
-    gap: 5px;
+    grid-column: 2;
+    grid-row: 2;
+    align-self: center;
+    gap: 6px;
   }
 
   .gallery-download {
-    width: 32px;
-    height: 32px;
-    min-width: 32px;
-    min-height: 32px;
+    width: 44px;
+    height: 28px;
+    min-width: 44px;
+    min-height: 28px;
+    border-radius: 999px;
+    background: var(--surface);
+    box-shadow: inset 3px 3px 6px var(--shadow-pressed-dark), inset -3px -3px 6px var(--shadow-pressed-light);
+  }
+
+  .gallery-download .material-symbols-outlined {
+    font-size: 17px;
+  }
+
+  .fmt-badge {
+    display: inline-flex;
+    align-items: center;
+    min-height: 28px;
+    padding: 4px 9px;
   }
 
   .config-canvas {
