@@ -231,14 +231,14 @@ def test_delete_job_rejects_active_tasks(tmp_path, monkeypatch):
     assert getattr(exc_info.value, "status_code", None) == 409
 
 
-def test_public_version_endpoint_reports_v302(tmp_path, monkeypatch):
+def test_public_version_endpoint_reports_v303(tmp_path, monkeypatch):
     monkeypatch.setenv("CONFIG_DIR", str(tmp_path))
     monkeypatch.setenv("CACHE_DIR", str(tmp_path))
     monkeypatch.setenv("WATCH_DIR", str(tmp_path))
     monkeypatch.setenv("OUTPUT_DIR", str(tmp_path))
     from app import main
 
-    assert main.get_version() == {"version": "v3.02"}
+    assert main.get_version() == {"version": "v3.03"}
 
 
 def test_docker_compose_does_not_override_repo_branch():
@@ -286,6 +286,83 @@ def test_metadata_node_route_rejects_unconfigured_dbo(tmp_path, monkeypatch):
 
     assert exc_info.value.status_code == 400
     assert "DBO" in str(exc_info.value.detail)
+
+
+def test_javdb_posters_rewrite_encrypted_cdn_url_to_public_jpeg(tmp_path, monkeypatch):
+    monkeypatch.setenv("CONFIG_DIR", str(tmp_path))
+    monkeypatch.setenv("CACHE_DIR", str(tmp_path))
+    monkeypatch.setenv("WATCH_DIR", str(tmp_path))
+    monkeypatch.setenv("OUTPUT_DIR", str(tmp_path))
+    from app import main
+
+    store = ConfigStore(tmp_path / "poster-config.json")
+    store.save({
+        "metadata_provider": "javdb",
+        "javdb_api_url": "https://jdforrepam.com",
+        "dbo_api_url": "https://dbo.example.com",
+        "dbo_api_key": "decoder-key",
+    })
+    monkeypatch.setattr(main, "config_store", store)
+    requests = []
+
+    class ImageResponse:
+        headers = {"Content-Type": "image/jpeg"}
+
+        def read(self):
+            return b"decoded-jpeg"
+
+    def opener(request, timeout):
+        requests.append(request)
+        return ImageResponse()
+
+    monkeypatch.setattr(main.urllib.request, "urlopen", opener)
+
+    response = main.poster_proxy("https://tp.spfcas.com/rhe951l4q/covers/mo/movie.jpg")
+
+    assert response.body == b"decoded-jpeg"
+    assert requests[0].full_url == "https://c0.jdbstatic.com/covers/mo/movie.jpg"
+    assert requests[0].get_header("X-api-key") is None
+
+
+def test_javdb_posters_fall_back_to_dbo_decoder_when_public_cdn_fails(tmp_path, monkeypatch):
+    monkeypatch.setenv("CONFIG_DIR", str(tmp_path))
+    monkeypatch.setenv("CACHE_DIR", str(tmp_path))
+    monkeypatch.setenv("WATCH_DIR", str(tmp_path))
+    monkeypatch.setenv("OUTPUT_DIR", str(tmp_path))
+    from app import main
+
+    store = ConfigStore(tmp_path / "poster-fallback-config.json")
+    store.save({
+        "metadata_provider": "javdb",
+        "dbo_api_url": "https://dbo.example.com",
+        "dbo_api_key": "decoder-key",
+    })
+    monkeypatch.setattr(main, "config_store", store)
+    requests = []
+
+    class ImageResponse:
+        headers = {"Content-Type": "image/jpeg"}
+
+        def read(self):
+            return b"fallback-jpeg"
+
+    def opener(request, timeout):
+        requests.append(request)
+        if len(requests) == 1:
+            raise OSError("public CDN unavailable")
+        return ImageResponse()
+
+    monkeypatch.setattr(main.urllib.request, "urlopen", opener)
+
+    response = main.poster_proxy("https://tp.spfcas.com/rhe951l4q/covers/mo/movie.jpg")
+
+    assert response.body == b"fallback-jpeg"
+    assert requests[0].full_url == "https://c0.jdbstatic.com/covers/mo/movie.jpg"
+    assert requests[1].full_url == (
+        "https://dbo.example.com/api/image?url="
+        "https%3A//tp.spfcas.com/rhe951l4q/covers/mo/movie.jpg"
+    )
+    assert requests[1].get_header("X-api-key") == "decoder-key"
 
 
 def test_config_store_persists_min_file_size_mb(tmp_path):

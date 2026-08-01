@@ -176,7 +176,7 @@ def test_dbo() -> dict:
 
 @app.get("/api/version")
 def get_version() -> dict:
-    return {"version": "v3.02"}
+    return {"version": "v3.03"}
 
 
 @app.get("/api/config")
@@ -461,6 +461,20 @@ _ALLOWED_IMAGE_DOMAINS = {
     "pics.r18.com", "imgr18.shemalejapanhardcore.com",
 }
 
+
+def _public_javdb_image_url(url: str) -> str:
+    parsed = urllib.parse.urlparse(url)
+    if parsed.hostname not in {"tp.cmastd.com", "tp.spfcas.com"}:
+        return url
+    parts = parsed.path.lstrip("/").split("/")
+    if len(parts) < 2 or parts[1] not in {"covers", "small_covers"}:
+        return url
+    return urllib.parse.urlunparse(parsed._replace(
+        netloc="c0.jdbstatic.com",
+        path="/" + "/".join(parts[1:]),
+    ))
+
+
 @app.get("/api/poster-proxy")
 def poster_proxy(url: str):
     cfg = config_store.load()
@@ -473,21 +487,27 @@ def poster_proxy(url: str):
         raise HTTPException(status_code=400, detail="invalid url")
     if not any(host == d or host.endswith("." + d) for d in _ALLOWED_IMAGE_DOMAINS):
         raise HTTPException(status_code=400, detail="domain not allowed")
-    if cfg.metadata_provider == "dbo":
-        if not cfg.dbo_api_url or not cfg.dbo_api_key:
-            raise HTTPException(status_code=503, detail="DBO 未配置")
-        image_url = f"{cfg.dbo_api_url.rstrip('/')}/api/image?url={urllib.parse.quote(url)}"
-        headers = {"X-API-Key": cfg.dbo_api_key}
-    else:
-        image_url = url
-        headers = {
+    requests = [(
+        _public_javdb_image_url(url),
+        {
             "User-Agent": "Dart/3.5 (dart:io)",
             "Referer": cfg.javdb_api_url.rstrip("/") + "/",
-        }
-    req = urllib.request.Request(image_url, headers=headers)
-    try:
-        r = urllib.request.urlopen(req, timeout=10)
-        content_type = r.headers.get("Content-Type", "image/jpeg").split(";", 1)[0]
-        return Response(content=r.read(), media_type=content_type)
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"image fetch failed: {e}")
+        },
+    )]
+    if cfg.dbo_api_url and cfg.dbo_api_key:
+        requests.append((
+            f"{cfg.dbo_api_url.rstrip('/')}/api/image?url={urllib.parse.quote(url)}",
+            {"X-API-Key": cfg.dbo_api_key},
+        ))
+    last_error = None
+    for image_url, headers in requests:
+        try:
+            req = urllib.request.Request(image_url, headers=headers)
+            r = urllib.request.urlopen(req, timeout=10)
+            content_type = r.headers.get("Content-Type", "image/jpeg").split(";", 1)[0]
+            if not content_type.startswith("image/"):
+                raise ValueError(f"unexpected content type: {content_type}")
+            return Response(content=r.read(), media_type=content_type)
+        except Exception as e:
+            last_error = e
+    raise HTTPException(status_code=502, detail=f"image fetch failed: {last_error}")

@@ -786,7 +786,7 @@ $("#test-dbo-btn")?.addEventListener("click", async () => {
 });
 
 $("#refresh").addEventListener("click", loadJobs);
-api("/api/version").then(r => { const v = $("#version"); if (v) v.textContent = r.version || "v3.02"; });
+api("/api/version").then(r => { const v = $("#version"); if (v) v.textContent = r.version || "v3.03"; });
 
 $("#clear-audio")?.addEventListener("click", async () => {
   if (!confirm("确定清空音频缓存？已缓存的文件下次需要重新提取。")) return;

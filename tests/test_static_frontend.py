@@ -17,7 +17,7 @@ def test_frontend_uses_new_neumorphic_shell():
 
     assert "Subtitle Cloud" in html
     assert "字幕画廊" in html
-    assert '<h2 id="topbar-heading"><span class="topbar-title-text">Subtitle Cloud</span><small>v3.02</small></h2>' in html
+    assert '<h2 id="topbar-heading"><span class="topbar-title-text">Subtitle Cloud</span><small>v3.03</small></h2>' in html
     assert "topbar" in html
     assert "gallery-summary" not in html
     assert "summary-stats" not in html
@@ -39,13 +39,13 @@ def test_brand_title_places_chinese_name_under_subtitle_and_version_under_cloud(
 
     assert '<h1 class="brand-title">' in html
     assert '<span class="brand-word"><span>Subtitle</span><small>字幕云</small></span>' in html
-    assert '<span class="brand-word"><span>Cloud</span><small id="version">v3.02</small></span>' in html
+    assert '<span class="brand-word"><span>Cloud</span><small id="version">v3.03</small></span>' in html
     assert "字幕云 AI" not in html
     assert "brand-meta" not in html
     assert ".brand-title {\n  display: grid;" in css
     assert "grid-template-columns: repeat(2, max-content);" in css
     assert ".brand-word small" in css
-    assert 'v.textContent = r.version || "v3.02"' in app_js
+    assert 'v.textContent = r.version || "v3.03"' in app_js
 
 
 def test_pwa_icons_use_sync_cloud_symbol():
@@ -120,7 +120,7 @@ def test_mobile_topbar_title_keeps_version_badge():
     css = STYLES.read_text(encoding="utf-8")
     app_js = APP_JS.read_text(encoding="utf-8")
 
-    assert '<h2 id="topbar-heading"><span class="topbar-title-text">Subtitle Cloud</span><small>v3.02</small></h2>' in html
+    assert '<h2 id="topbar-heading"><span class="topbar-title-text">Subtitle Cloud</span><small>v3.03</small></h2>' in html
     assert ".topbar h2 {\n  display: inline-flex;" in css
     assert "align-items: center;" in css.split(".topbar h2 {", 1)[1].split("}", 1)[0]
     assert "flex-wrap: nowrap;" in css
