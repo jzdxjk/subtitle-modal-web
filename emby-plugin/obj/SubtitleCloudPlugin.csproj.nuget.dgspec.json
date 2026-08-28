@@ -1,0 +1,78 @@
+{
+  "format": 1,
+  "restore": {
+    "E:\\E盘codex\\字幕云翻译\\emby-plugin\\SubtitleCloudPlugin.csproj": {}
+  },
+  "projects": {
+    "E:\\E盘codex\\字幕云翻译\\emby-plugin\\SubtitleCloudPlugin.csproj": {
+      "version": "1.0.0",
+      "restore": {
+        "projectUniqueName": "E:\\E盘codex\\字幕云翻译\\emby-plugin\\SubtitleCloudPlugin.csproj",
+        "projectName": "SubtitleCloudPlugin",
+        "projectPath": "E:\\E盘codex\\字幕云翻译\\emby-plugin\\SubtitleCloudPlugin.csproj",
+        "packagesPath": "C:\\Users\\jzdxjk\\.nuget\\packages\\",
+        "outputPath": "E:\\E盘codex\\字幕云翻译\\emby-plugin\\obj\\",
+        "projectStyle": "PackageReference",
+        "configFilePaths": [
+          "C:\\Users\\jzdxjk\\AppData\\Roaming\\NuGet\\NuGet.Config"
+        ],
+        "originalTargetFrameworks": [
+          "netstandard2.0"
+        ],
+        "sources": {
+          "https://api.nuget.org/v3/index.json": {}
+        },
+        "frameworks": {
+          "netstandard2.0": {
+            "targetAlias": "netstandard2.0",
+            "projectReferences": {}
+          }
+        },
+        "warningProperties": {
+          "warnAsError": [
+            "NU1605"
+          ]
+        },
+        "restoreAuditProperties": {
+          "enableAudit": "true",
+          "auditLevel": "low",
+          "auditMode": "direct"
+        },
+        "SdkAnalysisLevel": "9.0.300"
+      },
+      "frameworks": {
+        "netstandard2.0": {
+          "targetAlias": "netstandard2.0",
+          "dependencies": {
+            "MediaBrowser.Server.Core": {
+              "target": "Package",
+              "version": "[4.8.11, )"
+            },
+            "NETStandard.Library": {
+              "suppressParent": "All",
+              "target": "Package",
+              "version": "[2.0.3, )",
+              "autoReferenced": true
+            },
+            "System.Text.Json": {
+              "target": "Package",
+              "version": "[8.0.8, )"
+            }
+          },
+          "imports": [
+            "net461",
+            "net462",
+            "net47",
+            "net471",
+            "net472",
+            "net48",
+            "net481"
+          ],
+          "assetTargetFallback": true,
+          "warn": true,
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\9.0.315\\RuntimeIdentifierGraph.json"
+        }
+      }
+    }
+  }
+}

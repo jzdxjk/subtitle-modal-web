@@ -1,0 +1,35 @@
+{
+  "version": 2,
+  "dgSpecHash": "jyYW0M6FJhA=",
+  "success": true,
+  "projectFilePath": "E:\\E盘codex\\字幕云翻译\\emby-plugin\\SubtitleCloudPlugin.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\jzdxjk\\.nuget\\packages\\mediabrowser.common\\4.8.11\\mediabrowser.common.4.8.11.nupkg.sha512",
+    "C:\\Users\\jzdxjk\\.nuget\\packages\\mediabrowser.server.core\\4.8.11\\mediabrowser.server.core.4.8.11.nupkg.sha512",
+    "C:\\Users\\jzdxjk\\.nuget\\packages\\microsoft.bcl.asyncinterfaces\\9.0.0\\microsoft.bcl.asyncinterfaces.9.0.0.nupkg.sha512",
+    "C:\\Users\\jzdxjk\\.nuget\\packages\\microsoft.netcore.platforms\\1.1.0\\microsoft.netcore.platforms.1.1.0.nupkg.sha512",
+    "C:\\Users\\jzdxjk\\.nuget\\packages\\netstandard.library\\2.0.3\\netstandard.library.2.0.3.nupkg.sha512",
+    "C:\\Users\\jzdxjk\\.nuget\\packages\\system.buffers\\4.5.1\\system.buffers.4.5.1.nupkg.sha512",
+    "C:\\Users\\jzdxjk\\.nuget\\packages\\system.io.pipelines\\9.0.0\\system.io.pipelines.9.0.0.nupkg.sha512",
+    "C:\\Users\\jzdxjk\\.nuget\\packages\\system.memory\\4.5.5\\system.memory.4.5.5.nupkg.sha512",
+    "C:\\Users\\jzdxjk\\.nuget\\packages\\system.numerics.vectors\\4.4.0\\system.numerics.vectors.4.4.0.nupkg.sha512",
+    "C:\\Users\\jzdxjk\\.nuget\\packages\\system.runtime.compilerservices.unsafe\\6.0.0\\system.runtime.compilerservices.unsafe.6.0.0.nupkg.sha512",
+    "C:\\Users\\jzdxjk\\.nuget\\packages\\system.text.encodings.web\\9.0.0\\system.text.encodings.web.9.0.0.nupkg.sha512",
+    "C:\\Users\\jzdxjk\\.nuget\\packages\\system.text.json\\9.0.0\\system.text.json.9.0.0.nupkg.sha512",
+    "C:\\Users\\jzdxjk\\.nuget\\packages\\system.threading.tasks.extensions\\4.5.4\\system.threading.tasks.extensions.4.5.4.nupkg.sha512"
+  ],
+  "logs": [
+    {
+      "code": "NU1603",
+      "level": "Warning",
+      "message": "SubtitleCloudPlugin 依赖于 System.Text.Json (>= 8.0.8)，但没有找到 System.Text.Json 8.0.8。已改为解析 System.Text.Json 9.0.0。",
+      "projectPath": "E:\\E盘codex\\字幕云翻译\\emby-plugin\\SubtitleCloudPlugin.csproj",
+      "warningLevel": 1,
+      "filePath": "E:\\E盘codex\\字幕云翻译\\emby-plugin\\SubtitleCloudPlugin.csproj",
+      "libraryId": "System.Text.Json",
+      "targetGraphs": [
+        ".NETStandard,Version=v2.0"
+      ]
+    }
+  ]
+}

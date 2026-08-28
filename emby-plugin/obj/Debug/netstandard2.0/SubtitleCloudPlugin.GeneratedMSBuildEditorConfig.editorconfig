@@ -1,0 +1,8 @@
+is_global = true
+build_property.RootNamespace = SubtitleCloudPlugin
+build_property.ProjectDir = E:\E盘codex\字幕云翻译\emby-plugin\
+build_property.EnableComHosting = 
+build_property.EnableGeneratedComInterfaceComImportInterop = 
+build_property.CsWinRTUseWindowsUIXamlProjections = false
+build_property.EffectiveAnalysisLevelStyle = 
+build_property.EnableCodeStyleSeverity = 

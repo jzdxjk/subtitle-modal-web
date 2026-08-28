@@ -1,0 +1,11 @@
+E:\E盘codex\字幕云翻译\emby-plugin\obj\Debug\netstandard2.0\SubtitleCloudPlugin.csproj.AssemblyReference.cache
+E:\E盘codex\字幕云翻译\emby-plugin\obj\Debug\netstandard2.0\SubtitleCloudPlugin.GeneratedMSBuildEditorConfig.editorconfig
+E:\E盘codex\字幕云翻译\emby-plugin\obj\Debug\netstandard2.0\SubtitleCloudPlugin.AssemblyInfoInputs.cache
+E:\E盘codex\字幕云翻译\emby-plugin\obj\Debug\netstandard2.0\SubtitleCloudPlugin.AssemblyInfo.cs
+E:\E盘codex\字幕云翻译\emby-plugin\obj\Debug\netstandard2.0\SubtitleCloudPlugin.csproj.CoreCompileInputs.cache
+E:\E盘codex\字幕云翻译\emby-plugin\obj\Debug\netstandard2.0\SubtitleCloudPlugin.sourcelink.json
+E:\E盘codex\字幕云翻译\emby-plugin\bin\Debug\netstandard2.0\SubtitleCloudPlugin.deps.json
+E:\E盘codex\字幕云翻译\emby-plugin\bin\Debug\netstandard2.0\SubtitleCloudPlugin.dll
+E:\E盘codex\字幕云翻译\emby-plugin\bin\Debug\netstandard2.0\SubtitleCloudPlugin.pdb
+E:\E盘codex\字幕云翻译\emby-plugin\obj\Debug\netstandard2.0\SubtitleCloudPlugin.dll
+E:\E盘codex\字幕云翻译\emby-plugin\obj\Debug\netstandard2.0\SubtitleCloudPlugin.pdb
