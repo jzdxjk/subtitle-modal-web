@@ -44,3 +44,6 @@ Thumbs.db
 
 # Temp scripts
 /_*.py
+
+emby-plugin/bin/
+emby-plugin/obj/
