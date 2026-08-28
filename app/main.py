@@ -12,6 +12,7 @@ import logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(levelname)s: %(message)s")
 
 from fastapi import FastAPI, HTTPException
+from fastapi import Header
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -65,6 +66,7 @@ class ConfigPayload(BaseModel):
     enable_smart_vad: bool | None = None
     metadata_provider: str | None = None
     javdb_api_url: str | None = None
+    poster_decrypt: bool | None = None
     dbo_api_url: str | None = None
     dbo_api_key: str | None = None
     enable_transcribe: bool | None = None
@@ -74,6 +76,7 @@ class ConfigPayload(BaseModel):
     transcribe_prompt: str | None = None
     transcribe_model: str | None = None
     repo_branch: str | None = None
+    plugin_api_token: str | None = None
 
 
 class JobPayload(BaseModel):
@@ -82,6 +85,17 @@ class JobPayload(BaseModel):
     formats: list[str] = Field(default_factory=lambda: ["srt"])
     overwrite: bool = False
     move_target_dir: str = ""
+
+
+class PluginJobPayload(BaseModel):
+    input_path: str
+    emby_item_id: str = ""
+    display_title: str = ""
+    av_code: str = ""
+    poster_url: str = ""
+    task_type: str = "native"
+    formats: list[str] = Field(default_factory=lambda: ["srt"])
+    overwrite: bool = False
 
 
 class ModalAccountPayload(BaseModel):
@@ -94,6 +108,11 @@ class ModalAccountPayload(BaseModel):
 
 class MetadataNodeSelection(BaseModel):
     node_id: str
+
+
+class PluginRefreshPayload(BaseModel):
+    state: str
+    message: str = ""
 
 
 @app.on_event("startup")
@@ -176,7 +195,7 @@ def test_dbo() -> dict:
 
 @app.get("/api/version")
 def get_version() -> dict:
-    return {"version": "v3.04"}
+    return {"version": "v3.06"}
 
 
 @app.get("/api/config")
@@ -330,6 +349,80 @@ def create_job(payload: JobPayload) -> dict:
     return asdict(job)
 
 
+def _plugin_auth(token: str | None) -> None:
+    expected = config_store.load().plugin_api_token
+    if expected and token != expected:
+        raise HTTPException(status_code=401, detail="invalid plugin token")
+
+
+@app.get("/api/plugin/health")
+def plugin_health(x_api_token: str | None = Header(default=None)) -> dict:
+    _plugin_auth(x_api_token)
+    return {"ok": True, "plugin_api_enabled": bool(config_store.load().plugin_api_token)}
+
+
+@app.post("/api/plugin/jobs")
+def create_plugin_job(payload: PluginJobPayload, x_api_token: str | None = Header(default=None)) -> dict:
+    _plugin_auth(x_api_token)
+    path = Path(payload.input_path)
+    if not path.exists():
+        raise HTTPException(status_code=400, detail=f"input path does not exist: {payload.input_path}")
+    if job_store.has_active_job_for_path(payload.input_path):
+        existing = next((j for j in job_store.list_jobs() if j.input_path == payload.input_path and j.status in {"queued", "running", "cancelling"}), None)
+        return asdict(existing) if existing else {"deduplicated": True}
+    task_type = payload.task_type
+    if path.suffix.lower() == ".strm" and task_type == "native":
+        from app.media import classify_strm_source
+        try:
+            task_type, _ = classify_strm_source(path)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+    config = config_store.load()
+    account = config_store.get_modal_account(config.active_modal_account_id)
+    if account is None or not account.get("token_id") or not account.get("token_secret"):
+        raise HTTPException(status_code=400, detail="请先配置有效的 Modal 账户")
+    formats = [fmt.strip().lstrip(".").lower() for fmt in payload.formats if fmt.strip()]
+    if not formats:
+        raise HTTPException(status_code=400, detail="at least one subtitle format is required")
+    if payload.task_type not in {"native", "strm-http", "strm-local"}:
+        raise HTTPException(status_code=400, detail="invalid plugin task type")
+    job = job_store.create_job(
+        str(path), str(path.parent), formats, payload.overwrite, "", config.active_modal_account_id,
+        source="emby", task_type=task_type, emby_item_id=payload.emby_item_id,
+        display_title=payload.display_title, av_code=payload.av_code, poster_url=payload.poster_url,
+    )
+    return asdict(job)
+
+
+@app.get("/api/plugin/jobs")
+def list_plugin_jobs(x_api_token: str | None = Header(default=None)) -> list[dict]:
+    _plugin_auth(x_api_token)
+    return [asdict(job) for job in job_store.list_jobs() if job.source == "emby"]
+
+
+@app.get("/api/plugin/jobs/{job_id}")
+def get_plugin_job(job_id: str, x_api_token: str | None = Header(default=None)) -> dict:
+    _plugin_auth(x_api_token)
+    job = job_store.get_job(job_id)
+    if job is None or job.source != "emby":
+        raise HTTPException(status_code=404, detail="plugin job not found")
+    return asdict(job)
+
+
+@app.post("/api/plugin/jobs/{job_id}/refresh-result")
+def plugin_refresh_result(job_id: str, payload: PluginRefreshPayload | None = None, refresh_state: str | None = None, x_api_token: str | None = Header(default=None)) -> dict:
+    _plugin_auth(x_api_token)
+    job = job_store.get_job(job_id)
+    if job is None or job.source != "emby":
+        raise HTTPException(status_code=404, detail="plugin job not found")
+    state = payload.state if payload else (refresh_state or "pending")
+    message = payload.message if payload else ""
+    if state not in {"pending", "refreshing", "success", "failed"}:
+        raise HTTPException(status_code=422, detail="invalid refresh state")
+    job_store.update_job(job_id, refresh_state=state, message=message or job.message)
+    return {"ok": True, "refresh_state": state, "message": message}
+
+
 @app.get("/api/jobs")
 def list_jobs() -> list[dict]:
     return [asdict(job) for job in job_store.list_jobs()]
@@ -379,7 +472,7 @@ def delete_job(job_id: str) -> dict:
     job = job_store.get_job(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="job not found")
-    if job.status in ("queued", "running", "cancelling"):
+    if job.status in ("queued", "running"):
         raise HTTPException(status_code=409, detail="active job must be cancelled before deletion")
     ok = job_store.delete_job(job_id)
     if not ok:
@@ -476,6 +569,15 @@ def _public_javdb_image_url(url: str) -> str:
     ))
 
 
+def _decrypt_javdb_image(data: bytes) -> bytes:
+    """解码 JavDB App 图床的单字节 XOR 图片（首字节为密钥）。"""
+    if len(data) < 2:
+        return data
+    key = data[0]
+    table = bytes(key ^ i for i in range(256))
+    return data[1:].translate(table)
+
+
 @app.get("/api/poster-proxy")
 def poster_proxy(url: str):
     cfg = config_store.load()
@@ -483,33 +585,50 @@ def poster_proxy(url: str):
         raise HTTPException(status_code=400, detail="invalid url")
     # SSRF 防护：只允许白名单域名
     try:
-        host = urllib.parse.urlparse(url).hostname or ""
+        parsed = urllib.parse.urlparse(url)
+        host = parsed.hostname or ""
     except Exception:
         raise HTTPException(status_code=400, detail="invalid url")
     if not any(host == d or host.endswith("." + d) for d in _ALLOWED_IMAGE_DOMAINS):
         raise HTTPException(status_code=400, detail="domain not allowed")
-    requests = [(
-        _public_javdb_image_url(url),
-        {
-            "User-Agent": "Dart/3.5 (dart:io)",
-            "Referer": cfg.javdb_api_url.rstrip("/") + "/",
-        },
-    )]
+    javdb_headers = {
+        "User-Agent": "Dart/3.5 (dart:io)",
+        "Referer": cfg.javdb_api_url.rstrip("/") + "/",
+    }
+    is_encrypted_javdb = host == "tp.spfcas.com"
+
+    candidates = []
+    if cfg.poster_decrypt:
+        # 解密模式：优先取 App 图床原图并解码为无水印 JPEG
+        candidates.append((url, javdb_headers, is_encrypted_javdb))
+        if is_encrypted_javdb:
+            candidates.append((_public_javdb_image_url(url), javdb_headers, False))
+    else:
+        # 替换模式：tp.* 图床替换为公开明文 CDN（带水印）
+        candidates.append((_public_javdb_image_url(url), javdb_headers, False))
+
     if cfg.dbo_api_url and cfg.dbo_api_key:
-        requests.append((
+        candidates.append((
             f"{cfg.dbo_api_url.rstrip('/')}/api/image?url={urllib.parse.quote(url)}",
             {"X-API-Key": cfg.dbo_api_key},
+            False,
         ))
     last_error = None
-    for image_url, headers in requests:
+    for image_url, headers, decrypt in candidates:
         try:
             req = urllib.request.Request(image_url, headers=headers)
             r = urllib.request.urlopen(req, timeout=10)
+            content = r.read()
             content_type = r.headers.get("Content-Type", "image/jpeg").split(";", 1)[0]
+            if decrypt:
+                content = _decrypt_javdb_image(content)
+                if len(content) < 3 or content[:2] != b"\xff\xd8":
+                    raise ValueError("decrypted poster is not a JPEG")
+                content_type = "image/jpeg"
             if not content_type.startswith("image/"):
                 raise ValueError(f"unexpected content type: {content_type}")
             return Response(
-                content=r.read(),
+                content=content,
                 media_type=content_type,
                 headers={"Cache-Control": _POSTER_CACHE_CONTROL},
             )

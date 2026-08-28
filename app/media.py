@@ -21,6 +21,8 @@ def is_audio_file(path: Path) -> bool:
 
 
 def meets_min_file_size(path: Path, min_file_size_mb: int = 0) -> bool:
+    if path.suffix.lower() == ".strm":
+        return True
     if min_file_size_mb <= 0:
         return True
     min_file_size_bytes = min_file_size_mb * 1024 * 1024
@@ -66,12 +68,12 @@ def normalize_av_code(code: str) -> str:
 def discover_media(input_path: Path, min_file_size_mb: int = 0) -> list[Path]:
     """发现媒体文件，只保留文件名包含 AV 番号的"""
     if input_path.is_file():
-        return [input_path] if (is_video_file(input_path) or is_audio_file(input_path)) and extract_av_code(input_path) and meets_min_file_size(input_path, min_file_size_mb) else []
+        return [input_path] if (is_video_file(input_path) or is_audio_file(input_path) or input_path.suffix.lower() == ".strm") and extract_av_code(input_path) and meets_min_file_size(input_path, min_file_size_mb) else []
     if not input_path.is_dir():
         return []
     return sorted(
         path for path in input_path.rglob("*")
-        if path.is_file() and (is_video_file(path) or is_audio_file(path)) and extract_av_code(path) is not None and meets_min_file_size(path, min_file_size_mb)
+        if path.is_file() and (is_video_file(path) or is_audio_file(path) or path.suffix.lower() == ".strm") and extract_av_code(path) is not None and meets_min_file_size(path, min_file_size_mb)
     )
 
 
@@ -99,6 +101,39 @@ def output_subtitle_path(media_path: Path, output_root: Path, fmt: str) -> Path:
     """输出字幕路径：/output/{番号}.{fmt}，如 /output/FNS-192.srt"""
     av_code = extract_av_code(media_path) or media_path.stem
     return output_root / f"{av_code}.{fmt}"
+
+
+def classify_strm_source(path: Path) -> tuple[str, str]:
+    if path.suffix.lower() != ".strm":
+        raise ValueError(f"not a strm file: {path}")
+    for line in path.read_text(encoding="utf-8-sig").splitlines():
+        value = line.strip()
+        if not value or value.startswith("#"):
+            continue
+        if value.lower().startswith(("http://", "https://")):
+            return "strm-http", value
+        return "strm-local", value
+    raise ValueError(f"empty strm file: {path}")
+
+
+def output_subtitle_path_for_plugin(media_path: Path, fmt: str) -> Path:
+    return media_path.parent / f"{media_path.stem}.zh.{fmt.lstrip('.') }"
+
+
+def apply_path_mappings(path: str, mappings: str) -> str:
+    candidates = []
+    for raw in (mappings or "").splitlines():
+        if "=" not in raw:
+            continue
+        source, target = (part.strip() for part in raw.split("=", 1))
+        if source:
+            candidates.append((source.rstrip("/\\"), target.rstrip("/\\")))
+    path_norm = path.replace("\\", "/")
+    for source, target in sorted(candidates, key=lambda item: len(item[0]), reverse=True):
+        source_norm = source.replace("\\", "/")
+        if path_norm.lower() == source_norm.lower() or path_norm.lower().startswith(source_norm.lower() + "/"):
+            return target + path_norm[len(source_norm):]
+    return path
 
 
 def cache_audio_path(media_path: Path, cache_dir: Path) -> Path:
@@ -177,15 +212,19 @@ def prepare_audio(media_path: Path, cache_dir: Path, on_progress=None, is_cancel
     on_progress: Callable[[int], None] | None — 进度回调（0-100）
     is_cancelled_fn: Callable[[], bool] | None — 取消检查，返回 True 时杀 ffmpeg
     """
-    if not media_path.exists():
-        raise RuntimeError(f"input path does not exist in container: {media_path}")
+    input_source: Path | str = media_path
+    if media_path.suffix.lower() == ".strm":
+        kind, value = classify_strm_source(media_path)
+        input_source = value if kind == "strm-http" else Path(value)
+    if isinstance(input_source, Path) and not input_source.exists():
+        raise RuntimeError(f"input path does not exist in container: {input_source}")
     if is_audio_file(media_path):
         return media_path
     audio_path = cache_audio_path(media_path, cache_dir)
     audio_path.parent.mkdir(parents=True, exist_ok=True)
     if audio_path.exists() and audio_path.stat().st_size > 0:
         return audio_path
-    command = build_ffmpeg_command(media_path, audio_path)
+    command = build_ffmpeg_command(input_source, audio_path)
     proc = subprocess.Popen(command, stderr=subprocess.PIPE, stdout=subprocess.DEVNULL, text=True)
 
     total_duration: float | None = None
