@@ -1,7 +1,7 @@
 using System.Net.Http;
 using System.Text;
-using System.Text.Json;
 using System.Threading.Tasks;
+using MediaBrowser.Model.Serialization;
 
 namespace SubtitleCloudPlugin;
 
@@ -9,13 +9,14 @@ public sealed class SubtitleCloudApi
 {
     private readonly HttpClient _http;
     private readonly PluginConfiguration _config;
-    public SubtitleCloudApi(HttpClient http, PluginConfiguration config) { _http = http; _config = config; }
+    private readonly IJsonSerializer _json;
+    public SubtitleCloudApi(HttpClient http, PluginConfiguration config, IJsonSerializer json) { _http = http; _config = config; _json = json; }
 
     public async Task<string> CreateJobAsync(object payload)
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, _config.ServiceUrl.TrimEnd('/') + "/api/plugin/jobs");
         if (!string.IsNullOrWhiteSpace(_config.ApiToken)) request.Headers.Add("X-API-Token", _config.ApiToken);
-        request.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+        request.Content = new StringContent(_json.SerializeToString(payload), Encoding.UTF8, "application/json");
         using var response = await _http.SendAsync(request).ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadAsStringAsync().ConfigureAwait(false);
@@ -34,7 +35,7 @@ public sealed class SubtitleCloudApi
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, _config.ServiceUrl.TrimEnd('/') + "/api/plugin/jobs/" + jobId + "/refresh-result");
         AddToken(request);
-        request.Content = new StringContent(JsonSerializer.Serialize(new { state, message }), Encoding.UTF8, "application/json");
+        request.Content = new StringContent(_json.SerializeToString(new { state, message }), Encoding.UTF8, "application/json");
         using var response = await _http.SendAsync(request).ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
     }

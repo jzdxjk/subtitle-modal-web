@@ -17,7 +17,7 @@ def test_frontend_uses_new_neumorphic_shell():
 
     assert "Subtitle Cloud" in html
     assert "字幕画廊" in html
-    assert '<h2 id="topbar-heading"><span class="topbar-title-text">Subtitle Cloud</span><small>v3.04</small></h2>' in html
+    assert '<h2 id="topbar-heading"><span class="topbar-title-text">Subtitle Cloud</span><small>v3.06</small></h2>' in html
     assert "topbar" in html
     assert "gallery-summary" not in html
     assert "summary-stats" not in html
@@ -39,13 +39,13 @@ def test_brand_title_places_chinese_name_under_subtitle_and_version_under_cloud(
 
     assert '<h1 class="brand-title">' in html
     assert '<span class="brand-word"><span>Subtitle</span><small>字幕云</small></span>' in html
-    assert '<span class="brand-word"><span>Cloud</span><small id="version">v3.04</small></span>' in html
+    assert '<span class="brand-word"><span>Cloud</span><small id="version">v3.06</small></span>' in html
     assert "字幕云 AI" not in html
     assert "brand-meta" not in html
     assert ".brand-title {\n  display: grid;" in css
     assert "grid-template-columns: repeat(2, max-content);" in css
     assert ".brand-word small" in css
-    assert 'v.textContent = r.version || "v3.04"' in app_js
+    assert 'v.textContent = r.version || "v3.06"' in app_js
 
 
 def test_pwa_icons_use_sync_cloud_symbol():
@@ -120,7 +120,7 @@ def test_mobile_topbar_title_keeps_version_badge():
     css = STYLES.read_text(encoding="utf-8")
     app_js = APP_JS.read_text(encoding="utf-8")
 
-    assert '<h2 id="topbar-heading"><span class="topbar-title-text">Subtitle Cloud</span><small>v3.04</small></h2>' in html
+    assert '<h2 id="topbar-heading"><span class="topbar-title-text">Subtitle Cloud</span><small>v3.06</small></h2>' in html
     assert ".topbar h2 {\n  display: inline-flex;" in css
     assert "align-items: center;" in css.split(".topbar h2 {", 1)[1].split("}", 1)[0]
     assert "flex-wrap: nowrap;" in css
@@ -304,6 +304,17 @@ def test_frontend_exposes_modal_account_switcher_and_monthly_cost_action():
     assert '"/api/modal-cost/month"' in app_js
 
 
+def test_frontend_exposes_emby_plugin_token_setting():
+    html = INDEX.read_text(encoding="utf-8")
+    app_js = APP_JS.read_text(encoding="utf-8")
+
+    assert 'name="plugin_api_token" type="password"' in html
+    assert 'id="plugin-api-token-status"' in html
+    assert "留空保留当前 Token" in html
+    assert 'config.has_plugin_api_token ?? Boolean(config.plugin_api_token)' in app_js
+    assert 'saved.has_plugin_api_token ?? Boolean(saved.plugin_api_token)' in app_js
+
+
 def test_modal_account_actions_surface_backend_errors_as_toasts():
     app_js = APP_JS.read_text(encoding="utf-8")
     switch_handler = app_js.split('$("#modal-account-select")?.addEventListener("change"', 1)[1].split('$("#modal-account-new")', 1)[0]
@@ -327,9 +338,38 @@ def test_static_assets_are_versioned_with_the_current_service_worker_cache():
     html = INDEX.read_text(encoding="utf-8")
     service_worker = (ROOT / "app" / "static" / "sw.js").read_text(encoding="utf-8")
 
-    assert 'styles.css?v=118' in html
-    assert 'app.js?v=118' in html
-    assert 'const CACHE = "subtitle-web-v43";' in service_worker
+    assert 'styles.css?v=125' in html
+    assert 'app.js?v=125' in html
+    assert 'const CACHE = "subtitle-web-v53";' in service_worker
+
+
+def test_poster_decrypt_checkbox_submits_false_when_unchecked():
+    html = INDEX.read_text(encoding="utf-8")
+    app_js = APP_JS.read_text(encoding="utf-8")
+
+    assert '<input name="poster_decrypt" type="hidden" value="false" />' in html
+    assert '<input name="poster_decrypt" type="checkbox" value="true" />' in html
+    assert 'document.querySelector(`[name="${key}"][type="checkbox"]`)' in app_js
+    assert 'event.target.querySelector(\'[name="poster_decrypt"][type="checkbox"]\')?.checked' in app_js
+
+
+def test_gallery_posters_are_not_browser_lazy_loaded():
+    app_js = APP_JS.read_text(encoding="utf-8")
+
+    assert 'class="gallery-poster"><img alt="' in app_js
+    assert 'loading="lazy"' not in app_js
+    assert "const MAX_POSTER_CONCURRENCY = 4;" in app_js
+
+
+def test_config_panels_share_cloud_credentials_surface_style():
+    css = STYLES.read_text(encoding="utf-8")
+
+    assert ":root.dark .config-canvas .config-panel," in css
+    assert ":root.dark .config-canvas .config-panel .smart-vad-card," in css
+    assert ":root.dark .config-canvas .config-panel .poster-mode-card," in css
+    assert ":root.dark .config-canvas .config-panel .tuning-toggle-card {" in css
+    assert "background: #0b0d10;" in css
+    assert "box-shadow: 8px 8px 18px var(--edge-shadow), -6px -6px 14px rgba(255, 255, 255, .055), inset 0 1px 0 var(--edge-highlight);" in css
 
 
 def test_frontend_declares_a_pwa_favicon_and_password_autocomplete_hints():

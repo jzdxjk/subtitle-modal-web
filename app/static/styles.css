@@ -1413,6 +1413,22 @@ pre {
   transform: translateX(22px);
 }
 
+.poster-mode-card {
+  margin-top: 14px;
+  padding: 16px;
+  border-radius: 8px;
+  box-shadow: inset 4px 4px 8px var(--shadow-pressed-dark), inset -4px -4px 8px var(--shadow-pressed-light);
+}
+
+.poster-mode-card .toggle input:checked + .toggle-track {
+  background: var(--success);
+  box-shadow: inset 2px 2px 5px rgba(49, 111, 52, .42), inset -2px -2px 5px rgba(255, 255, 255, .45);
+}
+
+.poster-mode-card .toggle input:checked + .toggle-track .toggle-thumb {
+  background: var(--surface);
+}
+
 .config-actions {
   display: flex;
   align-items: center;
@@ -2990,6 +3006,21 @@ pre {
 :root.dark .queue-surface.neu-concave {
   border: 1px solid rgba(119, 128, 140, .48);
   background: linear-gradient(145deg, rgba(17, 19, 23, .98), rgba(4, 5, 7, .98));
+  box-shadow: 8px 8px 18px var(--edge-shadow), -6px -6px 14px rgba(255, 255, 255, .055), inset 0 1px 0 var(--edge-highlight);
+}
+
+:root.dark .config-canvas .config-panel {
+  border: 1px solid rgba(119, 128, 140, .48);
+  background: #0b0d10;
+  box-shadow: 8px 8px 18px var(--edge-shadow), -6px -6px 14px rgba(255, 255, 255, .055), inset 0 1px 0 var(--edge-highlight);
+}
+
+:root.dark .config-canvas .config-panel,
+:root.dark .config-canvas .config-panel .smart-vad-card,
+:root.dark .config-canvas .config-panel .poster-mode-card,
+:root.dark .config-canvas .config-panel .tuning-toggle-card {
+  border: 1px solid rgba(119, 128, 140, .48);
+  background: #0b0d10;
   box-shadow: 8px 8px 18px var(--edge-shadow), -6px -6px 14px rgba(255, 255, 255, .055), inset 0 1px 0 var(--edge-highlight);
 }
 

@@ -179,7 +179,7 @@ async function loadConfig() {
   const config = await api("/api/config");
   if (config.repo_branch === "bec3d22") config.repo_branch = "v1.7";
   for (const [key, value] of Object.entries(config)) {
-    const input = document.querySelector(`[name="${key}"]`);
+    const input = document.querySelector(`[name="${key}"][type="checkbox"]`) || document.querySelector(`[name="${key}"]`);
     if (!input) continue;
     if (input.type === "checkbox") {
       input.checked = Boolean(value);
@@ -195,10 +195,17 @@ async function loadConfig() {
     }
   }
   DBO_BASE = config.metadata_provider === "javdb" ? config.javdb_api_url : config.dbo_api_url;
+  POSTER_DECRYPT = Boolean(config.poster_decrypt);
+  syncPosterCacheMode();
   if (config.dbo_api_key) DBO_KEY = config.dbo_api_key;
   const activeApiUrl = config.metadata_provider === "javdb" ? config.javdb_api_url : config.dbo_api_url;
   const activeApiInput = $("#metadata-api-url");
   if (activeApiInput) activeApiInput.value = activeApiUrl || "";
+  const pluginTokenInput = document.querySelector('[name="plugin_api_token"]');
+  const pluginTokenStatus = $("#plugin-api-token-status");
+  const hasPluginToken = config.has_plugin_api_token ?? Boolean(config.plugin_api_token);
+  if (pluginTokenInput) pluginTokenInput.value = "";
+  if (pluginTokenStatus) pluginTokenStatus.textContent = hasPluginToken ? "已配置，留空保留当前 Token" : "未配置";
   initRangeControls();
   $("#config-status").textContent = JSON.stringify(config, null, 2);
 }
@@ -254,8 +261,7 @@ async function selectMetadataNode(nodeId) {
   document.querySelector('[name="javdb_api_url"]').value = saved.javdb_api_url;
   DBO_BASE = saved.metadata_provider === "javdb" ? saved.javdb_api_url : saved.dbo_api_url;
   $("#metadata-api-url").value = DBO_BASE || "";
-  localStorage.removeItem("poster_provider_version");
-  posterCache.clear();
+  clearPosterCache();
   $("#metadata-node-dialog").close();
   showToast(`已切换到 ${nodeId === "dbo" ? "DBO" : "JavDB"} 节点`);
 }
@@ -429,7 +435,6 @@ async function retryAllFailedJobs() {
 }
 
 function renderJobRow(job) {
-  const retryable = job.status === "failed" || job.status === "cancelled" || job.status === "cancelling";
   const statusLabel = STATUS_LABELS[job.status] || job.status;
   const isRunning = job.status === "running";
   const isQueued = job.status === "queued";
@@ -485,13 +490,12 @@ function renderJobRow(job) {
   }
 
   const actions = [];
-  if (isRunning || isQueued || isCancelling) {
+  if (isRunning || isQueued) {
     actions.push(`<button class="cancel-btn job-action" data-id="${job.id}" title="取消"><span class="material-symbols-outlined">stop_circle</span></button>`);
-  } else if (isFailed || job.status === "cancelled" || retryable) {
-    const retryLabel = job.status === "cancelled" ? "重新加入" : "重试";
-    actions.push(`<button class="retry-btn job-action" data-id="${job.id}" title="${retryLabel}"><span class="material-symbols-outlined">refresh</span><span>${retryLabel}</span></button>`);
+  } else if (isFailed) {
+    actions.push(`<button class="retry-btn job-action" data-id="${job.id}" title="重试"><span class="material-symbols-outlined">refresh</span><span>重试</span></button>`);
   }
-  if (!isRunning && !isQueued && !isCancelling && !isDone) {
+  if (isFailed || isCancelled) {
     actions.push(`<button class="delete-btn job-action" data-id="${job.id}" title="删除"><span class="material-symbols-outlined">delete</span></button>`);
   }
 
@@ -670,8 +674,19 @@ $("#config-form").addEventListener("submit", async (event) => {
   data.max_workers = Number(data.max_workers || 1);
   data.enable_watchdog = Boolean(event.target.enable_watchdog?.checked);
   data.enable_smart_vad = Boolean(event.target.enable_smart_vad.checked);
+  const nextPosterDecrypt = Boolean(event.target.querySelector('[name="poster_decrypt"][type="checkbox"]')?.checked);
+  data.poster_decrypt = nextPosterDecrypt;
   try {
     const saved = await api("/api/config", { method: "POST", body: JSON.stringify(data) });
+    const pluginTokenInput = event.target.querySelector('[name="plugin_api_token"]');
+    const pluginTokenStatus = $("#plugin-api-token-status");
+    if (pluginTokenInput) pluginTokenInput.value = "";
+    if (pluginTokenStatus) pluginTokenStatus.textContent = (saved.has_plugin_api_token ?? Boolean(saved.plugin_api_token)) ? "已配置，留空保留当前 Token" : "未配置";
+    if (nextPosterDecrypt !== POSTER_DECRYPT) {
+      POSTER_DECRYPT = nextPosterDecrypt;
+      clearPosterCache();
+      loadJobs();
+    }
     showToast("✅ 配置已保存");
   } catch (error) {
     showToast("保存失败: " + error.message, false);
@@ -786,7 +801,7 @@ $("#test-dbo-btn")?.addEventListener("click", async () => {
 });
 
 $("#refresh").addEventListener("click", loadJobs);
-api("/api/version").then(r => { const v = $("#version"); if (v) v.textContent = r.version || "v3.04"; });
+api("/api/version").then(r => { const v = $("#version"); if (v) v.textContent = r.version || "v3.06"; });
 
 $("#clear-audio")?.addEventListener("click", async () => {
   if (!confirm("确定清空音频缓存？已缓存的文件下次需要重新提取。")) return;
@@ -812,6 +827,33 @@ const posterQueue = [];
 let DBO_BASE = "";
 let DBO_KEY = "";
 const LS_PREFIX = "poster_";
+let POSTER_DECRYPT = false;
+
+function clearPosterCache() {
+  posterCache.clear();
+  pendingFetches.clear();
+  posterQueue.length = 0;
+  for (let i = localStorage.length - 1; i >= 0; i--) {
+    const key = localStorage.key(i);
+    if (key && key.startsWith(LS_PREFIX)) localStorage.removeItem(key);
+  }
+  localStorage.removeItem("poster_provider_version");
+}
+
+function syncPosterCacheMode() {
+  const expectedMode = POSTER_DECRYPT ? "decrypt" : "replace";
+  const marker = "&mode=" + expectedMode;
+  for (let i = localStorage.length - 1; i >= 0; i--) {
+    const key = localStorage.key(i);
+    if (!key || !key.startsWith(LS_PREFIX)) continue;
+    const av = key.slice(LS_PREFIX.length);
+    const val = localStorage.getItem(key);
+    if (val && val !== "null" && !val.includes(marker)) {
+      localStorage.removeItem(key);
+      posterCache.delete(av);
+    }
+  }
+}
 
 // 从 localStorage 恢复缓存（自动清理旧格式 dbo 直连 URL 和 FC2 旧缓存）
 for (let i = localStorage.length - 1; i >= 0; i--) {
@@ -824,8 +866,10 @@ for (let i = localStorage.length - 1; i >= 0; i--) {
       localStorage.removeItem(key);
     } else if (av.toLowerCase().startsWith("fc2") && val === "null") {
       localStorage.removeItem(key);
-    } else if (val && val !== "null") {
+    } else if (val && val !== "null" && val.includes("&mode=")) {
       posterCache.set(av, val);
+    } else if (val) {
+      localStorage.removeItem(key);
     }
   }
 }
@@ -880,7 +924,7 @@ async function _doFetch(av) {
       const parsedUrl = new URL(coverUrl, DBO_BASE || window.location.origin);
       const remoteUrl = parsedUrl.searchParams.get("url") || parsedUrl.href;
       if (remoteUrl) {
-        return "/api/poster-proxy?url=" + encodeURIComponent(remoteUrl);
+        return "/api/poster-proxy?url=" + encodeURIComponent(remoteUrl) + "&mode=" + (POSTER_DECRYPT ? "decrypt" : "replace");
       }
     }
   } catch (e) {
@@ -1043,6 +1087,15 @@ function downloadGalleryFile(jobId, fileIndex) {
   a.remove();
 }
 
+function downloadGalleryPack(dateTs, av) {
+  const a = document.createElement("a");
+  a.href = "/api/pack?date=" + encodeURIComponent(Math.floor(dateTs / 1000)) + "&av=" + encodeURIComponent(av);
+  a.download = "";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
 /* ═══ HOME GALLERY — 按日期归组 ═══ */
 function renderHome() {
   const gallery = $("#gallery");
@@ -1074,8 +1127,11 @@ function renderHome() {
     const d = new Date(ts);
     const dateStart = new Date(d.toLocaleDateString("zh-CN", { timeZone: "Asia/Shanghai" })).getTime();
     const key = dateStart;
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key).push(job);
+    if (!groups.has(key)) groups.set(key, new Map());
+    const av = extractAvCode((job.output_files?.[0] || "").split("/").pop() || job.input_path.split("/").pop() || "") || "未知";
+    const byAv = groups.get(key);
+    if (!byAv.has(av)) byAv.set(av, []);
+    byAv.get(av).push(job);
   });
 
   // 按天数分页：每页 5 个有海报的日期
@@ -1088,7 +1144,10 @@ function renderHome() {
   // 构建 HTML
   let html = "";
   for (const ts of pagedDates) {
-    const jobs = groups.get(ts);
+    const jobs = [...groups.get(ts).values()].map(items => items.sort((a,b) => (b.completed_at||0)-(a.completed_at||0))).map(items => {
+      const first = items[0];
+      return { ...first, _groupJobs: items, output_files: items.flatMap(j => j.output_files || []) };
+    });
     // 日期标题
     let label;
     if (ts === today) {
@@ -1117,14 +1176,15 @@ function renderHome() {
         av = extractAvCode(job.input_path.split("/").pop() || job.input_path);
       }
       const fmt = ((job.output_files || [])[0] || "").split(".").pop() || "srt";
+      const isMulti = job.output_files.length > 1 || job.output_files.some(f => /-CD\d+\./i.test(f));
       html +=
         '<div class="gallery-card" data-job-id="' + escapeHtml(job.id) + '" data-av="' + escapeHtml(av) + '">' +
-        '<div class="gallery-poster"><img alt="' + escapeHtml(av) + '" loading="lazy" /></div>' +
+        '<div class="gallery-poster"><img alt="' + escapeHtml(av) + '" /></div>' +
         '<div class="gallery-poster-fallback">' + escapeHtml(av) + '</div>' +
         '<div class="gallery-footer">' +
         '<div class="av">' + escapeHtml(av) + '</div>' +
         '<div class="meta">' + escapeHtml(fmtDate(job.completed_at)) + '</div>' +
-        '<div class="gallery-actions"><span class="fmt-badge">' + escapeHtml(fmt) + '</span><button type="button" class="gallery-download" title="下载字幕" onclick="downloadGalleryFile(\'' + escapeHtml(job.id) + '\', 0)"><span class="material-symbols-outlined">download</span></button></div>' +
+        '<div class="gallery-actions"><span class="fmt-badge">' + escapeHtml(fmt) + '</span><button type="button" class="gallery-download" title="下载字幕" onclick="' + (isMulti ? 'downloadGalleryPack(' + ts + ',\'' + escapeHtml(av) + '\')' : 'downloadGalleryFile(\'' + escapeHtml(job.id) + '\', 0)') + '"><span class="material-symbols-outlined">download</span></button></div>' +
         '</div></div>';
     }
     html += '</div></div>';

@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+SC:wght@400;500;600;700&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/styles.css?v=118" />
+  <link rel="stylesheet" href="/static/styles.css?v=125" />
 </head>
 <body>
   <div id="splash" class="splash">
@@ -27,7 +27,7 @@
       <div class="brand-mark neu-convex"><span class="material-symbols-outlined">cloud_sync</span></div>
       <h1 class="brand-title">
         <span class="brand-word"><span>Subtitle</span><small>字幕云</small></span>
-        <span class="brand-word"><span>Cloud</span><small id="version">v3.04</small></span>
+        <span class="brand-word"><span>Cloud</span><small id="version">v3.06</small></span>
       </h1>
     </div>
     <button class="dock-item active" data-view="home">
@@ -58,7 +58,7 @@
   </nav>
 
   <header class="topbar">
-    <h2 id="topbar-heading"><span class="topbar-title-text">Subtitle Cloud</span><small>v3.04</small></h2>
+    <h2 id="topbar-heading"><span class="topbar-title-text">Subtitle Cloud</span><small>v3.06</small></h2>
     <div class="topbar-actions">
       <button class="icon-button neu-convex notify-button" id="modal-monthly-cost" type="button" title="查询本月 Modal 费用"><span class="material-symbols-outlined">notifications</span></button>
       <div class="topbar-avatar neu-convex" id="topbar-avatar" aria-label="当前 Modal 账户">M</div>
@@ -209,6 +209,19 @@
           </section>
 
           <section class="config-panel config-panel-wide neu-concave">
+            <div class="config-section-title">
+              <span class="material-symbols-outlined config-icon info">extension</span>
+              <h3>Emby 集成</h3>
+            </div>
+            <div class="config-stack">
+              <label>Emby 插件 API Token
+                <input name="plugin_api_token" type="password" autocomplete="new-password" placeholder="留空保留当前 Token" />
+              </label>
+              <small id="plugin-api-token-status" class="form-note">未配置</small>
+            </div>
+          </section>
+
+          <section class="config-panel config-panel-wide neu-concave">
             <div class="config-section-title metadata-config-title">
               <span class="material-symbols-outlined config-icon info">link</span>
               <h3>JavDB API 配置</h3>
@@ -225,6 +238,17 @@
                 <span>选择地址</span>
               </button>
             </div>
+            <label class="toggle-row poster-mode-card">
+              <span class="config-label-row">
+                <span>海报解密模式</span>
+                <small>开启后显示 JavDB 无水印原图；关闭则为替换模式（带水印公开图）</small>
+              </span>
+              <span class="toggle">
+                <input name="poster_decrypt" type="hidden" value="false" />
+                <input name="poster_decrypt" type="checkbox" value="true" />
+                <span class="toggle-track"><span class="toggle-thumb"></span></span>
+              </span>
+            </label>
             <div class="dbo-custom-fields">
               <div class="dbo-custom-heading"><span class="material-symbols-outlined">dns</span><span>自定义 DBO 节点</span></div>
               <div class="config-fields-two">
@@ -339,7 +363,7 @@
     <button class="dock-mobile-item theme-btn" id="theme-toggle-mobile"><span class="material-symbols-outlined sun-icon">light_mode</span><span class="material-symbols-outlined moon-icon">dark_mode</span><span>主题</span></button>
   </nav>
 
-  <script src="/static/app.js?v=118"></script>
+  <script src="/static/app.js?v=125"></script>
   <script>if("serviceWorker" in navigator){navigator.serviceWorker.register("/static/sw.js",{updateViaCache:"none"})}</script>
 </body>
 </html>

@@ -18,13 +18,15 @@ from app.media import (
     extract_av_code,
     list_small_av_files,
     output_subtitle_path,
+    output_subtitle_path_for_plugin,
     prepare_audio,
+    sort_media_parts,
 )
 
 
-def _output_exists_for_media(media_path: Path, output_dir: Path, formats: list[str]) -> bool:
+def _output_exists_for_media(media_path: Path, output_dir: Path, formats: list[str], cd_index: int | None = None) -> bool:
     """检查媒体文件的所有格式字幕是否都已存在"""
-    return all(output_subtitle_path(media_path, output_dir, fmt).exists() for fmt in formats)
+    return all(output_subtitle_path(media_path, output_dir, fmt, cd_index).exists() for fmt in formats)
 
 
 from app.modal_runner import ModalRunner, is_transient_modal_connection_error, modal_client_wait_timeout
@@ -284,6 +286,15 @@ class JobRunner:
             item_output_dir = Path(job.output_dir)
 
             total_media = len(media_files)
+            media_groups: dict[str, list[Path]] = {}
+            for media_path in media_files:
+                media_groups.setdefault((extract_av_code(media_path) or media_path.stem).casefold(), []).append(media_path)
+            media_cd_index: dict[Path, int | None] = {}
+            for group in media_groups.values():
+                ordered = sort_media_parts(group)
+                use_cd = len(ordered) > 1
+                for cd_index, media_path in enumerate(ordered, start=1):
+                    media_cd_index[media_path] = cd_index if use_cd else None
             audio_paths: list[Path] = []
             for index, media_path in enumerate(media_files, start=1):
                 if self.store.is_cancelling(job.id):
@@ -291,7 +302,11 @@ class JobRunner:
                     return
 
                 # Skip check (no cloud needed)
-                expected = [output_subtitle_path(media_path, item_output_dir, fmt) for fmt in job.formats]
+                expected = [
+                    output_subtitle_path_for_plugin(media_path, fmt) if job.source == "emby"
+                    else output_subtitle_path(media_path, item_output_dir, fmt, media_cd_index.get(media_path))
+                    for fmt in job.formats
+                ]
                 if not job.overwrite and all(path.exists() for path in expected):
                     logger.info("[skip] job=%s media=%s existing files=%s", job.id, media_path.name, [str(p) for p in expected])
                     output_files.extend(str(path) for path in expected)
@@ -421,7 +436,11 @@ class JobRunner:
                         av_code = extract_av_code(srt_path) or srt_path.stem
                         ja_path = JobRunner._unique_path(ja_subs_dir / f"{av_code}.ja.srt")
                         shutil.move(str(srt_path), str(ja_path))
-                        zh_path = JobRunner._unique_path(item_output_dir / f"{av_code}.srt")
+                        cd_suffix = ""
+                        cd_index = media_cd_index.get(media_path)
+                        if cd_index is not None:
+                            cd_suffix = f"-CD{cd_index}"
+                        zh_path = JobRunner._unique_path(item_output_dir / f"{av_code}{cd_suffix}.srt")
                         self.store.update_job(job.id, phase="translating", message=f"🤖 LLM 翻译中...（{av_code}）", progress=final_prog)
                         t_tl_start = time.time()
                         await asyncio.to_thread(
@@ -558,10 +577,18 @@ class JobRunner:
                     if self.store.has_any_failed_job_for_path(input_path):
                         continue  # 已有失败任务，不自动重试
                     media_files = discover_media(path, min_file_size_mb=min_file_size_mb)
-                    if all(
-                        _output_exists_for_media(m, output_dir, formats)
-                        for m in media_files
-                    ):
+                    grouped: dict[str, list[Path]] = {}
+                    for media_path in media_files:
+                        grouped.setdefault((extract_av_code(media_path) or media_path.stem).casefold(), []).append(media_path)
+                    ordered_media = []
+                    for group in grouped.values():
+                        ordered_media.extend(sort_media_parts(group))
+                    part_indexes = {}
+                    for group in grouped.values():
+                        ordered = sort_media_parts(group)
+                        for i, media_path in enumerate(ordered, start=1):
+                            part_indexes[media_path] = i if len(ordered) > 1 else None
+                    if all(_output_exists_for_media(m, output_dir, formats, part_indexes[m]) for m in ordered_media):
                         continue
 
                     self.store.create_job(

@@ -1,15 +1,18 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 import subprocess
 import threading
 from pathlib import Path
+from urllib.parse import unquote, urlparse
 
 VIDEO_EXTENSIONS = {".mp4", ".mkv", ".avi", ".mov", ".wmv", ".flv", ".webm", ".m4v", ".ts"}
 AUDIO_EXTENSIONS = {".mp3", ".m4a", ".wav", ".flac", ".aac", ".ogg"}
 # 匹配 AV 番号格式：2-5 位大写字母 + 连字符 + 3-5 位数字（含 FC2-PPV 格式）
 AV_PATTERN = re.compile(r"FC2-?(?:[A-Z]{3}-?)?\d{5,7}|(?:\d+)?[A-Z]{2,5}-\d{3,5}", re.IGNORECASE)
+PART_PATTERN = re.compile(r"(?:part|cd)[_ -]?(\d+)(?!\d)", re.IGNORECASE)
 
 
 def is_video_file(path: Path) -> bool:
@@ -33,6 +36,19 @@ def extract_av_code(path: Path) -> str | None:
     """从文件名中提取 AV 番号，如 FNS-192、EBWH-309，找不到返回 None"""
     match = AV_PATTERN.search(path.stem)
     return match.group(0) if match else None
+
+
+def extract_part_number(path: Path) -> int | None:
+    """Extract an explicit part/CD number without treating quality suffixes as parts."""
+    match = PART_PATTERN.search(path.stem)
+    return int(match.group(1)) if match else None
+
+
+def sort_media_parts(paths: list[Path]) -> list[Path]:
+    """Stable part ordering: explicit number first, then full filename."""
+    return sorted(paths, key=lambda path: (extract_part_number(path) is None,
+                                            extract_part_number(path) or 0,
+                                            path.name.casefold()))
 
 
 def normalize_av_code(code: str) -> str:
@@ -97,10 +113,12 @@ def list_small_av_files(input_path: Path, min_file_size_mb: int = 0) -> list[Pat
     return sorted(path for path in input_path.rglob("*") if _is_small_av_file(path))
 
 
-def output_subtitle_path(media_path: Path, output_root: Path, fmt: str) -> Path:
+def output_subtitle_path(media_path: Path, output_root: Path, fmt: str, cd_index: int | None = None) -> Path:
     """输出字幕路径：/output/{番号}.{fmt}，如 /output/FNS-192.srt"""
     av_code = extract_av_code(media_path) or media_path.stem
-    return output_root / f"{av_code}.{fmt}"
+    suffix = f"-CD{cd_index}" if cd_index is not None else ""
+    extension = fmt.upper() if cd_index is not None and fmt.lower() == "srt" else fmt
+    return output_root / f"{av_code}{suffix}.{extension}"
 
 
 def classify_strm_source(path: Path) -> tuple[str, str]:
@@ -136,35 +154,58 @@ def apply_path_mappings(path: str, mappings: str) -> str:
     return path
 
 
+def resolve_emby_media_path(input_path: str, media_root: Path) -> Path:
+    path = Path(input_path)
+    if path.exists() or not input_path.lower().startswith(("http://", "https://")):
+        return path
+
+    parts = [
+        part
+        for part in unquote(urlparse(input_path).path).replace("\\", "/").split("/")
+        if part not in {"", ".", ".."}
+    ]
+    for index in range(len(parts)):
+        candidate = media_root.joinpath(*parts[index:])
+        if candidate.exists():
+            return candidate
+    return path
+
+
 def cache_audio_path(media_path: Path, cache_dir: Path) -> Path:
     digest = hashlib.sha1(str(media_path).encode("utf-8")).hexdigest()[:12]
     return cache_dir / "audio" / f"{media_path.stem}-{digest}.m4a"
 
 
-def _get_audio_codec(input_path: Path) -> str | None:
-    """用 ffprobe 检测第一个音频流的编码名称，如 'aac'、'mp3'，失败返回 None"""
+def _get_audio_stream_info(input_path: Path | str) -> tuple[str, int, int] | None:
+    """Return codec, channels, and bitrate for the first audio stream."""
     try:
         result = subprocess.run(
             [
                 "ffprobe", "-v", "error",
                 "-select_streams", "a:0",
-                "-show_entries", "stream=codec_name",
-                "-of", "default=noprint_wrappers=1:nokey=1",
+                "-show_entries", "stream=codec_name,channels,bit_rate",
+                "-of", "json",
                 str(input_path),
             ],
             capture_output=True, text=True, timeout=30,
         )
-        codec = result.stdout.strip()
-        return codec if codec else None
-    except Exception:
+        streams = json.loads(result.stdout).get("streams", [])
+        if not streams:
+            return None
+        stream = streams[0]
+        return (
+            str(stream.get("codec_name", "")).lower(),
+            int(stream.get("channels", 0)),
+            int(stream.get("bit_rate", 0)),
+        )
+    except (OSError, ValueError, TypeError, json.JSONDecodeError):
         return None
 
 
-def build_ffmpeg_command(input_path: Path, audio_path: Path) -> list[str]:
-    """双路径策略：AAC 源码流拷贝（零 CPU），非 AAC 重编码为 64k 单声道"""
-    codec = _get_audio_codec(input_path)
-    if codec and codec.lower() == "aac":
-        # AAC 源码：流拷贝，零 CPU，10-30s
+def build_ffmpeg_command(input_path: Path | str, audio_path: Path) -> list[str]:
+    """Copy transcription-ready AAC; compress larger audio before upload."""
+    stream = _get_audio_stream_info(input_path)
+    if stream and stream[0] == "aac" and 0 < stream[1] <= 2 and 0 < stream[2] <= 192_000:
         return [
             "ffmpeg", "-y",
             "-i", str(input_path),
@@ -173,19 +214,18 @@ def build_ffmpeg_command(input_path: Path, audio_path: Path) -> list[str]:
             "-c:a", "copy",
             str(audio_path),
         ]
-    else:
-        # 非 AAC：重编码为 64k 单声道，单线程
-        return [
-            "ffmpeg", "-y",
-            "-i", str(input_path),
-            "-vn",
-            "-map", "0:a:0?",
-            "-acodec", "aac",
-            "-b:a", "64k",
-            "-ac", "1",
-            "-threads", "1",
-            str(audio_path),
-        ]
+    return [
+        "ffmpeg", "-y",
+        "-i", str(input_path),
+        "-vn",
+        "-map", "0:a:0?",
+        "-acodec", "aac",
+        "-b:a", "48k",
+        "-ar", "16000",
+        "-ac", "1",
+        "-threads", "1",
+        str(audio_path),
+    ]
 
 
 def _parse_ffmpeg_duration(line: str) -> float | None:
@@ -224,6 +264,8 @@ def prepare_audio(media_path: Path, cache_dir: Path, on_progress=None, is_cancel
     audio_path.parent.mkdir(parents=True, exist_ok=True)
     if audio_path.exists() and audio_path.stat().st_size > 0:
         return audio_path
+    if _get_audio_stream_info(input_source) is None:
+        raise RuntimeError("视频没有音频轨道，无法提取字幕")
     command = build_ffmpeg_command(input_source, audio_path)
     proc = subprocess.Popen(command, stderr=subprocess.PIPE, stdout=subprocess.DEVNULL, text=True)
 

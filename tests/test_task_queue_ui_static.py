@@ -47,10 +47,11 @@ def test_config_has_five_node_metadata_selector_dialog():
     assert '"ip ip latency"' in styles
 
 
-def test_static_shell_displays_v304_consistently():
+def test_static_shell_displays_v306_consistently():
     index = INDEX.read_text(encoding="utf-8")
 
-    assert "v3.04" in index
+    assert "v3.06" in index
+    assert "v3.05" not in index
     assert "v3.01" not in index
 
 
@@ -70,11 +71,13 @@ def test_queue_rows_keep_delete_action_for_existing_jobs():
     assert 'querySelectorAll(".delete-btn[data-id]")' in app_js
 
 
-def test_queue_rows_hide_delete_action_until_active_jobs_finish():
+def test_queue_rows_use_delete_instead_of_cancel_for_cancelling_jobs():
     app_js = APP_JS.read_text(encoding="utf-8")
 
-    assert "if (!isRunning && !isQueued && !isCancelling && !isDone) {" in app_js
-    assert "active job must be cancelled before deletion" in (ROOT / "app" / "main.py").read_text(encoding="utf-8")
+    assert "if (isRunning || isQueued) {" in app_js
+    assert "if (isFailed || isCancelled) {" in app_js
+    assert "if (job.status === \"cancelling\")" not in app_js
+    assert 'job.status in ("queued", "running")' in (ROOT / "app" / "main.py").read_text(encoding="utf-8")
 
 
 def test_completed_rows_replace_status_and_actions_with_completion_details():
@@ -83,7 +86,7 @@ def test_completed_rows_replace_status_and_actions_with_completion_details():
 
     assert 'else if (isDone)' not in app_js
     assert 'class="view-btn job-action"' not in app_js
-    assert "!isCancelling && !isDone" in app_js
+    assert "if (isFailed || isCancelled) {" in app_js
     assert 'class="job-completed-total"' in app_js
     assert 'class="job-completed-phases"' in app_js
     assert 'class="job-completed-at"' in app_js

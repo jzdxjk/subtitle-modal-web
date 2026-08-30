@@ -40,12 +40,19 @@ class Job:
     local_seconds: float = 0.0
     cloud_seconds: float = 0.0
     input_size_bytes: int = 0
+    source: str = "native"
+    task_type: str = "native"
+    emby_item_id: str = ""
+    display_title: str = ""
+    av_code: str = ""
+    poster_url: str = ""
+    refresh_state: str = "pending"
 
 
 class JobStore:
     def list_all(self) -> list[Job]:
         with self._connect() as conn:
-            rows = conn.execute("SELECT * FROM jobs ORDER BY created_at DESC").fetchall()
+            rows = conn.execute("SELECT * FROM jobs WHERE hidden = 0 ORDER BY created_at DESC").fetchall()
         return [self._row_to_job(r) for r in rows]
 
     def get_by_completion_date(self, date_start: float) -> list[Job]:
@@ -116,6 +123,14 @@ class JobStore:
                 ("local_seconds", "REAL NOT NULL DEFAULT 0.0"),
                 ("cloud_seconds", "REAL NOT NULL DEFAULT 0.0"),
                 ("input_size_bytes", "INTEGER NOT NULL DEFAULT 0"),
+                ("hidden", "INTEGER NOT NULL DEFAULT 0"),
+                ("source", "TEXT NOT NULL DEFAULT 'native'"),
+                ("task_type", "TEXT NOT NULL DEFAULT 'native'"),
+                ("emby_item_id", "TEXT NOT NULL DEFAULT ''"),
+                ("display_title", "TEXT NOT NULL DEFAULT ''"),
+                ("av_code", "TEXT NOT NULL DEFAULT ''"),
+                ("poster_url", "TEXT NOT NULL DEFAULT ''"),
+                ("refresh_state", "TEXT NOT NULL DEFAULT 'pending'"),
             ):
                 try:
                     conn.execute(f"ALTER TABLE jobs ADD COLUMN {column} {definition}")
@@ -143,7 +158,7 @@ class JobStore:
                         (size, row["id"]),
                     )
 
-    def create_job(self, input_path: str, output_dir: str, formats: Iterable[str], overwrite: bool, move_target_dir: str = "", modal_account_id: str = "", input_size_bytes: int | None = None, min_file_size_mb: int | None = None) -> Job:
+    def create_job(self, input_path: str, output_dir: str, formats: Iterable[str], overwrite: bool, move_target_dir: str = "", modal_account_id: str = "", input_size_bytes: int | None = None, min_file_size_mb: int | None = None, source: str = "native", task_type: str = "native", emby_item_id: str = "", display_title: str = "", av_code: str = "", poster_url: str = "") -> Job:
         now = time.time()
         if input_size_bytes is None:
             threshold_mb = self.min_file_size_mb if min_file_size_mb is None else max(0, min_file_size_mb)
@@ -162,10 +177,12 @@ class JobStore:
             updated_at=now,
             modal_account_id=modal_account_id,
             input_size_bytes=max(0, int(input_size_bytes)),
+            source=source, task_type=task_type, emby_item_id=emby_item_id,
+            display_title=display_title, av_code=av_code, poster_url=poster_url,
         )
         with self._connect() as conn:
             conn.execute(
-                "INSERT INTO jobs (id, input_path, output_dir, formats, overwrite, move_target_dir, status, message, output_files, created_at, updated_at, started_at, completed_at, progress, modal_account_id, phase, phase_started_at, local_seconds, cloud_seconds, input_size_bytes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO jobs (id, input_path, output_dir, formats, overwrite, move_target_dir, status, message, output_files, created_at, updated_at, started_at, completed_at, progress, modal_account_id, phase, phase_started_at, local_seconds, cloud_seconds, input_size_bytes, source, task_type, emby_item_id, display_title, av_code, poster_url, refresh_state) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     job.id,
                     job.input_path,
@@ -187,6 +204,8 @@ class JobStore:
                     job.local_seconds,
                     job.cloud_seconds,
                     job.input_size_bytes,
+                    job.source, job.task_type, job.emby_item_id, job.display_title,
+                    job.av_code, job.poster_url, job.refresh_state,
                 ),
             )
         return job
@@ -195,6 +214,7 @@ class JobStore:
         allowed = {
             "status", "message", "output_files", "started_at", "completed_at", "progress",
             "phase", "phase_started_at", "local_seconds", "cloud_seconds",
+            "refresh_state",
         }
         updates = {key: value for key, value in fields.items() if key in allowed}
         if not updates:
@@ -217,9 +237,9 @@ class JobStore:
     def list_jobs(self, limit: int = 0) -> list[Job]:
         with self._connect() as conn:
             if limit > 0:
-                rows = conn.execute("SELECT * FROM jobs ORDER BY created_at DESC LIMIT ?", (limit,)).fetchall()
+                rows = conn.execute("SELECT * FROM jobs WHERE hidden = 0 ORDER BY created_at DESC LIMIT ?", (limit,)).fetchall()
             else:
-                rows = conn.execute("SELECT * FROM jobs ORDER BY created_at DESC").fetchall()
+                rows = conn.execute("SELECT * FROM jobs WHERE hidden = 0 ORDER BY created_at DESC").fetchall()
         return [self._row_to_job(row) for row in rows]
 
     def next_queued(self) -> Job | None:
@@ -261,7 +281,7 @@ class JobStore:
                 return False
             message = "重试已提交，等待中" if row["status"] == "failed" else "已重新加入队列，等待中"
             conn.execute(
-                "UPDATE jobs SET status = 'queued', phase = 'queued', phase_started_at = 0.0, local_seconds = 0.0, cloud_seconds = 0.0, message = ?, output_files = ?, started_at = 0.0, completed_at = 0.0, progress = 0, updated_at = ? WHERE id = ?",
+                "UPDATE jobs SET status = 'queued', phase = 'queued', phase_started_at = 0.0, local_seconds = 0.0, cloud_seconds = 0.0, message = ?, output_files = ?, started_at = 0.0, completed_at = 0.0, progress = 0, hidden = 0, updated_at = ? WHERE id = ?",
                 (message, json.dumps([]), time.time(), job_id),
             )
         return True
@@ -270,7 +290,7 @@ class JobStore:
         """Retry all failed jobs and return affected row count."""
         with self._connect() as conn:
             cur = conn.execute(
-                "UPDATE jobs SET status = 'queued', phase = 'queued', phase_started_at = 0.0, local_seconds = 0.0, cloud_seconds = 0.0, message = ?, output_files = ?, started_at = 0.0, completed_at = 0.0, progress = 0, updated_at = ? WHERE status = 'failed'",
+                "UPDATE jobs SET status = 'queued', phase = 'queued', phase_started_at = 0.0, local_seconds = 0.0, cloud_seconds = 0.0, message = ?, output_files = ?, started_at = 0.0, completed_at = 0.0, progress = 0, updated_at = ? WHERE status = 'failed' AND hidden = 0",
                 ("批量重试已提交，等待中", json.dumps([]), time.time()),
             )
         return cur.rowcount
@@ -279,7 +299,7 @@ class JobStore:
         """该路径是否已有失败/取消任务（不自动重试）"""
         with self._connect() as conn:
             row = conn.execute(
-                "SELECT 1 FROM jobs WHERE input_path = ? AND status IN ('failed','cancelled') LIMIT 1",
+                "SELECT 1 FROM jobs WHERE input_path = ? AND (status IN ('failed','cancelled') OR hidden = 1) LIMIT 1",
                 (input_path,),
             ).fetchone()
         return row is not None
@@ -322,9 +342,9 @@ class JobStore:
         return self._row_to_job(row) if row else None
 
     def delete_job(self, job_id: str) -> bool:
-        """Delete a job. Returns True if found and deleted."""
+        """Hide a job while retaining its watchdog and cancellation state."""
         with self._connect() as conn:
-            cur = conn.execute("DELETE FROM jobs WHERE id = ?", (job_id,))
+            cur = conn.execute("UPDATE jobs SET hidden = 1, updated_at = ? WHERE id = ?", (time.time(), job_id))
         return cur.rowcount > 0
 
     def _row_to_job(self, row: sqlite3.Row) -> Job:
@@ -349,5 +369,12 @@ class JobStore:
             local_seconds=row["local_seconds"] if "local_seconds" in row.keys() else 0.0,
             cloud_seconds=row["cloud_seconds"] if "cloud_seconds" in row.keys() else 0.0,
             input_size_bytes=row["input_size_bytes"] if "input_size_bytes" in row.keys() else 0,
+            source=row["source"] if "source" in row.keys() else "native",
+            task_type=row["task_type"] if "task_type" in row.keys() else "native",
+            emby_item_id=row["emby_item_id"] if "emby_item_id" in row.keys() else "",
+            display_title=row["display_title"] if "display_title" in row.keys() else "",
+            av_code=row["av_code"] if "av_code" in row.keys() else "",
+            poster_url=row["poster_url"] if "poster_url" in row.keys() else "",
+            refresh_state=row["refresh_state"] if "refresh_state" in row.keys() else "pending",
         )
 

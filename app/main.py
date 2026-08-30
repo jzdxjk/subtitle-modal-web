@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 import subprocess
 from dataclasses import asdict
 from pathlib import Path
@@ -18,6 +19,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from app.config import ConfigStore
+from app.media import resolve_emby_media_path
 from app.metadata_api import JAVDB_NODES, MetadataClient
 from app.storage import JobStore
 from app.worker import JobRunner
@@ -26,6 +28,7 @@ CONFIG_DIR = Path(os.getenv("CONFIG_DIR", "/config"))
 CACHE_DIR = Path(os.getenv("CACHE_DIR", "/cache"))
 WATCH_DIR = Path(os.getenv("WATCH_DIR", "/watch"))
 OUTPUT_DIR = Path(os.getenv("OUTPUT_DIR", "/output"))
+PLUGIN_MEDIA_ROOT = Path(os.getenv("PLUGIN_MEDIA_ROOT", str(WATCH_DIR.parent)))
 JA_SUBS_DIR = Path("/ja_subs")
 
 # 启动前验证关键目录，避免挂载遗漏导致静默失败
@@ -364,11 +367,12 @@ def plugin_health(x_api_token: str | None = Header(default=None)) -> dict:
 @app.post("/api/plugin/jobs")
 def create_plugin_job(payload: PluginJobPayload, x_api_token: str | None = Header(default=None)) -> dict:
     _plugin_auth(x_api_token)
-    path = Path(payload.input_path)
+    path = resolve_emby_media_path(payload.input_path, PLUGIN_MEDIA_ROOT)
     if not path.exists():
         raise HTTPException(status_code=400, detail=f"input path does not exist: {payload.input_path}")
-    if job_store.has_active_job_for_path(payload.input_path):
-        existing = next((j for j in job_store.list_jobs() if j.input_path == payload.input_path and j.status in {"queued", "running", "cancelling"}), None)
+    resolved_path = str(path)
+    if job_store.has_active_job_for_path(resolved_path):
+        existing = next((j for j in job_store.list_jobs() if j.input_path == resolved_path and j.status in {"queued", "running", "cancelling"}), None)
         return asdict(existing) if existing else {"deduplicated": True}
     task_type = payload.task_type
     if path.suffix.lower() == ".strm" and task_type == "native":
@@ -387,7 +391,7 @@ def create_plugin_job(payload: PluginJobPayload, x_api_token: str | None = Heade
     if payload.task_type not in {"native", "strm-http", "strm-local"}:
         raise HTTPException(status_code=400, detail="invalid plugin task type")
     job = job_store.create_job(
-        str(path), str(path.parent), formats, payload.overwrite, "", config.active_modal_account_id,
+        resolved_path, str(path.parent), formats, payload.overwrite, "", config.active_modal_account_id,
         source="emby", task_type=task_type, emby_item_id=payload.emby_item_id,
         display_title=payload.display_title, av_code=payload.av_code, poster_url=payload.poster_url,
     )
@@ -508,26 +512,39 @@ def clear_audio_cache() -> dict:
 
 
 @app.get("/api/pack")
-def pack_jobs(date: str):
-    """打包某一天所有已完成任务的字幕文件"""
+def pack_jobs(date: str, av: str | None = None):
+    """打包某一天字幕，传 av 时只打包该作品。"""
     try:
         date_start = float(date)
     except ValueError:
         raise HTTPException(status_code=400, detail="invalid date")
     jobs = job_store.get_by_completion_date(date_start)
+    if av:
+        wanted = av.casefold()
+        jobs = [j for j in jobs if (j.av_code or "").casefold() == wanted or any(wanted in Path(f).stem.casefold() for f in j.output_files)]
     if not jobs:
         raise HTTPException(status_code=404, detail="no jobs found for this date")
 
     import io, zipfile
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        seen_names: set[str] = set()
         for job in jobs:
             for filepath in job.output_files:
                 p = Path(filepath)
                 if p.exists():
-                    zf.write(p, p.name)
-                else:
-                    zf.writestr(f"(missing)_{p.name}", f"file not found: {filepath}")
+                    arcname = p.name
+                    if av:
+                        stem = p.stem
+                        if "-CD" not in stem:
+                            match = re.search(r"(?:part|cd)[_ -]?(\d+)", Path(job.input_path).stem, re.I)
+                            if match:
+                                arcname = f"{av}-CD{match.group(1)}{p.suffix}"
+                        arcname = arcname.upper() if arcname.lower().endswith(".srt") else arcname
+                    if arcname in seen_names:
+                        continue
+                    seen_names.add(arcname)
+                    zf.write(p, arcname)
     buf.seek(0)
 
     d = date_start
@@ -535,8 +552,8 @@ def pack_jobs(date: str):
     from urllib.parse import quote
     tz = timezone(timedelta(hours=8))
     label = datetime.fromtimestamp(d, tz=tz).strftime("%Y%m%d")
-    filename_en = f"{label}-{len(jobs)}.zip"
-    filename_cn = f"{label}-{len(jobs)}部.zip"
+    filename_en = f"{av}.zip" if av else f"{label}-{len(jobs)}.zip"
+    filename_cn = f"{av}.zip" if av else f"{label}-{len(jobs)}部.zip"
 
     return Response(
         content=buf.getvalue(),

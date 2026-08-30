@@ -30,6 +30,7 @@ class AppConfig:
     repo_branch: str = "v1.10"
     metadata_provider: str = "javdb"
     javdb_api_url: str = "https://jdforrepam.com"
+    poster_decrypt: bool = False
     dbo_api_url: str = ""
     dbo_api_key: str = ""
     enable_transcribe: bool = False
@@ -38,6 +39,7 @@ class AppConfig:
     openai_model: str = ""
     transcribe_prompt: str = "你是一个专业的日文→中文字幕翻译助手。请将以下日文字幕翻译为中文，要求：\n1. 保持口语化，符合中文表达习惯\n2. 保留原文的语气和情感\n3. 专有名词（人名、地名、品牌等）保持原文不翻译\n4. 每行独立翻译，不要合并或拆分\n5. 只返回翻译结果，不要添加任何解释"
     transcribe_model: str = "jim-ja-transcribe"
+    plugin_api_token: str = ""
 
     def merged_with_env(self) -> "AppConfig":
         data = asdict(self)
@@ -72,11 +74,12 @@ class AppConfig:
 
     def redacted(self) -> dict[str, Any]:
         data = asdict(self)
-        for key in ("modal_token_id", "modal_token_secret", "hf_token", "dbo_api_key", "openai_api_key"):
+        for key in ("modal_token_id", "modal_token_secret", "hf_token", "dbo_api_key", "openai_api_key", "plugin_api_token"):
             data[key] = redact_secret(data.get(key, ""))
         data["has_modal_token"] = bool(self.modal_token_id and self.modal_token_secret)
         data["has_hf_token"] = bool(self.hf_token)
         data["has_openai"] = bool(self.openai_api_url and self.openai_api_key)
+        data["has_plugin_api_token"] = bool(self.plugin_api_token)
         data["modal_accounts"] = [
             {"id": account["id"], "name": account["name"], "has_token": bool(account.get("token_id") and account.get("token_secret"))}
             for account in self.modal_accounts
@@ -115,7 +118,7 @@ class ConfigStore:
 
     def save(self, payload: dict[str, Any]) -> AppConfig:
         current = asdict(self.load())
-        for key in ("modal_token_id", "modal_token_secret", "hf_token", "dbo_api_key", "openai_api_key"):
+        for key in ("modal_token_id", "modal_token_secret", "hf_token", "dbo_api_key", "openai_api_key", "plugin_api_token"):
             if key in payload and (not payload[key] or "***" in str(payload[key])):
                 payload.pop(key)
         current.update({key: value for key, value in payload.items() if key in current})

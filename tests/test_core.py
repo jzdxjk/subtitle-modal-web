@@ -12,10 +12,12 @@ from app.media import (
     build_ffmpeg_command,
     discover_media,
     extract_av_code,
+    extract_part_number,
     is_video_file,
     list_small_av_files,
     normalize_av_code,
     output_subtitle_path,
+    sort_media_parts,
     prepare_audio,
 )
 from app.modal_runner import (
@@ -50,6 +52,7 @@ def test_config_defaults_include_min_file_size_mb():
     assert config.repo_branch == "v1.10"
     assert config.metadata_provider == "javdb"
     assert config.javdb_api_url == "https://jdforrepam.com"
+    assert config.poster_decrypt is False
 
 
 def test_config_store_persists_metadata_provider_and_redacts_dbo_key(tmp_path):
@@ -65,6 +68,17 @@ def test_config_store_persists_metadata_provider_and_redacts_dbo_key(tmp_path):
     assert saved.metadata_provider == "javdb"
     assert saved.javdb_api_url == "https://javdb.com"
     assert saved.redacted()["dbo_api_key"] == "pri***key"
+
+
+def test_config_store_preserves_plugin_token_when_blank_update(tmp_path):
+    store = ConfigStore(tmp_path / "config.json")
+    store.save({"plugin_api_token": "plugin-secret"})
+
+    saved = store.save({"plugin_api_token": ""})
+
+    assert saved.plugin_api_token == "plugin-secret"
+    assert saved.redacted()["plugin_api_token"] == "plu***ret"
+    assert saved.redacted()["has_plugin_api_token"] is True
 
 
 def test_legacy_config_with_dbo_credentials_keeps_dbo_as_provider(tmp_path):
@@ -231,14 +245,30 @@ def test_delete_job_rejects_active_tasks(tmp_path, monkeypatch):
     assert getattr(exc_info.value, "status_code", None) == 409
 
 
-def test_public_version_endpoint_reports_v304(tmp_path, monkeypatch):
+def test_delete_job_allows_cancelling_tasks(tmp_path, monkeypatch):
     monkeypatch.setenv("CONFIG_DIR", str(tmp_path))
     monkeypatch.setenv("CACHE_DIR", str(tmp_path))
     monkeypatch.setenv("WATCH_DIR", str(tmp_path))
     monkeypatch.setenv("OUTPUT_DIR", str(tmp_path))
     from app import main
 
-    assert main.get_version() == {"version": "v3.04"}
+    cancelling_job = SimpleNamespace(id="cancelling-job", status="cancelling")
+    deleted = []
+    monkeypatch.setattr(main.job_store, "get_job", lambda job_id: cancelling_job if job_id == cancelling_job.id else None)
+    monkeypatch.setattr(main.job_store, "delete_job", lambda job_id: deleted.append(job_id) or True)
+
+    assert main.delete_job(cancelling_job.id) == {"ok": True}
+    assert deleted == [cancelling_job.id]
+
+
+def test_public_version_endpoint_reports_v306(tmp_path, monkeypatch):
+    monkeypatch.setenv("CONFIG_DIR", str(tmp_path))
+    monkeypatch.setenv("CACHE_DIR", str(tmp_path))
+    monkeypatch.setenv("WATCH_DIR", str(tmp_path))
+    monkeypatch.setenv("OUTPUT_DIR", str(tmp_path))
+    from app import main
+
+    assert main.get_version() == {"version": "v3.06"}
 
 
 def test_docker_compose_does_not_override_repo_branch():
@@ -368,6 +398,45 @@ def test_javdb_posters_fall_back_to_dbo_decoder_when_public_cdn_fails(tmp_path, 
     assert requests[1].get_header("X-api-key") == "decoder-key"
 
 
+def test_javdb_posters_decrypt_mode_returns_watermark_free_jpeg(tmp_path, monkeypatch):
+    monkeypatch.setenv("CONFIG_DIR", str(tmp_path))
+    monkeypatch.setenv("CACHE_DIR", str(tmp_path))
+    monkeypatch.setenv("WATCH_DIR", str(tmp_path))
+    monkeypatch.setenv("OUTPUT_DIR", str(tmp_path))
+    from app import main
+
+    store = ConfigStore(tmp_path / "poster-decrypt-config.json")
+    store.save({
+        "metadata_provider": "javdb",
+        "javdb_api_url": "https://jdforrepam.com",
+        "poster_decrypt": True,
+    })
+    monkeypatch.setattr(main, "config_store", store)
+    requests = []
+
+    key = 0x42
+    plain = b"\xff\xd8\xff\xe0\x00\x10JFIF"
+    encrypted = bytes([key]) + bytes(byte ^ key for byte in plain)
+
+    class ImageResponse:
+        headers = {"Content-Type": "application/octet-stream"}
+
+        def read(self):
+            return encrypted
+
+    def opener(request, timeout):
+        requests.append(request)
+        return ImageResponse()
+
+    monkeypatch.setattr(main.urllib.request, "urlopen", opener)
+
+    response = main.poster_proxy("https://tp.spfcas.com/rhe951l4q/covers/mo/movie.jpg")
+
+    assert response.body == plain
+    assert response.media_type == "image/jpeg"
+    assert requests[0].full_url == "https://tp.spfcas.com/rhe951l4q/covers/mo/movie.jpg"
+
+
 def test_config_store_persists_min_file_size_mb(tmp_path):
     store = ConfigStore(tmp_path / "config.json")
 
@@ -401,6 +470,21 @@ def test_extract_av_code():
     assert extract_av_code(Path("/watch/NHDTB-963.mp4")) == "NHDTB-963"
     assert extract_av_code(Path("/watch/18+游戏大全-垃圾广告.mp4")) is None
     assert extract_av_code(Path("/watch/normal video.mp4")) is None
+
+
+def test_extract_and_sort_multilevel_av_parts(tmp_path):
+    files = [
+        tmp_path / "4K688.com@SAVR-00143.part3_8K.mp4",
+        tmp_path / "4K688.com@SAVR-00143.CD1.mp4",
+        tmp_path / "4K688.com@SAVR-00143.part2_8K.mp4",
+    ]
+    assert extract_part_number(files[0]) == 3
+    assert [p.name for p in sort_media_parts(files)] == [files[1].name, files[2].name, files[0].name]
+
+
+def test_output_subtitle_path_uses_cd_for_multilevel_part():
+    result = output_subtitle_path(Path("/watch/SAVR-00143.part2.mp4"), Path("/output"), "srt", cd_index=2)
+    assert result == Path("/output/SAVR-00143-CD2.SRT")
 
 
 def test_extract_fc2_av_code_variants():
@@ -610,6 +694,36 @@ def test_watchdog_jobs_bind_the_active_modal_account(tmp_path, monkeypatch):
     assert jobs[0].modal_account_id == "old-account"
 
 
+@pytest.mark.parametrize("status", ["failed", "cancelled"])
+def test_watchdog_does_not_recreate_a_deleted_terminal_job(tmp_path, monkeypatch, status):
+    watch_root = tmp_path / "watch"
+    media_dir = watch_root / "IKURI-013"
+    media_dir.mkdir(parents=True)
+    (media_dir / "IKURI-013.mp4").write_bytes(b"media")
+    output_dir = tmp_path / "output"
+    output_dir.mkdir()
+    config_store = ConfigStore(tmp_path / "config.json")
+    config_store.save({
+        "enable_watchdog": True,
+        "min_file_size_mb": 0,
+        "default_output_dir": str(output_dir),
+    })
+    store = JobStore(tmp_path / "jobs.sqlite3")
+    job = store.create_job(str(media_dir), str(output_dir), ["srt"], False)
+    store.update_job(job.id, status=status, phase=status)
+    assert store.delete_job(job.id) is True
+    runner = JobRunner(store, config_store, watch_root, tmp_path / "cache")
+    runner._running = True
+
+    async def stop_after_first_scan(_seconds):
+        runner._running = False
+
+    monkeypatch.setattr("app.worker.asyncio.sleep", stop_after_first_scan)
+    asyncio.run(runner._watchdog_loop())
+
+    assert store.list_jobs() == []
+
+
 def test_build_ffmpeg_command_targets_cache_audio(tmp_path):
     command = build_ffmpeg_command(Path("/watch/movie.mp4"), tmp_path / "movie.m4a")
 
@@ -618,11 +732,60 @@ def test_build_ffmpeg_command_targets_cache_audio(tmp_path):
     assert "-vn" in command
 
 
+def test_build_ffmpeg_command_copies_standard_aac(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        "app.media.subprocess.run",
+        lambda *args, **kwargs: SimpleNamespace(
+            stdout='{"streams":[{"codec_name":"aac","channels":2,"bit_rate":"128000"}]}'
+        ),
+    )
+
+    command = build_ffmpeg_command(Path("/watch/movie.mp4"), tmp_path / "movie.m4a")
+
+    assert command[command.index("-c:a") + 1] == "copy"
+
+
+@pytest.mark.parametrize(
+    "stream",
+    [
+        '{"codec_name":"aac","channels":6,"bit_rate":"128000"}',
+        '{"codec_name":"aac","channels":2,"bit_rate":"256000"}',
+        '{"codec_name":"ac3","channels":2,"bit_rate":"384000"}',
+    ],
+)
+def test_build_ffmpeg_command_compresses_large_or_non_aac_audio(tmp_path, monkeypatch, stream):
+    monkeypatch.setattr(
+        "app.media.subprocess.run",
+        lambda *args, **kwargs: SimpleNamespace(stdout='{"streams":[' + stream + "]}"),
+    )
+
+    command = build_ffmpeg_command(Path("/watch/movie.mp4"), tmp_path / "movie.m4a")
+
+    assert command[command.index("-b:a") + 1] == "48k"
+    assert command[command.index("-ar") + 1] == "16000"
+    assert command[command.index("-ac") + 1] == "1"
+    assert command[command.index("-threads") + 1] == "1"
+
+
 def test_prepare_audio_reports_missing_input_path_before_running_ffmpeg(tmp_path):
     missing = tmp_path / "missing.mp4"
 
     with pytest.raises(RuntimeError, match="input path does not exist in container"):
         prepare_audio(missing, tmp_path)
+
+
+def test_prepare_audio_reports_missing_audio_track_before_running_ffmpeg(tmp_path, monkeypatch):
+    media = tmp_path / "MIZD-519.mp4"
+    media.write_bytes(b"media")
+    monkeypatch.setattr("app.media._get_audio_stream_info", lambda *_args, **_kwargs: None)
+
+    def fail_if_started(*_args, **_kwargs):
+        raise AssertionError("ffmpeg must not start when no audio stream exists")
+
+    monkeypatch.setattr("app.media.subprocess.Popen", fail_if_started)
+
+    with pytest.raises(RuntimeError, match="视频没有音频轨道，无法提取字幕"):
+        prepare_audio(media, tmp_path)
 
 
 def test_job_store_persists_and_updates_jobs(tmp_path):
@@ -685,6 +848,32 @@ def test_cancel_running_job(tmp_path):
     job = store.create_job("/watch/a.mp4", "/output", ["srt"], False)
     store.update_job(job.id, status="running")
     assert store.cancel_job(job.id) is True
+    assert store.is_cancelling(job.id) is True
+
+
+@pytest.mark.parametrize("status", ["failed", "cancelled"])
+def test_deleted_terminal_job_stays_hidden_and_blocks_watchdog_requeue(tmp_path, status):
+    store = JobStore(tmp_path / "jobs.sqlite3")
+    input_path = "/watch/a.mp4"
+    job = store.create_job(input_path, "/output", ["srt"], False)
+    store.update_job(job.id, status=status, phase=status)
+
+    assert store.delete_job(job.id) is True
+    assert store.list_jobs() == []
+    assert store.has_any_failed_job_for_path(input_path) is True
+
+    replacement = store.create_job(input_path, "/output", ["srt"], False)
+    assert [item.id for item in store.list_jobs()] == [replacement.id]
+
+
+def test_deleted_cancelling_job_keeps_worker_cancellation_signal(tmp_path):
+    store = JobStore(tmp_path / "jobs.sqlite3")
+    job = store.create_job("/watch/a.mp4", "/output", ["srt"], False)
+    store.update_job(job.id, status="running")
+    assert store.cancel_job(job.id) is True
+
+    assert store.delete_job(job.id) is True
+    assert store.list_jobs() == []
     assert store.is_cancelling(job.id) is True
 
 

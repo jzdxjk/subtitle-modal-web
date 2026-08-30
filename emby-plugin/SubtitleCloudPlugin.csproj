@@ -7,8 +7,10 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="MediaBrowser.Server.Core" Version="4.8.11.0" />
-    <PackageReference Include="System.Text.Json" Version="8.0.8" />
+    <PackageReference Include="System.Memory" Version="4.5.5" />
     <EmbeddedResource Include="PluginPage.html" LogicalName="SubtitleCloudPlugin.PluginPage.html" />
-    <EmbeddedResource Include="shortcuts.js" LogicalName="SubtitleCloudPlugin.shortcuts.js" />
+    <EmbeddedResource Include="Dashboard.html" LogicalName="SubtitleCloudPlugin.Dashboard.html" />
+    <EmbeddedResource Include="SubtitleCloudPage.js" LogicalName="SubtitleCloudPlugin.SubtitleCloudPage.js" />
+    <EmbeddedResource Include="SubtitleCloudPlugin.js" LogicalName="SubtitleCloudPlugin.SubtitleCloudPlugin.js" />
   </ItemGroup>
 </Project>
