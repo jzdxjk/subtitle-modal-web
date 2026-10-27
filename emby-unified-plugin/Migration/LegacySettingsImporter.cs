@@ -26,7 +26,7 @@ internal static class LegacySettingsImporter
             }
             var result = MigrationRunner.Clone(current, json);
             if (local?.SubtitleLibraryPaths != null) result.LocalPaths = local.SubtitleLibraryPaths;
-            if (pool?.PoolBaseUrl != null) result.PoolUrl = pool.PoolBaseUrl;
+            // The pool address is fixed in code; legacy custom addresses are ignored.
             if (pool?.RequestTimeoutSeconds != null) result.PoolTimeoutSeconds = pool.RequestTimeoutSeconds.Value;
             if (thunder?.EnableAutoDownloadOnNewMedia != null || pool?.EnableAutoDownloadOnNewMedia != null)
                 result.AutoDownloadOnNewMedia = thunder?.EnableAutoDownloadOnNewMedia == true || pool?.EnableAutoDownloadOnNewMedia == true;

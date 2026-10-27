@@ -12,8 +12,8 @@ public sealed class SaveSettingsRequest
     public string LocalPaths { get; set; }
     public int? LocalMaxResults { get; set; }
     public int? ThunderMaxResults { get; set; }
+    public int? ThunderTimeoutSeconds { get; set; }
     public int? PoolMaxResults { get; set; }
-    public string PoolUrl { get; set; }
     public int? PoolTimeoutSeconds { get; set; }
     public string CloudServiceUrl { get; set; }
     public string CloudApiToken { get; set; }
@@ -47,8 +47,8 @@ public sealed class SettingsSnapshot
     public string LocalPaths { get; set; }
     public int LocalMaxResults { get; set; }
     public int ThunderMaxResults { get; set; }
+    public int ThunderTimeoutSeconds { get; set; }
     public int PoolMaxResults { get; set; }
-    public string PoolUrl { get; set; }
     public int PoolTimeoutSeconds { get; set; }
     public string CloudServiceUrl { get; set; }
     public bool HasCloudApiToken { get; set; }
@@ -81,7 +81,8 @@ public static class SettingsEditor
         {
             Version = typeof(Plugin).Assembly.GetName().Version?.ToString() ?? "",
             LocalPaths = c.LocalPaths, LocalMaxResults = c.LocalMaxResults, ThunderMaxResults = c.ThunderMaxResults,
-            PoolMaxResults = c.PoolMaxResults, PoolUrl = c.PoolUrl, PoolTimeoutSeconds = c.PoolTimeoutSeconds,
+            ThunderTimeoutSeconds = c.ThunderTimeoutSeconds,
+            PoolMaxResults = c.PoolMaxResults, PoolTimeoutSeconds = c.PoolTimeoutSeconds,
             CloudServiceUrl = c.CloudServiceUrl, HasCloudApiToken = !string.IsNullOrEmpty(c.CloudApiToken),
             CloudPathMappings = c.CloudPathMappings, AutoDownloadOnNewMedia = c.AutoDownloadOnNewMedia,
             Proxy = new ProxySnapshot
@@ -104,8 +105,10 @@ public static class SettingsEditor
             LocalPaths = update.LocalPaths ?? c.LocalPaths,
             LocalMaxResults = update.LocalMaxResults ?? c.LocalMaxResults,
             ThunderMaxResults = update.ThunderMaxResults ?? c.ThunderMaxResults,
+            ThunderTimeoutSeconds = update.ThunderTimeoutSeconds ?? c.ThunderTimeoutSeconds,
             PoolMaxResults = update.PoolMaxResults ?? c.PoolMaxResults,
-            PoolUrl = update.PoolUrl ?? c.PoolUrl,
+            // The pool address is fixed in code and is not user-configurable.
+            PoolUrl = PluginConfiguration.OfficialPoolUrl,
             PoolTimeoutSeconds = update.PoolTimeoutSeconds ?? c.PoolTimeoutSeconds,
             CloudServiceUrl = update.CloudServiceUrl ?? c.CloudServiceUrl,
             CloudApiToken = Secret(c.CloudApiToken, update.CloudApiToken, update.ClearCloudApiToken),

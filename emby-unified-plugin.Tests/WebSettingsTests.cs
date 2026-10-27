@@ -51,6 +51,20 @@ public class WebSettingsTests
     }
 
     [Fact]
+    public void PoolUrlIsFixedAndHiddenAndThunderTimeoutRoundTrips()
+    {
+        var current = new PluginConfiguration { PoolUrl = "https://legacy-pool.example", ThunderTimeoutSeconds = 33 };
+        var snapshot = SettingsEditor.Snapshot(current);
+        Assert.Null(typeof(SettingsSnapshot).GetProperty("PoolUrl"));
+        var unchanged = SettingsEditor.Apply(current, new SaveSettingsRequest { LocalMaxResults = 4 });
+        Assert.Equal(PluginConfiguration.OfficialPoolUrl, unchanged.PoolUrl);
+        Assert.Equal(33, unchanged.ThunderTimeoutSeconds);
+        var updated = SettingsEditor.Apply(current, new SaveSettingsRequest { ThunderTimeoutSeconds = 25 });
+        Assert.Equal(PluginConfiguration.OfficialPoolUrl, updated.PoolUrl);
+        Assert.Equal(25, updated.ThunderTimeoutSeconds);
+    }
+
+    [Fact]
     public void FixedLanguageAndManifestValuesAreHiddenAndCannotBeOverridden()
     {
         var current = new PluginConfiguration

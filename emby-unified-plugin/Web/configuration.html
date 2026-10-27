@@ -69,7 +69,7 @@
   font:inherit;font-size:.95em;border-radius:.45em;padding:.62em 1.1em;cursor:pointer;
   border:1px solid var(--sa-line);background:var(--sa-surface);color:var(--sa-text);
 }
-#SubtitleAssistantConfigurationPage .sa-save{background:var(--sa-accent);border-color:transparent;color:#fff;font-weight:600}
+#SubtitleAssistantConfigurationPage .sa-save{background:var(--sa-accent);border-color:transparent;color:#fff;font-weight:600;display:block;width:100%;box-sizing:border-box;border-radius:6px;padding:.85em 1.1em;text-align:center}
 #SubtitleAssistantConfigurationPage .sa-save:disabled{opacity:.55;cursor:default}
 #SubtitleAssistantConfigurationPage .sa-secondary{background:transparent}
 #SubtitleAssistantConfigurationPage .sa-btn:focus-visible,
@@ -128,23 +128,23 @@
             <div class="sa-field sa-field-narrow">
                 <label for="sa-local-max">最多展示结果数</label>
                 <input id="sa-local-max" type="number" min="1" step="1" required data-field="LocalMaxResults" value="5">
-                <p class="sa-hint">字幕按与视频时长的差值排序，同等差值优先较大的文件。</p>
+                <p class="sa-hint">完成搜索、匹配、去重与排序后，最多展示 N 条；不影响自动补全可用的候选。</p>
             </div>
         </section>
         <section id="sa-panel-thunder" role="tabpanel" aria-labelledby="sa-tab-thunder" data-panel="thunder" hidden>
             <h2>迅雷字幕</h2>
             <div class="sa-field sa-field-narrow">
+                <label for="sa-thunder-timeout">请求超时（秒）</label>
+                <input id="sa-thunder-timeout" type="number" min="1" max="120" step="1" data-field="ThunderTimeoutSeconds" required>
+            </div>
+            <div class="sa-field sa-field-narrow">
                 <label for="sa-thunder-max">最多展示结果数</label>
                 <input id="sa-thunder-max" type="number" min="1" step="1" required data-field="ThunderMaxResults" value="5">
-                <p class="sa-hint">仅从文件名提取番号，查询等价写法并过滤其他作品。代理可在“全局设置”中调整。</p>
+                <p class="sa-hint">完成搜索、匹配、去重与排序后，最多展示 N 条；不影响自动补全可用的候选。</p>
             </div>
         </section>
         <section id="sa-panel-pool" role="tabpanel" aria-labelledby="sa-tab-pool" data-panel="pool" hidden>
             <h2>海南鸡字幕</h2>
-            <div class="sa-field">
-                <label for="sa-pool-url">字幕池服务地址</label>
-                <input id="sa-pool-url" type="url" data-field="PoolUrl" required spellcheck="false">
-            </div>
             <div class="sa-field sa-field-narrow">
                 <label for="sa-pool-timeout">请求超时（秒）</label>
                 <input id="sa-pool-timeout" type="number" min="1" max="120" step="1" data-field="PoolTimeoutSeconds" required>
@@ -152,6 +152,7 @@
             <div class="sa-field sa-field-narrow">
                 <label for="sa-pool-max">最多展示结果数</label>
                 <input id="sa-pool-max" type="number" min="1" step="1" required data-field="PoolMaxResults" value="5">
+                <p class="sa-hint">完成搜索、匹配、去重与排序后，最多展示 N 条；不影响自动补全可用的候选。</p>
             </div>
         </section>
         <section id="sa-panel-cloud" role="tabpanel" aria-labelledby="sa-tab-cloud" data-panel="cloud" hidden>
@@ -227,8 +228,7 @@
             </div>
         </section>
         <div class="sa-actionbar">
-            <button type="submit" is="emby-button" class="raised sa-save">保存设置</button>
-            <button type="button" is="emby-button" class="sa-secondary" data-update>检查更新</button>
+            <button type="submit" is="emby-button" class="raised sa-save">保存</button>
             <span class="sa-unsaved" data-unsaved hidden>未保存</span>
             <span data-status role="status" aria-live="polite"></span>
         </div>

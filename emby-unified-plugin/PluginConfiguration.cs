@@ -6,12 +6,14 @@ namespace Emby.SubtitleAssistant;
 public sealed class PluginConfiguration : BasePluginConfiguration
 {
     public const string OfficialUpdateManifestUrl = "https://github.com/jzdxjk/subtitle-modal-web/releases/download/emby-subtitle-assistant-update/update.json";
+    public const string OfficialPoolUrl = "https://chickenrice-subtitle-pool.jzdxjk.workers.dev";
 
     public string LocalPaths { get; set; } = "";
     public int LocalMaxResults { get; set; } = 5;
     public int ThunderMaxResults { get; set; } = 5;
+    public int ThunderTimeoutSeconds { get; set; } = 15;
     public int PoolMaxResults { get; set; } = 5;
-    public string PoolUrl { get; set; } = "https://chickenrice-subtitle-pool.jzdxjk.workers.dev";
+    public string PoolUrl { get; set; } = OfficialPoolUrl;
     public int PoolTimeoutSeconds { get; set; } = 15;
     public string CloudServiceUrl { get; set; } = "";
     public string CloudApiToken { get; set; } = "";
@@ -26,6 +28,8 @@ public sealed class PluginConfiguration : BasePluginConfiguration
     {
         if (LocalMaxResults < 1 || ThunderMaxResults < 1 || PoolMaxResults < 1)
             throw new ArgumentException("最大展示结果数必须为正整数。");
+        if (ThunderTimeoutSeconds < 1 || ThunderTimeoutSeconds > 120)
+            throw new ArgumentException("迅雷请求超时必须在1到120秒之间。");
         if (PoolTimeoutSeconds < 1 || PoolTimeoutSeconds > 120)
             throw new ArgumentException("海南鸡请求超时必须在1到120秒之间。");
         ValidateServiceUrl(PoolUrl, "海南鸡服务地址", false);

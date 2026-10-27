@@ -1,14 +1,16 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Threading;
 using MediaBrowser.Common.Configuration;
 using MediaBrowser.Common.Plugins;
+using MediaBrowser.Model.Drawing;
 using MediaBrowser.Model.Plugins;
 using MediaBrowser.Model.Serialization;
 
 namespace Emby.SubtitleAssistant;
 
-public sealed class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
+public sealed class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages, IHasThumbImage
 {
     public static readonly Guid PluginId = new Guid("76cd4168-e0b3-4aac-8a52-5cb638121744");
     private static readonly AsyncLocal<PluginConfiguration> TestConfiguration = new AsyncLocal<PluginConfiguration>();
@@ -18,6 +20,8 @@ public sealed class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
     public override string Name => "字幕助手";
     public override Guid Id => PluginId;
     public override string Description => "本地字幕、迅雷字幕、海南鸡字幕与字幕云，一个插件统一管理。";
+    public ImageFormat ThumbImageFormat => ImageFormat.Jpg;
+    public Stream GetThumbImage() => GetType().Assembly.GetManifestResourceStream($"{GetType().Namespace}.Thumb.jpg");
 
     public Plugin(IApplicationPaths paths, IXmlSerializer xml) : base(paths, xml) => Instance = this;
 

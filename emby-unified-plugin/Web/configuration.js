@@ -136,14 +136,6 @@ define(["baseView"], function (BaseView) {
         if (target.hasAttribute("data-tab")) self.selectTab(target.getAttribute("data-tab"));
         if (target.hasAttribute("data-refresh-jobs")) self.pollJobs();
         if (target.hasAttribute("data-proxy-test")) self.testProxy(target);
-        if (target.hasAttribute("data-update")) {
-            self.status("正在启动更新任务…");
-            ApiClient.ajax({ type: "GET", url: ApiClient.getUrl("ScheduledTasks"), dataType: "json" }).then(function (tasks) {
-                var task = tasks.filter(function (entry) { return entry.Key === "SubtitleAssistantUpdate"; })[0];
-                if (!task) throw Error("任务不存在");
-                return ApiClient.ajax({ type: "POST", url: ApiClient.getUrl("ScheduledTasks/Running/" + task.Id) });
-            }).then(function () { if (self.active) self.status("更新任务已启动，需要重启时由 Emby 提示。"); }).catch(function () { if (self.active) self.status("无法启动更新，请前往 Emby 计划任务查看。"); });
-        }
     };
     View.prototype.pollJobs = function () {
         var self = this;

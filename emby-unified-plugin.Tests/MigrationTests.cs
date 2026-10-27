@@ -26,7 +26,7 @@ public class MigrationTests
         PluginConfiguration saved = null;
         Assert.True(MigrationRunner.Execute(files.ConfigPath, original, Json(), Array.Empty<MigrationLibrary>(), c => saved = c));
         Assert.Equal("/subtitles;/more", saved.LocalPaths);
-        Assert.Equal("https://legacy-pool.test", saved.PoolUrl);
+        Assert.Equal(PluginConfiguration.OfficialPoolUrl, saved.PoolUrl);
         Assert.Equal(22, saved.PoolTimeoutSeconds);
         Assert.True(saved.AutoDownloadOnNewMedia);
         Assert.Equal(ChineseSubtitleLanguage.Simplified, saved.SimplifiedChineseLanguage);

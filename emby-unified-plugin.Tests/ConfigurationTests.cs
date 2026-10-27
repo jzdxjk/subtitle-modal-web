@@ -11,6 +11,8 @@ public sealed class ConfigurationTests
         Assert.Equal(5, config.LocalMaxResults);
         Assert.Equal(5, config.ThunderMaxResults);
         Assert.Equal(5, config.PoolMaxResults);
+        Assert.Equal(15, config.ThunderTimeoutSeconds);
+        Assert.Equal(PluginConfiguration.OfficialPoolUrl, config.PoolUrl);
         Assert.False(config.AutoDownloadOnNewMedia);
         config.Validate();
     }
@@ -20,6 +22,14 @@ public sealed class ConfigurationTests
     public void RejectsNonPositiveDisplayLimit(int value)
     {
         var config = new PluginConfiguration { LocalMaxResults = value };
+        Assert.Throws<ArgumentException>(() => config.Validate());
+    }
+
+    [Theory]
+    [InlineData(0)] [InlineData(121)]
+    public void RejectsOutOfRangeThunderTimeout(int value)
+    {
+        var config = new PluginConfiguration { ThunderTimeoutSeconds = value };
         Assert.Throws<ArgumentException>(() => config.Validate());
     }
 

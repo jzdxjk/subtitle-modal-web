@@ -3,9 +3,9 @@
     <TargetFramework>netstandard2.1</TargetFramework>
     <AssemblyName>Emby.SubtitleAssistant</AssemblyName>
     <RootNamespace>Emby.SubtitleAssistant</RootNamespace>
-    <Version>1.0.0.1</Version>
-    <AssemblyVersion>1.0.0.1</AssemblyVersion>
-    <FileVersion>1.0.0.1</FileVersion>
+    <Version>1.0.0.2</Version>
+    <AssemblyVersion>1.0.0.2</AssemblyVersion>
+    <FileVersion>1.0.0.2</FileVersion>
     <LangVersion>latest</LangVersion>
     <Nullable>disable</Nullable>
     <GenerateDependencyFile>false</GenerateDependencyFile>
@@ -19,6 +19,9 @@
     <EmbeddedResource Include="Data/*.json" />
     <EmbeddedResource Include="Web/*.html" />
     <EmbeddedResource Include="Web/*.js" />
+    <EmbeddedResource Include="Thumb.jpg">
+      <LogicalName>Emby.SubtitleAssistant.Thumb.jpg</LogicalName>
+    </EmbeddedResource>
     <InternalsVisibleTo Include="Emby.SubtitleAssistant.Tests" />
   </ItemGroup>
 </Project>

@@ -76,7 +76,7 @@ namespace Emby.SubtitleAssistant.Providers
         {
             try
             {
-                var bytes = await _http.GetBytesAsync("https://api-shoulei-ssl.xunlei.com/oracle/subtitle?name=" + Uri.EscapeDataString(code), NetworkPurpose.Thunder, ct).ConfigureAwait(false);
+                var bytes = await _http.GetBytesAsync("https://api-shoulei-ssl.xunlei.com/oracle/subtitle?name=" + Uri.EscapeDataString(code), NetworkPurpose.Thunder, ct, Plugin.CurrentConfiguration.ThunderTimeoutSeconds).ConfigureAwait(false);
                 var response = ProviderSupport.Json<ThunderResponse>(bytes);
                 return response.Code == 0 ? (IReadOnlyList<ThunderItem>)(response.Data ?? new List<ThunderItem>()) : Array.Empty<ThunderItem>();
             }
@@ -99,7 +99,7 @@ namespace Emby.SubtitleAssistant.Providers
             await _prefetch.WaitAsync(ct).ConfigureAwait(false);
             try
             {
-                var bytes = await _http.GetBytesAsync(url, NetworkPurpose.Thunder, ct, 5).ConfigureAwait(false);
+                var bytes = await _http.GetBytesAsync(url, NetworkPurpose.Thunder, ct, Plugin.CurrentConfiguration.ThunderTimeoutSeconds).ConfigureAwait(false);
                 var documents = SubtitleContent.ReadAll(bytes, format, name).ToArray();
                 foreach (var doc in documents) _bodies.Put(doc.ContentHash, doc.Bytes);
                 if (documents.Length != 0) _urls[url] = new CachedDocuments { Expires = DateTimeOffset.UtcNow.AddHours(24), Items = documents.Select(x => new CachedDocument { Name = x.Name, Format = x.Format, Language = x.Language, DurationSeconds = x.DurationSeconds, ContentHash = x.ContentHash }).ToArray() };
@@ -123,7 +123,7 @@ namespace Emby.SubtitleAssistant.Providers
                 if (!ProviderSupport.HttpUrl(url)) continue;
                 try
                 {
-                    var bytes = await _http.GetBytesAsync(url, NetworkPurpose.Thunder, ct).ConfigureAwait(false);
+                    var bytes = await _http.GetBytesAsync(url, NetworkPurpose.Thunder, ct, Plugin.CurrentConfiguration.ThunderTimeoutSeconds).ConfigureAwait(false);
                     var document = ProviderSupport.SelectDocument(bytes, payload);
                     _bodies.Put(document.ContentHash, document.Bytes);
                     return ProviderSupport.Response(payload, document);

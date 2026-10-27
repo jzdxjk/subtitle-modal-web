@@ -24,9 +24,9 @@ public class UpdateRunnerTests
         try
         {
             var original = File.ReadAllBytes(typeof(Plugin).Assembly.Location);
-            var candidate = UpdateInstallerTests.WithVersion(original, new Version(1, 0, 0, 2));
+            var candidate = UpdateInstallerTests.WithVersion(original, UpdateInstallerTests.CandidateVersion);
             var path = Path.Combine(root, "Emby.SubtitleAssistant.dll"); File.WriteAllBytes(path, original);
-            var manifest = UpdateManifestTests.Manifest(); manifest.sha256 = UpdateInstallerTests.Hash(candidate);
+            var manifest = UpdateManifestTests.Manifest(UpdateInstallerTests.CandidateVersion.ToString()); manifest.sha256 = UpdateInstallerTests.Hash(candidate);
             var handler = new UpdateHandler(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(manifest)), candidate);
             using var http = new PluginHttpClient(() => new PluginConfiguration(), purpose => { Assert.Equal(NetworkPurpose.Updates, purpose); return handler; });
             var runner = new UpdateRunner(http, DispatchProxy.Create<IJsonSerializer, UpdateJsonProxy>());

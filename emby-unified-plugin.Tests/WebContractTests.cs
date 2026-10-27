@@ -34,6 +34,10 @@ public class WebContractTests
         Assert.Contains("data-unsaved", html);
         Assert.Contains("全局设置", html);
         Assert.DoesNotContain("data-field=\"UpdateManifestUrl\"", html);
+        Assert.DoesNotContain("data-field=\"PoolUrl\"", html);
+        Assert.DoesNotContain("data-update", html);
+        Assert.DoesNotContain("检查更新", html);
+        Assert.Contains("完成搜索、匹配、去重与排序后，最多展示 N 条；不影响自动补全可用的候选。", html);
         Assert.DoesNotContain("data-field=\"SimplifiedChineseLanguage\"", html);
         Assert.DoesNotContain("data-field=\"TraditionalChineseLanguage\"", html);
         Assert.DoesNotContain("data-proxy-test-url", html);

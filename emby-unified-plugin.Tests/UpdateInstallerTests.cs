@@ -14,6 +14,10 @@ namespace Emby.SubtitleAssistant.Tests;
 
 public class UpdateInstallerTests : IDisposable
 {
+    private static readonly Version BuiltVersion = typeof(Plugin).Assembly.GetName().Version;
+    internal static readonly Version CandidateVersion = new Version(BuiltVersion.Major, BuiltVersion.Minor, BuiltVersion.Build, BuiltVersion.Revision + 1);
+    internal static readonly Version NextVersion = new Version(CandidateVersion.Major, CandidateVersion.Minor, CandidateVersion.Build, CandidateVersion.Revision + 1);
+    private static readonly Version RunningVersion = new Version(0, 0, 0, 0);
     private readonly string _root = Path.Combine(Path.GetTempPath(), "subtitle-assistant-update-" + Guid.NewGuid().ToString("N"));
     private readonly byte[] _original = File.ReadAllBytes(typeof(Plugin).Assembly.Location);
     private readonly string _path;
@@ -36,16 +40,16 @@ public class UpdateInstallerTests : IDisposable
     }
 
     internal static string Hash(byte[] bytes) => Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
-    private UpdateManifest For(byte[] candidate, string version = "1.0.0.2")
+    private UpdateManifest For(byte[] candidate, string version = null)
     {
-        var manifest = UpdateManifestTests.Manifest(version); manifest.sha256 = Hash(candidate); return manifest;
+        var manifest = UpdateManifestTests.Manifest(version ?? CandidateVersion.ToString()); manifest.sha256 = Hash(candidate); return manifest;
     }
 
     [Fact]
     public void ValidPackageAtomicallyReplacesFileAndKeepsOriginalBackup()
     {
-        var candidate = WithVersion(_original, new Version(1, 0, 0, 2));
-        var result = PackageInstaller.Install(candidate, For(candidate), _path, new Version(1, 0, 0, 0), CancellationToken.None);
+        var candidate = WithVersion(_original, CandidateVersion);
+        var result = PackageInstaller.Install(candidate, For(candidate), _path, RunningVersion, CancellationToken.None);
         Assert.True(result.Installed);
         Assert.Equal(candidate, File.ReadAllBytes(_path));
         Assert.EndsWith(".bak", result.BackupPath);
@@ -56,8 +60,8 @@ public class UpdateInstallerTests : IDisposable
     [Fact]
     public void PendingDiskVersionPreventsRepeatedReplacementBeforeRestart()
     {
-        var candidate = WithVersion(_original, new Version(1, 0, 0, 2)); File.WriteAllBytes(_path, candidate);
-        var result = PackageInstaller.Install(candidate, For(candidate), _path, new Version(1, 0, 0, 0), CancellationToken.None);
+        var candidate = WithVersion(_original, CandidateVersion); File.WriteAllBytes(_path, candidate);
+        var result = PackageInstaller.Install(candidate, For(candidate), _path, RunningVersion, CancellationToken.None);
         Assert.False(result.Installed);
         Assert.Equal(candidate, File.ReadAllBytes(_path));
     }
@@ -65,27 +69,27 @@ public class UpdateInstallerTests : IDisposable
     [Fact]
     public void BadHashCannotChangeOriginal()
     {
-        var candidate = WithVersion(_original, new Version(1, 0, 0, 2)); var manifest = For(candidate); manifest.sha256 = new string('0', 64);
-        Assert.Throws<InvalidDataException>(() => PackageInstaller.Install(candidate, manifest, _path, new Version(1, 0, 0, 0), CancellationToken.None));
+        var candidate = WithVersion(_original, CandidateVersion); var manifest = For(candidate); manifest.sha256 = new string('0', 64);
+        Assert.Throws<InvalidDataException>(() => PackageInstaller.Install(candidate, manifest, _path, RunningVersion, CancellationToken.None));
         Assert.Equal(_original, File.ReadAllBytes(_path));
     }
 
     [Fact]
     public void WrongAssemblyNameOrVersionCannotChangeOriginal()
     {
-        var wrongName = WithVersion(File.ReadAllBytes(typeof(UpdateInstallerTests).Assembly.Location), new Version(1, 0, 0, 2));
-        Assert.Throws<InvalidDataException>(() => PackageInstaller.Install(wrongName, For(wrongName), _path, new Version(1, 0, 0, 0), CancellationToken.None));
-        var wrongVersion = WithVersion(_original, new Version(1, 0, 0, 2));
-        Assert.Throws<InvalidDataException>(() => PackageInstaller.Install(wrongVersion, For(wrongVersion, "1.0.0.3"), _path, new Version(1, 0, 0, 0), CancellationToken.None));
+        var wrongName = WithVersion(File.ReadAllBytes(typeof(UpdateInstallerTests).Assembly.Location), CandidateVersion);
+        Assert.Throws<InvalidDataException>(() => PackageInstaller.Install(wrongName, For(wrongName), _path, RunningVersion, CancellationToken.None));
+        var wrongVersion = WithVersion(_original, CandidateVersion);
+        Assert.Throws<InvalidDataException>(() => PackageInstaller.Install(wrongVersion, For(wrongVersion, NextVersion.ToString()), _path, RunningVersion, CancellationToken.None));
         Assert.Equal(_original, File.ReadAllBytes(_path));
     }
 
     [Fact]
     public void CancellationAndReplacementFailureKeepOriginalAndCleanStaging()
     {
-        var candidate = WithVersion(_original, new Version(1, 0, 0, 2));
-        Assert.Throws<OperationCanceledException>(() => PackageInstaller.Install(candidate, For(candidate), _path, new Version(1, 0, 0, 0), new CancellationToken(true)));
-        Assert.Throws<IOException>(() => PackageInstaller.Install(candidate, For(candidate), _path, new Version(1, 0, 0, 0), CancellationToken.None,
+        var candidate = WithVersion(_original, CandidateVersion);
+        Assert.Throws<OperationCanceledException>(() => PackageInstaller.Install(candidate, For(candidate), _path, RunningVersion, new CancellationToken(true)));
+        Assert.Throws<IOException>(() => PackageInstaller.Install(candidate, For(candidate), _path, RunningVersion, CancellationToken.None,
             (_, _, _) => throw new IOException("simulated replace failure")));
         Assert.Equal(_original, File.ReadAllBytes(_path));
         Assert.Empty(Directory.GetFiles(Path.Combine(_root, ".subtitle-assistant-update"), "*.bin"));
@@ -94,8 +98,8 @@ public class UpdateInstallerTests : IDisposable
     [Fact]
     public void InstallerCannotOverwriteAnotherPlugin()
     {
-        var candidate = WithVersion(_original, new Version(1, 0, 0, 2)); var other = Path.Combine(_root, "other.dll"); File.WriteAllBytes(other, _original);
-        Assert.Throws<InvalidDataException>(() => PackageInstaller.Install(candidate, For(candidate), other, new Version(1, 0, 0, 0), CancellationToken.None));
+        var candidate = WithVersion(_original, CandidateVersion); var other = Path.Combine(_root, "other.dll"); File.WriteAllBytes(other, _original);
+        Assert.Throws<InvalidDataException>(() => PackageInstaller.Install(candidate, For(candidate), other, RunningVersion, CancellationToken.None));
         Assert.Equal(_original, File.ReadAllBytes(other));
     }
 }
