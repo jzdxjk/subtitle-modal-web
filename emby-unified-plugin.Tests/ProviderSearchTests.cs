@@ -40,8 +40,9 @@ public class ProviderSearchTests
         var handler = new FixtureHandler(uri =>
         {
             if (uri.Host == "api-shoulei-ssl.xunlei.com")
-                return JsonSerializer.Serialize(new { code = 0, data = Enumerable.Range(1, 6).Select(i => new { name = $"FC2-PPV-1234567 第{i}版.srt", url = $"https://files.test/{i}.srt", ext = "srt", duration = i == 1 ? 99 : 80 - i, cid = "same-video-cid", gcid = "same-untrusted-gcid" }) });
-            return Srt(int.Parse(uri.AbsolutePath.Trim('/').Split('.')[0]), 200);
+                return JsonSerializer.Serialize(new { code = 0, data = Enumerable.Range(1, 6).Select(i => new { name = $"FC2-PPV-1234567 第{i}版.srt", url = $"https://files.test/{i}.srt", ext = "srt", duration = i == 1 ? 999000 : i * 1000, cid = "same-video-cid", gcid = "same-untrusted-gcid" }) });
+            var version = int.Parse(uri.AbsolutePath.Trim('/').Split('.')[0]);
+            return Srt(version, version == 1 ? 100 : 200 - version * 10);
         });
         using var http = new PluginHttpClient(() => config, _ => handler);
         var provider = new ThunderSubtitleProvider(http);
@@ -49,7 +50,8 @@ public class ProviderSearchTests
         var display = (await provider.Search(request, CancellationToken.None)).ToArray();
         Assert.Equal(5, display.Length);
         Assert.Equal(request.MediaPath, ProviderSupport.Decode(display[0].Id).MediaPath);
-        Assert.Contains("第1版", display[0].Name); // API 99 seconds wins despite actual timeline 200 seconds.
+        Assert.Contains("第1版", display[0].Name); // Parsed timeline (100s) wins over the misleading API value.
+        Assert.Contains("(字幕轴)", display[0].Name);
         var queries = handler.Calls.Where(x => x.Host == "api-shoulei-ssl.xunlei.com").Select(x => Uri.UnescapeDataString(x.Query)).ToArray();
         Assert.Equal(3, queries.Length);
         Assert.Contains(queries, x => x.Contains("FC2-PPV-1234567"));
@@ -286,6 +288,59 @@ public class ProviderSearchTests
             await Assert.ThrowsAnyAsync<InvalidDataException>(() => new LocalSubtitleProvider(null).GetSubtitles(id, CancellationToken.None));
         }
         finally { Directory.Delete(directory, true); }
+    }
+
+    [Fact]
+    public void SearchResultSizesUseKilobytesWithOneDecimal()
+    {
+        using var config = Plugin.OverrideConfigurationForTests(new PluginConfiguration());
+        var candidates = new[]
+        {
+            new SubtitleCandidate { Name = "a", DurationSeconds = 100, SizeBytes = 125440, StableOrder = 0 },
+            new SubtitleCandidate { Name = "b", DurationSeconds = 100, SizeBytes = 512, StableOrder = 1 },
+            new SubtitleCandidate { Name = "c", DurationSeconds = 100, SizeBytes = 0, StableOrder = 2 },
+            new SubtitleCandidate { Name = "d", DurationSeconds = 100, SizeBytes = null, StableOrder = 3 }
+        };
+        var infos = ProviderSupport.Complete(candidates, Request("SSIS-157.mp4"), ProviderNames.Local, 5, "字幕轴").ToArray();
+        Assert.Contains(infos, x => x.Name.Contains("大小:122.5 KB"));
+        Assert.Contains(infos, x => x.Name.Contains("大小:0.5 KB"));
+        Assert.Contains(infos, x => x.Name.Contains("大小:0.0 KB"));
+        Assert.Contains(infos, x => x.Name.Contains("大小:unknown"));
+        Assert.DoesNotContain(infos, x => x.Name.Contains("大小:0 B") || x.Name.Contains("大小:125440 B"));
+    }
+
+    [Fact]
+    public void CompleteUsesPerCandidateDurationSource()
+    {
+        var candidates = new[]
+        {
+            new SubtitleCandidate { Name = "timeline", DurationSeconds = 100, DurationSource = "字幕轴", SizeBytes = 1024, StableOrder = 0 },
+            new SubtitleCandidate { Name = "api", DurationSeconds = 99, DurationSource = "迅雷API", SizeBytes = 1024, StableOrder = 1 }
+        };
+        var infos = ProviderSupport.Complete(candidates, Request("SSIS-157.mp4"), ProviderNames.Thunder, 5, "迅雷API").ToArray();
+        Assert.Contains(infos, x => x.Name.Contains("时长:00:01:40(字幕轴)"));
+        Assert.Contains(infos, x => x.Name.Contains("时长:00:01:39(迅雷API)"));
+    }
+
+    [Fact]
+    public async Task ThunderUsesApiMillisecondsWhenTimelineUnavailable()
+    {
+        var config = new PluginConfiguration { ThunderMaxResults = 5 };
+        using var scope = Plugin.OverrideConfigurationForTests(config);
+        var handler = new FixtureHandler(uri =>
+        {
+            if (uri.Host == "api-shoulei-ssl.xunlei.com")
+                return JsonSerializer.Serialize(new { code = 0, data = new[] {
+                    new { name = "SSIS-157 A.srt", url = "https://files.test/ok.srt", ext = "srt", duration = (double?)100000 },
+                    new { name = "SSIS-157 B.srt", url = "https://files.test/none.srt", ext = "srt", duration = (double?)null }
+                } });
+            throw new HttpRequestException("subtitle body unavailable");
+        });
+        using var http = new PluginHttpClient(() => config, _ => handler);
+        var results = (await new ThunderSubtitleProvider(http).Search(Request("SSIS-157.mp4"), CancellationToken.None)).ToArray();
+        Assert.NotEmpty(results);
+        Assert.Contains(results, x => x.Name.Contains("00:01:40(迅雷API)"));
+        Assert.Contains(results, x => x.Name.Contains("unknown(迅雷API)"));
     }
 
     private static SubtitleSearchRequest Request(string path) => new SubtitleSearchRequest { MediaPath = path, Language = "chi", RuntimeTicks = TimeSpan.FromSeconds(100).Ticks };

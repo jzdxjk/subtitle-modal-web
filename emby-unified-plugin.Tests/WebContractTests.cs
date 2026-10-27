@@ -64,4 +64,28 @@ public class WebContractTests
         Assert.Contains("SubtitleAssistant/cloud/submit", js);
         Assert.DoesNotContain("responseText", js);
     }
+
+    [Fact]
+    public void ConfigurationUsesNativeSaveButtonAndDraggableOrderControl()
+    {
+        var path = Path.Combine(Root, "emby-unified-plugin", "Web", "configuration.html");
+        var html = File.ReadAllText(path);
+        Assert.DoesNotContain("sa-actionbar", html);
+        Assert.DoesNotContain("sa-save", html);
+        Assert.DoesNotContain("sticky", html);
+        Assert.Contains("data-provider-order", html);
+        Assert.Contains("搜索结果来源顺序", html);
+        Assert.Contains("重启 Emby", html);
+        Assert.Contains("is=\"emby-button\"", html);
+        Assert.Contains("button-submit", html);
+        Assert.Contains("class=\"raised button-submit block\"", html);
+        var js = File.ReadAllText(Path.Combine(Root, "emby-unified-plugin", "Web", "configuration.js"));
+        Assert.Contains("pointerdown", js);
+        Assert.Contains("touchstart", js);
+        Assert.Contains("pointermove", js);
+        Assert.Contains("pointerup", js);
+        Assert.Contains("PROVIDER_DEFAULT_ORDER = [\"Pool\", \"Local\", \"Thunder\"]", js);
+        Assert.Contains("providerOrder", js);
+        Assert.Contains("重启 Emby 后生效", js);
+    }
 }

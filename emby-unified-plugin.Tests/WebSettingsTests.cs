@@ -87,4 +87,21 @@ public class WebSettingsTests
         Assert.Equal(ChineseSubtitleLanguage.Traditional, next.TraditionalChineseLanguage);
         Assert.Equal(PluginConfiguration.OfficialUpdateManifestUrl, next.UpdateManifestUrl);
     }
+
+    [Fact]
+    public void ProviderDisplayOrderRoundTripsAndRejectsInvalidUpdate()
+    {
+        var current = new PluginConfiguration { ProviderDisplayOrder = new[] { "Pool", "Local", "Thunder" } };
+        var snapshot = SettingsEditor.Snapshot(current);
+        Assert.Equal(new[] { "Pool", "Local", "Thunder" }, snapshot.ProviderDisplayOrder);
+        var unchanged = SettingsEditor.Apply(current, new SaveSettingsRequest { LocalMaxResults = 4 });
+        Assert.Equal(new[] { "Pool", "Local", "Thunder" }, unchanged.ProviderDisplayOrder);
+        var emptyKeepsCurrent = SettingsEditor.Apply(current, new SaveSettingsRequest { ProviderDisplayOrder = new string[0] });
+        Assert.Equal(new[] { "Pool", "Local", "Thunder" }, emptyKeepsCurrent.ProviderDisplayOrder);
+        var updated = SettingsEditor.Apply(current, new SaveSettingsRequest { ProviderDisplayOrder = new[] { "Thunder", "Local", "Pool" } });
+        Assert.Equal(new[] { "Thunder", "Local", "Pool" }, updated.ProviderDisplayOrder);
+        Assert.Throws<System.ArgumentException>(() => SettingsEditor.Apply(current, new SaveSettingsRequest { ProviderDisplayOrder = new[] { "Local", "Thunder" } }));
+        var nullSnapshot = SettingsEditor.Snapshot(new PluginConfiguration { ProviderDisplayOrder = null });
+        Assert.Equal(new[] { "Pool", "Local", "Thunder" }, nullSnapshot.ProviderDisplayOrder);
+    }
 }

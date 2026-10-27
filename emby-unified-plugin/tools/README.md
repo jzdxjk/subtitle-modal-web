@@ -14,7 +14,7 @@ python emby-unified-plugin/tools/github_release.py --check-auth
 $releaseCommit = git rev-parse HEAD
 python emby-unified-plugin/tools/github_release.py --publish `
   --dll emby-unified-plugin/bin/Release/netstandard2.1/Emby.SubtitleAssistant.dll `
-  --version 1.0.0.0 --commit $releaseCommit --body-file release-notes.md
+  --version 1.0.0.3 --commit $releaseCommit --body-file release-notes.md
 
 python emby-unified-plugin/tools/github_release.py --create-pr `
   --head codex/subtitle-assistant --base dev --body-file pr-description.md

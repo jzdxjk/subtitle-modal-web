@@ -23,7 +23,7 @@ namespace Emby.SubtitleAssistant.Providers
         public ThunderSubtitleProvider(ILogManager logManager) : this(PluginHttpClient.Shared) { _logger = logManager?.GetLogger(GetType().Name); }
         internal ThunderSubtitleProvider(PluginHttpClient http) { _http = http; }
         public string Name => ProviderNames.Thunder;
-        public int Order => 90;
+        public int Order => ProviderOrder.Resolve(ProviderKeys.Thunder);
         public IEnumerable<VideoContentType> SupportedMediaTypes => new[] { VideoContentType.Movie, VideoContentType.Episode };
         public async Task<IEnumerable<RemoteSubtitleInfo>> Search(SubtitleSearchRequest request, CancellationToken ct)
         {
@@ -67,8 +67,12 @@ namespace Emby.SubtitleAssistant.Providers
         {
             var payload = new DownloadPayload { Url = row.Url, Name = row.Name, Format = document?.Format ?? (row.Ext ?? "").TrimStart('.').ToLowerInvariant(), Language = request.Language,
                 ContentHash = document?.ContentHash, EntryName = document?.Name, MediaPath = request.MediaPath };
+            var timelineSeconds = document != null && document.DurationSeconds > 0 ? document.DurationSeconds : (double?)null;
+            var apiSeconds = row.Duration > 0 ? row.Duration.Value / 1000d : (double?)null;
+            var durationSeconds = timelineSeconds ?? apiSeconds;
+            var durationSource = timelineSeconds.HasValue ? "字幕轴" : "迅雷API";
             return new SubtitleCandidate { Id = ProviderSupport.Encode(payload), Name = row.Name ?? document?.Name ?? "字幕", Format = payload.Format, Language = language,
-                DurationSeconds = row.Duration > 0 ? row.Duration : null, SizeBytes = document?.Bytes.LongLength,
+                DurationSeconds = durationSeconds, DurationSource = durationSource, SizeBytes = document?.Bytes.LongLength,
                 ContentHash = document?.ContentHash, DownloadUrl = row.Url, StableOrder = index };
         }
 

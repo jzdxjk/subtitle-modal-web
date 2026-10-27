@@ -22,10 +22,14 @@ public sealed class PluginConfiguration : BasePluginConfiguration
     public string SimplifiedChineseLanguage { get; set; } = ChineseSubtitleLanguage.Simplified;
     public string TraditionalChineseLanguage { get; set; } = ChineseSubtitleLanguage.Traditional;
     public int MigrationVersion { get; set; }
+    public string[] ProviderDisplayOrder { get; set; } = new[] { ProviderKeys.Pool, ProviderKeys.Local, ProviderKeys.Thunder };
     public string UpdateManifestUrl { get; set; } = OfficialUpdateManifestUrl;
     public ProxyConfiguration Proxy { get; set; } = new ProxyConfiguration();
     public void Validate()
     {
+        // Missing or hand-edited values must not block host startup; runtime reads normalize them too.
+        if (!ProviderOrder.IsValid(ProviderDisplayOrder))
+            ProviderDisplayOrder = ProviderOrder.Default;
         if (LocalMaxResults < 1 || ThunderMaxResults < 1 || PoolMaxResults < 1)
             throw new ArgumentException("最大展示结果数必须为正整数。");
         if (ThunderTimeoutSeconds < 1 || ThunderTimeoutSeconds > 120)

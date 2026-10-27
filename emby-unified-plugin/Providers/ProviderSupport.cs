@@ -60,7 +60,7 @@ namespace Emby.SubtitleAssistant.Providers
             if (!SearchExecutionContext.IsAutomation) ordered = ordered.Take(Math.Max(1, maxResults));
             return ordered.Select(x => new RemoteSubtitleInfo
             {
-                Id = x.Id, Name = x.Name + " | 时长:" + Duration(x.DurationSeconds) + "(" + durationSource + ") | 大小:" + Size(x.SizeBytes) + " | 语言:" + LanguageName(x.Language),
+                Id = x.Id, Name = x.Name + " | 时长:" + Duration(x.DurationSeconds) + "(" + (x.DurationSource ?? durationSource) + ") | 大小:" + Size(x.SizeBytes) + " | 语言:" + LanguageName(x.Language),
                 Language = request.Language, ProviderName = provider, Format = x.Format, Author = "字幕助手",
                 Comment = "Code matching: exact | SHA256: " + (x.ContentHash ?? "unknown") + " | Language: " + (x.Language ?? "unknown"),
                 IsHashMatch = false, IsForced = false
@@ -68,7 +68,7 @@ namespace Emby.SubtitleAssistant.Providers
         }
         public static string LanguageName(string language) => language == "chi" ? "中文" : language == "eng" ? "英语" : language == "jpn" ? "日语" : language == "tha" ? "泰语" : language == "kor" ? "韩语" : "未知";
         private static string Duration(double? seconds) => seconds > 0 ? TimeSpan.FromSeconds(seconds.Value).ToString(@"hh\:mm\:ss", CultureInfo.InvariantCulture) : "unknown";
-        private static string Size(long? size) => size.HasValue ? size.Value.ToString(CultureInfo.InvariantCulture) + " B" : "unknown";
+        private static string Size(long? size) => size.HasValue ? (size.Value / 1024d).ToString("0.0", CultureInfo.InvariantCulture) + " KB" : "unknown";
         public static bool HttpUrl(string value) => Uri.TryCreate(value, UriKind.Absolute, out var uri) && (uri.Scheme == "http" || uri.Scheme == "https") && string.IsNullOrEmpty(uri.UserInfo);
         public static SubtitleResponse Response(DownloadPayload payload, SubtitleDocument document)
             => new SubtitleResponse { Language = payload.Language, IsForced = payload.IsForced, Format = document.Format,

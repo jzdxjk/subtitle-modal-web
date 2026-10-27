@@ -32,6 +32,18 @@ async function call(path, method = 'GET', data) {
 
 async function waitForSettings() {
     await page.locator('#SubtitleAssistantConfigurationPage [data-settings-form]:not([hidden])').waitFor({ timeout: 30000 });
+    // Emby 4.8's router can leave the Home view mounted above the legacy
+    // configuration page, where its item cards intercept pointer events. A real
+    // administrator does not see that stale view; dismiss it so clicks reach the
+    // settings page. Newer hosts never mount this view on the settings route.
+    await page.evaluate(() => {
+        for (const node of document.querySelectorAll('.view-home-home')) {
+            if (getComputedStyle(node).display !== 'none') {
+                node.style.display = 'none';
+                node.setAttribute('aria-hidden', 'true');
+            }
+        }
+    });
 }
 
 async function openSettings() {
@@ -49,13 +61,70 @@ async function select(tab) {
         ensure(!await page.locator(`[data-panel="${other}"]`).isVisible(), 'Inactive settings panel is visible');
 }
 
-async function save() {
+async function save(expectedStatus = '设置已保存') {
     ensure(await page.locator('[data-settings-form]').evaluate(form => form.checkValidity()), 'Native form validation blocked settings submission');
     const response = page.waitForResponse(value => new URL(value.url()).pathname.endsWith('/SubtitleAssistant/settings') && value.request().method() === 'POST');
-    await page.getByRole('button', { name: '保存设置', exact: true }).click();
+    await page.getByRole('button', { name: '保存', exact: true }).click();
     const result = await (await response).json();
     ensure(result.Ok, 'Settings save failed');
-    await page.locator('[data-status]').filter({ hasText: '设置已保存' }).waitFor();
+    await page.locator('[data-status]').filter({ hasText: expectedStatus }).waitFor();
+}
+
+async function orderKeys() {
+    return page.locator('[data-provider-order] .sa-order-row').evaluateAll(nodes => nodes.map(node => node.getAttribute('data-provider-key')));
+}
+
+async function mouseDragOrder(fromIndex, toIndex) {
+    const rows = page.locator('[data-provider-order] .sa-order-row');
+    await page.locator('[data-provider-order]').evaluate(element => element.scrollIntoView({ block: 'center' }));
+    await page.waitForTimeout(100);
+    const from = await rows.nth(fromIndex).boundingBox(), to = await rows.nth(toIndex).boundingBox();
+    ensure(from && to, 'Provider order rows have no layout box');
+    ensure(from.y > 0 && to.y > 0, 'Provider order rows are outside the viewport');
+    await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(to.x + to.width / 2, to.y + to.height * 0.4, { steps: 8 });
+    await page.mouse.up();
+}
+
+async function touchDragOrder(fromIndex, toIndex) {
+    const rows = page.locator('[data-provider-order] .sa-order-row');
+    await page.locator('[data-provider-order]').evaluate(element => element.scrollIntoView({ block: 'center' }));
+    await page.waitForTimeout(100);
+    const from = await rows.nth(fromIndex).boundingBox(), to = await rows.nth(toIndex).boundingBox();
+    ensure(from && to, 'Provider order rows have no layout box for touch');
+    ensure(from.y > 0 && to.y > 0, 'Provider order rows are outside the touch viewport');
+    await page.evaluate(() => {
+        window.__saOrderEvents = [];
+        const point = event => {
+            const touch = (event.touches && event.touches[0]) || (event.changedTouches && event.changedTouches[0]);
+            const x = touch ? touch.clientX : event.clientX;
+            const y = touch ? touch.clientY : event.clientY;
+            return Number.isFinite(x) && Number.isFinite(y) ? { x: Math.round(x), y: Math.round(y) } : null;
+        };
+        for (const type of ['pointerdown', 'pointermove', 'pointerup', 'pointercancel', 'touchstart', 'touchmove', 'touchend', 'touchcancel']) {
+            document.addEventListener(type, event => {
+                if (!String(event.target?.className || '').includes('sa-order-row')) return;
+                const box = event.target.getBoundingClientRect();
+                window.__saOrderEvents.push({ type, pointerType: event.pointerType || '', target: event.target.getAttribute('data-provider-key'),
+                    point: point(event), targetBox: { x: Math.round(box.x), y: Math.round(box.y), width: Math.round(box.width), height: Math.round(box.height) },
+                    dragging: !!document.querySelector('.sa-order-row.sa-dragging'),
+                    drop: document.querySelector('.sa-order-row.sa-drop-target')?.getAttribute('data-provider-key') || null });
+            }, true);
+        }
+    });
+    const cdp = await context.newCDPSession(page);
+    await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 1 });
+    const sx = from.x + from.width / 2, sy = from.y + from.height / 2;
+    const ex = to.x + to.width / 2, ey = to.y + to.height * 0.4;
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: sx, y: sy, id: 1 }] });
+    for (let step = 1; step <= 8; step++) {
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove',
+            touchPoints: [{ x: sx + (ex - sx) * step / 8, y: sy + (ey - sy) * step / 8, id: 1 }] });
+    }
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await cdp.detach();
+    await page.waitForTimeout(150);
 }
 
 async function restore() {
@@ -197,16 +266,48 @@ async function restore() {
     }
     check('Token and proxy password remain blank after save/reload while presence placeholders survive');
 
-    stage = 'native-task-button-wiring';
-    let capturedUpdate = false;
-    await page.route('**/ScheduledTasks/Running/*', route => {
-        if (route.request().method() === 'POST') { capturedUpdate = true; return route.fulfill({ status: 204 }); }
-        return route.continue();
+    stage = 'source-order';
+    await select('proxy');
+    let order = await orderKeys();
+    ensure(JSON.stringify(order) === JSON.stringify(['Pool', 'Local', 'Thunder']), 'Default source order is not Pool, Local, Thunder');
+    check('Global settings renders three source rows in the default Pool, Local, Thunder order');
+    await mouseDragOrder(0, 2);
+    order = await orderKeys();
+    ensure(JSON.stringify(order) === JSON.stringify(['Local', 'Thunder', 'Pool']), 'Mouse drag did not move the first source to the end');
+    ensure(await page.locator('[data-unsaved]').isVisible(), 'Reordering did not mark settings as unsaved');
+    await save('重启 Emby 后生效');
+    settings = await call('/SubtitleAssistant/settings');
+    ensure(JSON.stringify(settings.ProviderDisplayOrder) === JSON.stringify(['Local', 'Thunder', 'Pool']), 'Saved source order was not persisted');
+    ensure((await page.locator('[data-status]').textContent()).includes('重启 Emby'), 'Order save did not warn that Emby must restart');
+    check('Mouse drag reorders sources, marks the form dirty, persists ProviderDisplayOrder and warns about the restart');
+    await touchDragOrder(2, 0);
+    report.touchOrderEvents = await page.evaluate(() => window.__saOrderEvents || []);
+    order = await orderKeys();
+    ensure(JSON.stringify(order) === JSON.stringify(['Pool', 'Local', 'Thunder']), 'Touch drag did not restore the default source order');
+    await save('重启 Emby 后生效');
+    settings = await call('/SubtitleAssistant/settings');
+    ensure(JSON.stringify(settings.ProviderDisplayOrder) === JSON.stringify(['Pool', 'Local', 'Thunder']), 'Touch reorder was not persisted');
+    check('Touch drag reorders sources and persists the restored default order');
+
+    stage = 'save-button';
+    const saveButton = page.getByRole('button', { name: '保存', exact: true });
+    const formBox = await page.locator('[data-settings-form]').boundingBox();
+    const buttonBox = await saveButton.boundingBox();
+    ensure(formBox && buttonBox && buttonBox.width >= formBox.width - 2, 'Save button is not full width inside the settings form');
+    ensure(Math.abs(buttonBox.x - formBox.x) <= 2
+        && Math.abs((buttonBox.x + buttonBox.width) - (formBox.x + formBox.width)) <= 2,
+        'Save button does not align with the settings form edges');
+    const positioned = await saveButton.evaluate(element => {
+        const values = [];
+        for (let node = element; node; node = node.parentElement) {
+            const position = getComputedStyle(node).position;
+            if (position === 'sticky' || position === 'fixed') values.push(position);
+        }
+        return values;
     });
-    await page.locator('[data-update]').click();
-    await page.locator('[data-status]').filter({ hasText: '更新任务已启动' }).waitFor();
-    ensure(capturedUpdate, 'Update button did not call the native task endpoint');
-    check('Update button discovers the real native task and sends its POST (intercepted, no task started)');
+    ensure(positioned.length === 0, 'Save button still sits inside a sticky or fixed bar');
+    ensure(await page.locator('.sa-actionbar, .sa-save').count() === 0, 'Legacy custom save bar is still rendered');
+    check('Save button is a native in-flow full-width emby-button aligned with the form edges');
 
     stage = 'proxy-inline-result';
     let proxyPayloadOk = false;
@@ -223,6 +324,18 @@ async function restore() {
     ensure(proxyPayloadOk, 'Proxy test did not send a purpose-only payload');
     ensure((await page.locator('[data-proxy-result]').textContent()).includes('代理'), 'Proxy route label is missing');
     check('Proxy test renders route and latency inline beside the button');
+
+    stage = 'mobile-layout';
+    await page.setViewportSize({ width: 390, height: 844 });
+    await select('proxy');
+    const mobileButton = await saveButton.boundingBox();
+    const mobileForm = await page.locator('[data-settings-form]').boundingBox();
+    ensure(mobileButton && mobileForm && mobileButton.width >= mobileForm.width - 2, 'Mobile save button is not full width');
+    ensure(await page.locator('.sa-content').evaluate(node => node.scrollWidth <= node.clientWidth + 1), 'Settings content overflows horizontally on mobile');
+    const mobileRows = await orderKeys();
+    ensure(JSON.stringify(mobileRows) === JSON.stringify(['Pool', 'Local', 'Thunder']), 'Mobile source order control lost its rows');
+    check('Mobile viewport keeps the save button full width, all source rows and no horizontal overflow');
+    await page.setViewportSize({ width: 1440, height: 1100 });
 
     stage = 'restore'; await restore();
     await page.reload({ waitUntil: 'domcontentloaded' }); await waitForSettings();

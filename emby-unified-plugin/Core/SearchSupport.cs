@@ -8,6 +8,7 @@ namespace Emby.SubtitleAssistant.Core
     {
         public string Name { get; set; }
         public double? DurationSeconds { get; set; }
+        public string DurationSource { get; set; }
         public long? SizeBytes { get; set; }
         public int StableOrder { get; set; }
         public string Id { get; set; }

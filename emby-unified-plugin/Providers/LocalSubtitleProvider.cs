@@ -16,7 +16,7 @@ namespace Emby.SubtitleAssistant.Providers
         private readonly ILogger _logger;
         public LocalSubtitleProvider(ILogManager logManager) { _logger = logManager?.GetLogger(GetType().Name); }
         public string Name => ProviderNames.Local;
-        public int Order => 80;
+        public int Order => ProviderOrder.Resolve(ProviderKeys.Local);
         public IEnumerable<VideoContentType> SupportedMediaTypes => new[] { VideoContentType.Movie, VideoContentType.Episode };
         public Task<IEnumerable<RemoteSubtitleInfo>> Search(SubtitleSearchRequest request, CancellationToken ct)
         {

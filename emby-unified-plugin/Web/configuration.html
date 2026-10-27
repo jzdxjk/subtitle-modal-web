@@ -64,31 +64,31 @@
 #SubtitleAssistantConfigurationPage .sa-check span{flex:1 1 auto}
 #SubtitleAssistantConfigurationPage .sa-sublist{margin:.4em 0 .9em}
 #SubtitleAssistantConfigurationPage .sa-btn,
-#SubtitleAssistantConfigurationPage .sa-secondary,
-#SubtitleAssistantConfigurationPage .sa-save{
+#SubtitleAssistantConfigurationPage .sa-secondary{
   font:inherit;font-size:.95em;border-radius:.45em;padding:.62em 1.1em;cursor:pointer;
   border:1px solid var(--sa-line);background:var(--sa-surface);color:var(--sa-text);
 }
-#SubtitleAssistantConfigurationPage .sa-save{background:var(--sa-accent);border-color:transparent;color:#fff;font-weight:600;display:block;width:100%;box-sizing:border-box;border-radius:6px;padding:.85em 1.1em;text-align:center}
-#SubtitleAssistantConfigurationPage .sa-save:disabled{opacity:.55;cursor:default}
 #SubtitleAssistantConfigurationPage .sa-secondary{background:transparent}
 #SubtitleAssistantConfigurationPage .sa-btn:focus-visible,
-#SubtitleAssistantConfigurationPage .sa-secondary:focus-visible,
-#SubtitleAssistantConfigurationPage .sa-save:focus-visible{outline:2px solid var(--sa-accent);outline-offset:2px}
+#SubtitleAssistantConfigurationPage .sa-secondary:focus-visible{outline:2px solid var(--sa-accent);outline-offset:2px}
+#SubtitleAssistantConfigurationPage .sa-submit{margin:1.4em 0 0;display:flex;flex-direction:column;gap:.55em}
+#SubtitleAssistantConfigurationPage .sa-submit-meta{display:flex;flex-wrap:wrap;align-items:center;gap:.7em;margin:0}
+#SubtitleAssistantConfigurationPage .sa-order{border:1px solid var(--sa-line);border-radius:.4em;overflow:hidden;background:var(--sa-surface)}
+#SubtitleAssistantConfigurationPage .sa-order-row{display:flex;align-items:center;gap:.7em;padding:.62em .8em;border-bottom:1px solid var(--sa-line);cursor:grab;user-select:none;-webkit-user-select:none;touch-action:none}
+#SubtitleAssistantConfigurationPage .sa-order-row:last-child{border-bottom:0}
+#SubtitleAssistantConfigurationPage .sa-order-row.sa-dragging{opacity:.45}
+#SubtitleAssistantConfigurationPage .sa-order-row.sa-drop-target{box-shadow:inset 0 2px 0 var(--sa-accent)}
+#SubtitleAssistantConfigurationPage .sa-order-row:focus-visible{outline:2px solid var(--sa-accent);outline-offset:-2px}
+#SubtitleAssistantConfigurationPage .sa-order-handle{color:var(--sa-muted);font-size:1.05em;line-height:1;letter-spacing:-.12em}
+#SubtitleAssistantConfigurationPage .sa-order-name{flex:1 1 auto;font-size:.95em}
 #SubtitleAssistantConfigurationPage .sa-test{margin-top:1em;padding-top:1em;border-top:1px solid var(--sa-line)}
 #SubtitleAssistantConfigurationPage .sa-test-controls{display:flex;flex-wrap:wrap;align-items:center;gap:.7em}
 #SubtitleAssistantConfigurationPage .sa-test-controls select{width:auto;min-width:11em;flex:0 1 17em}
 #SubtitleAssistantConfigurationPage .sa-test-result{font-size:.9em;color:var(--sa-muted);overflow-wrap:anywhere}
 #SubtitleAssistantConfigurationPage .sa-test-ok{color:var(--sa-accent);font-weight:600}
 #SubtitleAssistantConfigurationPage .sa-test-fail{color:#e5534b;font-weight:600}
-#SubtitleAssistantConfigurationPage .sa-actionbar{
-  position:sticky;bottom:0;z-index:5;display:flex;flex-wrap:wrap;align-items:center;gap:.8em;
-  margin:1.2em -2em 0;padding:1em 2em calc(1em + env(safe-area-inset-bottom,0px));
-  background:var(--sa-sunken);border-top:1px solid var(--sa-line);
-  -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);
-}
 #SubtitleAssistantConfigurationPage .sa-unsaved{font-size:.85em;color:var(--sa-accent);font-weight:600}
-#SubtitleAssistantConfigurationPage [data-status]{color:var(--sa-muted);font-size:.88em;margin-left:auto}
+#SubtitleAssistantConfigurationPage [data-status]{color:var(--sa-muted);font-size:.88em}
 #SubtitleAssistantConfigurationPage table{width:100%;border-collapse:collapse;margin:.3em 0 1.2em;font-size:.88em}
 #SubtitleAssistantConfigurationPage th,#SubtitleAssistantConfigurationPage td{
   padding:.55em .5em;border-bottom:1px solid var(--sa-line);text-align:left;vertical-align:top;overflow-wrap:anywhere;
@@ -99,8 +99,7 @@
   #SubtitleAssistantConfigurationPage .sa-content{padding:3.5em 1.1em .5em}
   #SubtitleAssistantConfigurationPage .sa-head h1{font-size:1.7em}
   #SubtitleAssistantConfigurationPage h2{font-size:1.4em}
-  #SubtitleAssistantConfigurationPage .sa-actionbar{margin-left:-1.1em;margin-right:-1.1em;padding-left:1.1em;padding-right:1.1em}
-  #SubtitleAssistantConfigurationPage [data-status]{margin-left:0;flex-basis:100%}
+  #SubtitleAssistantConfigurationPage [data-status]{flex-basis:100%}
 }
 </style>
 <div class="scrollSlider"><main class="sa-content">
@@ -180,6 +179,11 @@
         <section id="sa-panel-proxy" role="tabpanel" aria-labelledby="sa-tab-proxy" data-panel="proxy" hidden>
             <h2>全局设置</h2>
             <div class="sa-group">
+                <h3>搜索结果来源顺序</h3>
+                <p class="sa-hint">拖拽调整三个下载器在手动搜索结果里的先后，排在上面的先显示。只影响来源之间的先后，不改变每个来源内部的排序；自动补全仍按各媒体库原生顺序。保存后需重启 Emby 才会改变搜索结果里的来源顺序。</p>
+                <div class="sa-order" data-provider-order role="list" aria-label="搜索结果来源顺序"></div>
+            </div>
+            <div class="sa-group">
                 <h3>新入库自动补全</h3>
                 <label class="sa-check"><input type="checkbox" data-field="AutoDownloadOnNewMedia"><span>新入库媒体延迟 60 秒自动补全缺失的中文字幕</span></label>
                 <p class="sa-hint">遵守媒体库中本地、迅雷、海南鸡下载器的开关与顺序。已有中文字幕时跳过；没有结果时结束。历史补全和自动更新时间可在 Emby 计划任务中设置。</p>
@@ -227,10 +231,12 @@
                 </div>
             </div>
         </section>
-        <div class="sa-actionbar">
-            <button type="submit" is="emby-button" class="raised sa-save">保存</button>
-            <span class="sa-unsaved" data-unsaved hidden>未保存</span>
-            <span data-status role="status" aria-live="polite"></span>
+        <div class="sa-submit">
+            <button is="emby-button" type="submit" class="raised button-submit block"><span>保存</span></button>
+            <p class="sa-submit-meta">
+                <span class="sa-unsaved" data-unsaved hidden>未保存</span>
+                <span data-status role="status" aria-live="polite"></span>
+            </p>
         </div>
     </form>
 </main></div></div>

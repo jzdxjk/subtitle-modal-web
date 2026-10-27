@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using MediaBrowser.Model.Services;
 
 namespace Emby.SubtitleAssistant.Web;
@@ -23,6 +24,7 @@ public sealed class SaveSettingsRequest
     public string SimplifiedChineseLanguage { get; set; }
     public string TraditionalChineseLanguage { get; set; }
     public string UpdateManifestUrl { get; set; }
+    public string[] ProviderDisplayOrder { get; set; }
     public ProxySettingsUpdate Proxy { get; set; }
 }
 
@@ -54,6 +56,7 @@ public sealed class SettingsSnapshot
     public bool HasCloudApiToken { get; set; }
     public string CloudPathMappings { get; set; }
     public bool AutoDownloadOnNewMedia { get; set; }
+    public string[] ProviderDisplayOrder { get; set; }
     public ProxySnapshot Proxy { get; set; }
 }
 
@@ -85,6 +88,7 @@ public static class SettingsEditor
             PoolMaxResults = c.PoolMaxResults, PoolTimeoutSeconds = c.PoolTimeoutSeconds,
             CloudServiceUrl = c.CloudServiceUrl, HasCloudApiToken = !string.IsNullOrEmpty(c.CloudApiToken),
             CloudPathMappings = c.CloudPathMappings, AutoDownloadOnNewMedia = c.AutoDownloadOnNewMedia,
+            ProviderDisplayOrder = ProviderOrder.Normalize(c.ProviderDisplayOrder),
             Proxy = new ProxySnapshot
             {
                 Enabled = p.Enabled, Address = p.Address, Username = p.Username, HasPassword = !string.IsNullOrEmpty(p.Password),
@@ -100,6 +104,9 @@ public static class SettingsEditor
         var c = configuration;
         var p = c.Proxy ?? new ProxyConfiguration();
         var u = update.Proxy;
+        var requestedOrder = update.ProviderDisplayOrder;
+        if (requestedOrder != null && requestedOrder.Length > 0 && !ProviderOrder.IsValid(requestedOrder))
+            throw new ArgumentException("来源显示顺序必须包含本地、迅雷、海南鸡各一次。");
         var next = new PluginConfiguration
         {
             LocalPaths = update.LocalPaths ?? c.LocalPaths,
@@ -114,6 +121,7 @@ public static class SettingsEditor
             CloudApiToken = Secret(c.CloudApiToken, update.CloudApiToken, update.ClearCloudApiToken),
             CloudPathMappings = update.CloudPathMappings ?? c.CloudPathMappings,
             AutoDownloadOnNewMedia = update.AutoDownloadOnNewMedia ?? c.AutoDownloadOnNewMedia,
+            ProviderDisplayOrder = ProviderOrder.Normalize(requestedOrder != null && requestedOrder.Length > 0 ? requestedOrder : c.ProviderDisplayOrder),
             // The language markers are fixed in code; hidden legacy values must not override them.
             SimplifiedChineseLanguage = ChineseSubtitleLanguage.Simplified,
             TraditionalChineseLanguage = ChineseSubtitleLanguage.Traditional,

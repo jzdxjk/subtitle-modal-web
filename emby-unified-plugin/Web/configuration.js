@@ -13,6 +13,10 @@ define(["baseView"], function (BaseView) {
         return ApiClient.ajax(options);
     }
 
+    var PROVIDER_LABELS = { Local: "本地字幕", Thunder: "迅雷字幕", Pool: "海南鸡字幕" };
+    var PROVIDER_DEFAULT_ORDER = ["Pool", "Local", "Thunder"];
+    function providerLabel(key) { return PROVIDER_LABELS[key] || key; }
+
     function View(view) {
         BaseView.apply(this, arguments);
         this.view = view; this.activeTab = "local"; this.active = false; this.admin = false; this.settings = null;
@@ -48,6 +52,8 @@ define(["baseView"], function (BaseView) {
             else field.value = value === undefined || value === null ? "" : String(value);
         });
         this.form.querySelectorAll("[data-clear]").forEach(function (field) { field.checked = false; });
+        this.providerOrder = (settings.ProviderDisplayOrder && settings.ProviderDisplayOrder.length ? settings.ProviderDisplayOrder : PROVIDER_DEFAULT_ORDER).slice();
+        this.renderOrder();
         this.updateDirty();
         this.updateTabOverflow();
     };
@@ -65,6 +71,10 @@ define(["baseView"], function (BaseView) {
         this.form.querySelectorAll("[data-clear]").forEach(function (field) {
             if (field.checked) writePath(result, field.getAttribute("data-clear"), true);
         });
+        var order = this.providerOrder || [];
+        var savedOrder = (settings && settings.ProviderDisplayOrder) || [];
+        var orderChanged = order.length !== savedOrder.length || order.some(function (key, index) { return key !== savedOrder[index]; });
+        if (orderChanged) result.ProviderDisplayOrder = order.slice();
         return result;
     };
     View.prototype.updateDirty = function () {
@@ -77,6 +87,146 @@ define(["baseView"], function (BaseView) {
         var tabs = this.view.querySelector(".sa-tabs");
         if (tabs) tabs.classList.toggle("sa-tabs-scrollable", tabs.scrollWidth > tabs.clientWidth + 1);
     };
+    View.prototype.renderOrder = function () {
+        var self = this, body = this.view.querySelector("[data-provider-order]");
+        if (!body) return;
+        body.textContent = "";
+        (self.providerOrder || []).forEach(function (key) {
+            var row = document.createElement("div");
+            row.className = "sa-order-row"; row.setAttribute("role", "listitem"); row.setAttribute("data-provider-key", key);
+            row.setAttribute("tabindex", "0"); row.setAttribute("aria-label", providerLabel(key) + "，使用上下方向键调整顺序");
+            var handle = document.createElement("span");
+            handle.className = "sa-order-handle"; handle.setAttribute("aria-hidden", "true"); handle.textContent = "≡";
+            var name = document.createElement("span");
+            name.className = "sa-order-name"; name.textContent = providerLabel(key);
+            row.appendChild(handle); row.appendChild(name);
+            row.addEventListener("pointerdown", function (event) { self.startOrderDrag(event, row, key); });
+            row.addEventListener("touchstart", function (event) { self.startOrderTouch(event, row, key); }, { passive: false });
+            row.addEventListener("keydown", function (event) { self.orderKeyDown(event, key); });
+            body.appendChild(row);
+        });
+    };
+    View.prototype.clearOrderDrag = function () {
+        this.view.querySelectorAll(".sa-order-row").forEach(function (row) { row.classList.remove("sa-dragging", "sa-drop-target"); });
+    };
+    View.prototype.markOrderTarget = function (row) {
+        this.clearOrderDrag();
+        if (this.dragRow) this.dragRow.classList.add("sa-dragging");
+        if (row) row.classList.add("sa-drop-target");
+    };
+    View.prototype.orderRowAt = function (x, y) {
+        var body = this.view.querySelector("[data-provider-order]"), rows;
+        if (!body) return null;
+        var area = body.getBoundingClientRect();
+        if (x < area.left - 48 || x > area.right + 48) return null;
+        rows = Array.prototype.slice.call(body.querySelectorAll(".sa-order-row"));
+        if (!rows.length) return null;
+        for (var i = 0; i < rows.length; i++) {
+            var box = rows[i].getBoundingClientRect();
+            if (y < box.top + box.height / 2) return rows[i];
+        }
+        return rows[rows.length - 1];
+    };
+    View.prototype.startOrderDrag = function (event, row, key) {
+        if (this.dragKey) return;
+        if (event.button !== undefined && event.button !== 0) return;
+        if (event.target && event.target.closest && event.target.closest("button, input, a, select")) return;
+        event.preventDefault();
+        this.dragKey = key; this.dragRow = row; row.classList.add("sa-dragging");
+        if (row.focus) row.focus({ preventScroll: true });
+        if (row.setPointerCapture && event.pointerId !== undefined) { try { row.setPointerCapture(event.pointerId); } catch (ignore) { } }
+        this.onOrderPointerMove = this.orderPointerMove.bind(this);
+        this.onOrderPointerUp = this.orderPointerEnd.bind(this);
+        document.addEventListener("pointermove", this.onOrderPointerMove, { passive: false });
+        document.addEventListener("pointerup", this.onOrderPointerUp);
+        document.addEventListener("pointercancel", this.onOrderPointerUp);
+    };
+    View.prototype.startOrderTouch = function (event, row, key) {
+        if (this.dragKey) return;
+        if (!event.touches || event.touches.length !== 1) return;
+        event.preventDefault();
+        this.dragKey = key; this.dragRow = row; row.classList.add("sa-dragging");
+        this.touchTargetKey = key;
+        if (row.focus) row.focus({ preventScroll: true });
+        this.onOrderTouchMove = this.orderTouchMove.bind(this);
+        this.onOrderTouchEnd = this.orderTouchEnd.bind(this);
+        document.addEventListener("touchmove", this.onOrderTouchMove, { passive: false });
+        document.addEventListener("touchend", this.onOrderTouchEnd);
+        document.addEventListener("touchcancel", this.onOrderTouchEnd);
+    };
+    View.prototype.orderTouchMove = function (event) {
+        var touch, row;
+        if (!this.dragKey) return;
+        if (event.cancelable) event.preventDefault();
+        touch = event.touches && event.touches[0];
+        if (!touch) return;
+        row = this.orderRowAt(touch.clientX, touch.clientY);
+        if (row) {
+            this.touchTargetKey = row.getAttribute("data-provider-key");
+            this.markOrderTarget(row);
+        }
+    };
+    View.prototype.orderTouchEnd = function (event) {
+        var touch = event.changedTouches && event.changedTouches[0];
+        var row = touch ? this.orderRowAt(touch.clientX, touch.clientY) : null;
+        var target = row ? row.getAttribute("data-provider-key") : this.touchTargetKey;
+        this.finishOrderDrag(target || null);
+    };
+    View.prototype.orderPointerMove = function (event) {
+        var row;
+        if (!this.dragKey) return;
+        event.preventDefault();
+        row = this.orderRowAt(event.clientX, event.clientY);
+        if (row) this.markOrderTarget(row);
+    };
+    View.prototype.orderPointerEnd = function (event) {
+        var row = this.orderRowAt(event.clientX, event.clientY);
+        this.finishOrderDrag(row ? row.getAttribute("data-provider-key") : null);
+    };
+    View.prototype.finishOrderDrag = function (targetKey) {
+        var key = this.dragKey;
+        this.dragKey = null; this.dragRow = null; this.touchTargetKey = null; this.clearOrderDrag();
+        if (this.onOrderPointerMove) document.removeEventListener("pointermove", this.onOrderPointerMove);
+        if (this.onOrderPointerUp) {
+            document.removeEventListener("pointerup", this.onOrderPointerUp);
+            document.removeEventListener("pointercancel", this.onOrderPointerUp);
+        }
+        if (this.onOrderTouchMove) document.removeEventListener("touchmove", this.onOrderTouchMove);
+        if (this.onOrderTouchEnd) {
+            document.removeEventListener("touchend", this.onOrderTouchEnd);
+            document.removeEventListener("touchcancel", this.onOrderTouchEnd);
+        }
+        if (key && targetKey) this.dropOrder(key, targetKey);
+    };
+    View.prototype.dropOrder = function (fromKey, targetKey) {
+        var order = this.providerOrder || [];
+        var from = order.indexOf(fromKey), to = order.indexOf(targetKey);
+        if (from < 0 || to < 0 || from === to) return;
+        var next = order.slice();
+        var moved = next.splice(from, 1)[0];
+        next.splice(to, 0, moved);
+        this.providerOrder = next;
+        this.renderOrder();
+        this.updateDirty();
+    };
+    View.prototype.orderKeyDown = function (event, key) {
+        var order = this.providerOrder || [], index = order.indexOf(key), target;
+        if (event.key === "ArrowUp") target = index - 1;
+        else if (event.key === "ArrowDown") target = index + 1;
+        else if (event.key === "Home") target = 0;
+        else if (event.key === "End") target = order.length - 1;
+        else return;
+        event.preventDefault();
+        if (target < 0 || target >= order.length || target === index) return;
+        var next = order.slice();
+        next.splice(index, 1);
+        next.splice(target, 0, key);
+        this.providerOrder = next;
+        this.renderOrder();
+        this.updateDirty();
+        var moved = this.view.querySelector('.sa-order-row[data-provider-key="' + key + '"]');
+        if (moved && moved.focus) moved.focus({ preventScroll: true });
+    };
     View.prototype.setProxyResult = function (text, state) {
         if (!this.proxyResult) return;
         this.proxyResult.textContent = text || "";
@@ -88,10 +238,14 @@ define(["baseView"], function (BaseView) {
         if (!self.admin || !self.settings) return Promise.reject(Error("仅限管理员。"));
         var patch;
         try { patch = self.patch(); } catch (error) { self.status(error.message); return Promise.reject(error); }
+        var orderChanged = patch.ProviderDisplayOrder !== undefined;
         self.status("正在保存…");
         return request("settings", "POST", patch).then(function (result) {
             if (!result.Ok) throw Error(result.Error || "保存失败。");
-            if (self.active) { self.fill(result.Settings); self.status("设置已保存。"); }
+            if (self.active) {
+                self.fill(result.Settings);
+                self.status(orderChanged ? "来源顺序已保存，重启 Emby 后生效。" : "设置已保存。");
+            }
             return result;
         }).catch(function (error) { if (self.active) self.status("保存失败，请检查设置和管理员登录状态。"); throw error; });
     };
@@ -186,6 +340,7 @@ define(["baseView"], function (BaseView) {
     };
     View.prototype.destroy = function () {
         this.active = false; clearInterval(this.timer);
+        this.finishOrderDrag(null);
         this.form.removeEventListener("submit", this.onSubmit);
         this.form.removeEventListener("input", this.onInput);
         this.form.removeEventListener("change", this.onInput);

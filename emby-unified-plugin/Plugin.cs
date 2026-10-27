@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using MediaBrowser.Common.Configuration;
 using MediaBrowser.Common.Plugins;
@@ -59,4 +60,39 @@ public static class ProviderNames
     public const string Local = "本地字幕";
     public const string Thunder = "迅雷字幕";
     public const string Pool = "海南鸡字幕";
+}
+
+public static class ProviderKeys
+{
+    public const string Local = "Local";
+    public const string Thunder = "Thunder";
+    public const string Pool = "Pool";
+}
+
+public static class ProviderOrder
+{
+    public static string[] Default => new[] { ProviderKeys.Pool, ProviderKeys.Local, ProviderKeys.Thunder };
+
+    public static bool IsValid(System.Collections.Generic.IReadOnlyList<string> order)
+    {
+        if (order == null || order.Count != 3) return false;
+        var seen = new System.Collections.Generic.HashSet<string>(System.StringComparer.Ordinal);
+        foreach (var key in order)
+        {
+            if (key != ProviderKeys.Local && key != ProviderKeys.Thunder && key != ProviderKeys.Pool) return false;
+            if (!seen.Add(key)) return false;
+        }
+        return true;
+    }
+
+    public static string[] Normalize(System.Collections.Generic.IReadOnlyList<string> order)
+        => IsValid(order) ? order.ToArray() : Default;
+
+    public static int Resolve(string key)
+    {
+        var order = Normalize(Plugin.CurrentConfiguration?.ProviderDisplayOrder);
+        var index = System.Array.IndexOf(order, key);
+        if (index < 0) index = 2;
+        return 80 + index * 10;
+    }
 }

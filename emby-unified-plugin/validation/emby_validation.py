@@ -113,7 +113,7 @@ class EmbyClient:
         self.token = token
         self.last_status = None
 
-    def request(self, method, path, payload=None):
+    def request(self, method, path, payload=None, timeout=15):
         self.last_status = None
         if not path.startswith("/") or "://" in path:
             raise ValueError("API path must stay on the isolated loopback host")
@@ -130,7 +130,7 @@ class EmbyClient:
             headers["Content-Type"] = "application/json"
         request = urllib.request.Request(self.base + path, data=data, headers=headers, method=method)
         try:
-            with urllib.request.urlopen(request, timeout=15) as response:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
                 self.last_status = response.status
                 body = response.read()
                 if not body:

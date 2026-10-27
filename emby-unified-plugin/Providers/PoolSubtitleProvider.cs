@@ -20,7 +20,7 @@ namespace Emby.SubtitleAssistant.Providers
         public PoolSubtitleProvider(ILogManager logManager) : this(PluginHttpClient.Shared) { _logger = logManager?.GetLogger(GetType().Name); }
         internal PoolSubtitleProvider(PluginHttpClient http) { _http = http; }
         public string Name => ProviderNames.Pool;
-        public int Order => 100;
+        public int Order => ProviderOrder.Resolve(ProviderKeys.Pool);
         public IEnumerable<VideoContentType> SupportedMediaTypes => new[] { VideoContentType.Movie, VideoContentType.Episode };
         public async Task<IEnumerable<RemoteSubtitleInfo>> Search(SubtitleSearchRequest request, CancellationToken ct)
         {

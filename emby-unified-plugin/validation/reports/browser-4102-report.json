@@ -9,8 +9,12 @@
     "Fixed language markers, manifest URL and custom test URL are absent from the page",
     "Local-only save and cross-tab save preserve the other source settings",
     "Token and proxy password remain blank after save/reload while presence placeholders survive",
-    "Update button discovers the real native task and sends its POST (intercepted, no task started)",
-    "Proxy test renders route and latency inline beside the button"
+    "Global settings renders three source rows in the default Pool, Local, Thunder order",
+    "Mouse drag reorders sources, marks the form dirty, persists ProviderDisplayOrder and warns about the restart",
+    "Touch drag reorders sources and persists the restored default order",
+    "Save button is a native in-flow full-width emby-button aligned with the form edges",
+    "Proxy test renders route and latency inline beside the button",
+    "Mobile viewport keeps the save button full width, all source rows and no horizontal overflow"
   ],
   "screenshots": [
     "4102-local.png",
@@ -25,12 +29,17 @@
   "failedResources": [],
   "recentResources": [
     {
-      "path": "/web/modules/notifications.js",
+      "path": "/web/modules/playback/mediasession.js",
       "status": 200,
       "type": "script"
     },
     {
-      "path": "/web/modules/nowplayingbar/nowplayingbar.js",
+      "path": "/web/modules/fonts/inter/intervariable.woff2",
+      "status": 200,
+      "type": "font"
+    },
+    {
+      "path": "/web/modules/fullscreen/fullscreen-dc.js",
       "status": 200,
       "type": "script"
     },
@@ -40,27 +49,12 @@
       "type": "script"
     },
     {
-      "path": "/emby/System/Info",
+      "path": "/web/modules/screensavermanager.js",
       "status": 200,
-      "type": "fetch"
+      "type": "script"
     },
     {
       "path": "/web/modules/themes/themecontroller.js",
-      "status": 200,
-      "type": "script"
-    },
-    {
-      "path": "/web/modules/actionsheet/actionsheet.js",
-      "status": 200,
-      "type": "script"
-    },
-    {
-      "path": "/web/modules/fullscreen/fullscreen-dc.js",
-      "status": 200,
-      "type": "script"
-    },
-    {
-      "path": "/web/modules/screensavermanager.js",
       "status": 200,
       "type": "script"
     },
@@ -70,24 +64,34 @@
       "type": "script"
     },
     {
+      "path": "/web/modules/actionsheet/actionsheet.js",
+      "status": 200,
+      "type": "script"
+    },
+    {
       "path": "/web/modules/playback/osdcontroller.js",
       "status": 200,
       "type": "script"
     },
     {
-      "path": "/emby/usersettings/[redacted]",
+      "path": "/emby/System/Info",
       "status": 200,
-      "type": "fetch"
-    },
-    {
-      "path": "/emby/Sessions/Capabilities/Full",
-      "status": 204,
       "type": "fetch"
     },
     {
       "path": "/web/modules/themes/dark/theme.json",
       "status": 200,
       "type": "xhr"
+    },
+    {
+      "path": "/web/modules/appfooter/appfooter.css",
+      "status": 200,
+      "type": "stylesheet"
+    },
+    {
+      "path": "/web/modules/dockedtabs/dockedtabs.css",
+      "status": 200,
+      "type": "stylesheet"
     },
     {
       "path": "/web/modules/actionsheet/actionsheet.css",
@@ -100,14 +104,14 @@
       "type": "stylesheet"
     },
     {
-      "path": "/web/modules/appfooter/appfooter.css",
+      "path": "/emby/usersettings/[redacted]",
       "status": 200,
-      "type": "stylesheet"
+      "type": "fetch"
     },
     {
-      "path": "/web/modules/dockedtabs/dockedtabs.css",
-      "status": 200,
-      "type": "stylesheet"
+      "path": "/emby/Sessions/Capabilities/Full",
+      "status": 204,
+      "type": "fetch"
     },
     {
       "path": "/web/modules/registrationservices/registrationservices.js",
@@ -165,19 +169,14 @@
       "type": "script"
     },
     {
-      "path": "/web/modules/emby-elements/emby-collapse/emby-collapse.js",
-      "status": 200,
-      "type": "script"
-    },
-    {
-      "path": "/emby/Users/[redacted]/Views",
-      "status": 200,
-      "type": "fetch"
-    },
-    {
       "path": "/emby/SubtitleAssistant/settings",
       "status": 200,
       "type": "fetch"
+    },
+    {
+      "path": "/web/modules/emby-elements/emby-collapse/emby-collapse.js",
+      "status": 200,
+      "type": "script"
     },
     {
       "path": "/emby/web/configurationpages",
@@ -185,12 +184,17 @@
       "type": "fetch"
     },
     {
-      "path": "/web/modules/emby-elements/emby-input/emby-input.css",
+      "path": "/emby/Users/[redacted]/Views",
+      "status": 200,
+      "type": "fetch"
+    },
+    {
+      "path": "/web/modules/emby-elements/emby-input/emby-input_3_nontv.css",
       "status": 200,
       "type": "stylesheet"
     },
     {
-      "path": "/web/modules/emby-elements/emby-input/emby-input_3_nontv.css",
+      "path": "/web/modules/emby-elements/emby-input/emby-input.css",
       "status": 200,
       "type": "stylesheet"
     },
@@ -251,10 +255,173 @@
       "status": 200
     },
     {
+      "method": "POST",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "status": 200
+    },
+    {
       "method": "GET",
       "status": 200
     }
   ],
   "initialDefaultsWereFive": true,
+  "touchOrderEvents": [
+    {
+      "type": "pointermove",
+      "pointerType": "touch",
+      "target": "Pool",
+      "point": {
+        "x": 678,
+        "y": 384
+      },
+      "targetBox": {
+        "x": 439,
+        "y": 375,
+        "width": 718,
+        "height": 38
+      },
+      "dragging": true,
+      "drop": null
+    },
+    {
+      "type": "pointermove",
+      "pointerType": "touch",
+      "target": "Pool",
+      "point": {
+        "x": 678,
+        "y": 373
+      },
+      "targetBox": {
+        "x": 439,
+        "y": 375,
+        "width": 718,
+        "height": 38
+      },
+      "dragging": true,
+      "drop": "Pool"
+    },
+    {
+      "type": "pointermove",
+      "pointerType": "touch",
+      "target": "Pool",
+      "point": {
+        "x": 678,
+        "y": 363
+      },
+      "targetBox": {
+        "x": 439,
+        "y": 375,
+        "width": 718,
+        "height": 38
+      },
+      "dragging": true,
+      "drop": "Pool"
+    },
+    {
+      "type": "pointermove",
+      "pointerType": "touch",
+      "target": "Pool",
+      "point": {
+        "x": 678,
+        "y": 353
+      },
+      "targetBox": {
+        "x": 439,
+        "y": 375,
+        "width": 718,
+        "height": 38
+      },
+      "dragging": true,
+      "drop": "Pool"
+    },
+    {
+      "type": "pointermove",
+      "pointerType": "touch",
+      "target": "Pool",
+      "point": {
+        "x": 678,
+        "y": 342
+      },
+      "targetBox": {
+        "x": 439,
+        "y": 375,
+        "width": 718,
+        "height": 38
+      },
+      "dragging": true,
+      "drop": "Thunder"
+    },
+    {
+      "type": "pointermove",
+      "pointerType": "touch",
+      "target": "Pool",
+      "point": {
+        "x": 678,
+        "y": 332
+      },
+      "targetBox": {
+        "x": 439,
+        "y": 375,
+        "width": 718,
+        "height": 38
+      },
+      "dragging": true,
+      "drop": "Thunder"
+    },
+    {
+      "type": "pointermove",
+      "pointerType": "touch",
+      "target": "Pool",
+      "point": {
+        "x": 678,
+        "y": 322
+      },
+      "targetBox": {
+        "x": 439,
+        "y": 375,
+        "width": 718,
+        "height": 38
+      },
+      "dragging": true,
+      "drop": "Thunder"
+    },
+    {
+      "type": "pointermove",
+      "pointerType": "touch",
+      "target": "Pool",
+      "point": {
+        "x": 678,
+        "y": 312
+      },
+      "targetBox": {
+        "x": 439,
+        "y": 375,
+        "width": 718,
+        "height": 38
+      },
+      "dragging": true,
+      "drop": "Thunder"
+    },
+    {
+      "type": "pointerup",
+      "pointerType": "touch",
+      "target": "Pool",
+      "point": {
+        "x": 678,
+        "y": 312
+      },
+      "targetBox": {
+        "x": 439,
+        "y": 375,
+        "width": 718,
+        "height": 38
+      },
+      "dragging": true,
+      "drop": "Local"
+    }
+  ],
   "ok": true
 }

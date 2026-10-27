@@ -4,9 +4,9 @@
 
 ```json
 {
-  "version": "1.0.0.1",
-  "download_url": "https://github.com/jzdxjk/subtitle-modal-web/releases/download/emby-subtitle-assistant-v1.0.0.1/Emby.SubtitleAssistant.dll",
-  "sha256": "替换为目标DLL的64位十六进制SHA256",
+  "version": "1.0.0.3",
+  "download_url": "https://github.com/jzdxjk/subtitle-modal-web/releases/download/emby-subtitle-assistant-v1.0.0.3/Emby.SubtitleAssistant.dll",
+  "sha256": "932a3ec4ff0ee5e26f1e2db7673c8f6293d1dc7bd715917aef51f2dd771de309",
   "plugin_id": "76cd4168-e0b3-4aac-8a52-5cb638121744",
   "channel": "stable",
   "minimum_server_versions": {
