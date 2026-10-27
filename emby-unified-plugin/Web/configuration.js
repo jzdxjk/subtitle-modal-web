@@ -17,9 +17,18 @@ define(["baseView"], function (BaseView) {
         BaseView.apply(this, arguments);
         this.view = view; this.activeTab = "local"; this.active = false; this.admin = false; this.settings = null;
         this.form = view.querySelector("[data-settings-form]"); this.timer = null; this.polling = false;
+        this.proxyResult = view.querySelector("[data-proxy-result]"); this.unsaved = view.querySelector("[data-unsaved]");
         var self = this;
-        this.onSubmit = function (event) { self.save(event).catch(function () {}); }; this.onClick = this.click.bind(this); this.onKeyDown = this.keyDown.bind(this);
-        this.form.addEventListener("submit", this.onSubmit); view.addEventListener("click", this.onClick); view.addEventListener("keydown", this.onKeyDown);
+        this.onSubmit = function (event) { self.save(event).catch(function () {}); };
+        this.onClick = this.click.bind(this); this.onKeyDown = this.keyDown.bind(this);
+        this.onInput = function () { self.updateDirty(); };
+        this.onResize = function () { self.updateTabOverflow(); };
+        this.form.addEventListener("submit", this.onSubmit);
+        this.form.addEventListener("input", this.onInput);
+        this.form.addEventListener("change", this.onInput);
+        view.addEventListener("click", this.onClick);
+        view.addEventListener("keydown", this.onKeyDown);
+        window.addEventListener("resize", this.onResize);
     }
     Object.assign(View.prototype, BaseView.prototype);
 
@@ -39,6 +48,8 @@ define(["baseView"], function (BaseView) {
             else field.value = value === undefined || value === null ? "" : String(value);
         });
         this.form.querySelectorAll("[data-clear]").forEach(function (field) { field.checked = false; });
+        this.updateDirty();
+        this.updateTabOverflow();
     };
     View.prototype.patch = function () {
         var result = {}, settings = this.settings;
@@ -55,6 +66,21 @@ define(["baseView"], function (BaseView) {
             if (field.checked) writePath(result, field.getAttribute("data-clear"), true);
         });
         return result;
+    };
+    View.prototype.updateDirty = function () {
+        if (!this.settings) return;
+        var dirty = true;
+        try { dirty = Object.keys(this.patch()).length > 0; } catch (error) { dirty = true; }
+        this.unsaved.hidden = !dirty;
+    };
+    View.prototype.updateTabOverflow = function () {
+        var tabs = this.view.querySelector(".sa-tabs");
+        if (tabs) tabs.classList.toggle("sa-tabs-scrollable", tabs.scrollWidth > tabs.clientWidth + 1);
+    };
+    View.prototype.setProxyResult = function (text, state) {
+        if (!this.proxyResult) return;
+        this.proxyResult.textContent = text || "";
+        this.proxyResult.className = "sa-test-result" + (state ? " " + state : "");
     };
     View.prototype.save = function (event) {
         if (event) event.preventDefault();
@@ -85,17 +111,31 @@ define(["baseView"], function (BaseView) {
         index = event.key === "Home" ? 0 : event.key === "End" ? buttons.length - 1 : (index + (event.key === "ArrowRight" ? 1 : -1) + buttons.length) % buttons.length;
         this.selectTab(buttons[index].getAttribute("data-tab")); buttons[index].focus();
     };
+    View.prototype.testProxy = function (button) {
+        var self = this;
+        button.disabled = true;
+        self.setProxyResult("测试中…", "");
+        self.save().then(function () {
+            return request("proxy/test", "POST", { Purpose: self.view.querySelector("[data-proxy-purpose]").value });
+        }).then(function (result) {
+            if (!self.active) return;
+            if (result.Ok) {
+                var route = result.Route === "Proxy" ? "代理" : "直连";
+                var latency = typeof result.LatencyMs === "number" ? result.LatencyMs + " ms" : "未知";
+                self.setProxyResult(route + " · 延迟 " + latency, "sa-test-ok");
+            } else {
+                self.setProxyResult(result.Error || "连接失败。", "sa-test-fail");
+            }
+        }).catch(function () {
+            if (self.active) self.setProxyResult("测试未完成，请检查设置和管理员登录状态。", "sa-test-fail");
+        }).then(function () { button.disabled = false; });
+    };
     View.prototype.click = function (event) {
         var self = this, target = event.target.closest("button");
         if (!target || !self.admin) return;
         if (target.hasAttribute("data-tab")) self.selectTab(target.getAttribute("data-tab"));
         if (target.hasAttribute("data-refresh-jobs")) self.pollJobs();
-        if (target.hasAttribute("data-proxy-test")) {
-            self.save().then(function () {
-                self.status("正在测试已保存的流量路由…");
-                return request("proxy/test", "POST", { Url: self.view.querySelector("[data-proxy-test-url]").value, Purpose: self.view.querySelector("[data-proxy-purpose]").value });
-            }).then(function (result) { if (self.active) self.status(result.Ok ? "连接成功。" : result.Error || "连接失败。"); }).catch(function () { if (self.active) self.status("测试未完成，请检查设置和管理员登录状态。"); });
-        }
+        if (target.hasAttribute("data-proxy-test")) self.testProxy(target);
         if (target.hasAttribute("data-update")) {
             self.status("正在启动更新任务…");
             ApiClient.ajax({ type: "GET", url: ApiClient.getUrl("ScheduledTasks"), dataType: "json" }).then(function (tasks) {
@@ -154,7 +194,12 @@ define(["baseView"], function (BaseView) {
     };
     View.prototype.destroy = function () {
         this.active = false; clearInterval(this.timer);
-        this.form.removeEventListener("submit", this.onSubmit); this.view.removeEventListener("click", this.onClick); this.view.removeEventListener("keydown", this.onKeyDown);
+        this.form.removeEventListener("submit", this.onSubmit);
+        this.form.removeEventListener("input", this.onInput);
+        this.form.removeEventListener("change", this.onInput);
+        this.view.removeEventListener("click", this.onClick);
+        this.view.removeEventListener("keydown", this.onKeyDown);
+        window.removeEventListener("resize", this.onResize);
         BaseView.prototype.destroy.apply(this, arguments);
     };
     return View;

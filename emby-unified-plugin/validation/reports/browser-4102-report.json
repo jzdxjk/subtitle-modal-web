@@ -6,9 +6,11 @@
     "Real Emby browser login completed with the isolated administrator",
     "All five real settings tabs switch with only their matching panel visible",
     "All three source display limits default to five in the actual page",
+    "Fixed language markers, manifest URL and custom test URL are absent from the page",
     "Local-only save and cross-tab save preserve the other source settings",
     "Token and proxy password remain blank after save/reload while presence placeholders survive",
-    "Update button discovers the real native task and sends its POST (intercepted, no task started)"
+    "Update button discovers the real native task and sends its POST (intercepted, no task started)",
+    "Proxy test renders route and latency inline beside the button"
   ],
   "screenshots": [
     "4102-local.png",
@@ -23,12 +25,12 @@
   "failedResources": [],
   "recentResources": [
     {
-      "path": "/web/modules/nowplayingbar/nowplayingbar.js",
+      "path": "/web/modules/notifications.js",
       "status": 200,
       "type": "script"
     },
     {
-      "path": "/web/modules/playback/mediasession.js",
+      "path": "/web/modules/nowplayingbar/nowplayingbar.js",
       "status": 200,
       "type": "script"
     },
@@ -48,12 +50,12 @@
       "type": "script"
     },
     {
-      "path": "/web/modules/fullscreen/fullscreen-dc.js",
+      "path": "/web/modules/actionsheet/actionsheet.js",
       "status": 200,
       "type": "script"
     },
     {
-      "path": "/web/modules/appfooter/appfooter.js",
+      "path": "/web/modules/fullscreen/fullscreen-dc.js",
       "status": 200,
       "type": "script"
     },
@@ -63,7 +65,7 @@
       "type": "script"
     },
     {
-      "path": "/web/modules/actionsheet/actionsheet.js",
+      "path": "/web/modules/appfooter/appfooter.js",
       "status": 200,
       "type": "script"
     },
@@ -88,22 +90,22 @@
       "type": "xhr"
     },
     {
-      "path": "/web/modules/appfooter/appfooter.css",
-      "status": 200,
-      "type": "stylesheet"
-    },
-    {
       "path": "/web/modules/actionsheet/actionsheet.css",
       "status": 200,
       "type": "stylesheet"
     },
     {
-      "path": "/web/modules/dockedtabs/dockedtabs.css",
+      "path": "/web/modules/actionsheet/actionsheet_nontv.css",
       "status": 200,
       "type": "stylesheet"
     },
     {
-      "path": "/web/modules/actionsheet/actionsheet_nontv.css",
+      "path": "/web/modules/appfooter/appfooter.css",
+      "status": 200,
+      "type": "stylesheet"
+    },
+    {
+      "path": "/web/modules/dockedtabs/dockedtabs.css",
       "status": 200,
       "type": "stylesheet"
     },
@@ -138,14 +140,14 @@
       "type": "script"
     },
     {
-      "path": "/web/modules/fonts/material-icons/mi_2024_05.woff2",
-      "status": 200,
-      "type": "font"
-    },
-    {
       "path": "/web/modules/viewmanager/baseview.js",
       "status": 200,
       "type": "script"
+    },
+    {
+      "path": "/web/modules/fonts/material-icons/mi_2024_05.woff2",
+      "status": 200,
+      "type": "font"
     },
     {
       "path": "/web/modules/themes/light/theme.css",
@@ -168,12 +170,12 @@
       "type": "script"
     },
     {
-      "path": "/emby/SubtitleAssistant/settings",
+      "path": "/emby/Users/[redacted]/Views",
       "status": 200,
       "type": "fetch"
     },
     {
-      "path": "/emby/Users/[redacted]/Views",
+      "path": "/emby/SubtitleAssistant/settings",
       "status": 200,
       "type": "fetch"
     },
@@ -242,6 +244,10 @@
     },
     {
       "method": "GET",
+      "status": 200
+    },
+    {
+      "method": "POST",
       "status": 200
     },
     {

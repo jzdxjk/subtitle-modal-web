@@ -28,8 +28,6 @@ internal static class LegacySettingsImporter
             if (local?.SubtitleLibraryPaths != null) result.LocalPaths = local.SubtitleLibraryPaths;
             if (pool?.PoolBaseUrl != null) result.PoolUrl = pool.PoolBaseUrl;
             if (pool?.RequestTimeoutSeconds != null) result.PoolTimeoutSeconds = pool.RequestTimeoutSeconds.Value;
-            if (pool?.SimplifiedChineseLanguage != null) result.SimplifiedChineseLanguage = pool.SimplifiedChineseLanguage;
-            if (pool?.TraditionalChineseLanguage != null) result.TraditionalChineseLanguage = pool.TraditionalChineseLanguage;
             if (thunder?.EnableAutoDownloadOnNewMedia != null || pool?.EnableAutoDownloadOnNewMedia != null)
                 result.AutoDownloadOnNewMedia = thunder?.EnableAutoDownloadOnNewMedia == true || pool?.EnableAutoDownloadOnNewMedia == true;
             if (cloud != null)

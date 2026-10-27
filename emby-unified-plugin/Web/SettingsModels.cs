@@ -54,9 +54,6 @@ public sealed class SettingsSnapshot
     public bool HasCloudApiToken { get; set; }
     public string CloudPathMappings { get; set; }
     public bool AutoDownloadOnNewMedia { get; set; }
-    public string SimplifiedChineseLanguage { get; set; }
-    public string TraditionalChineseLanguage { get; set; }
-    public string UpdateManifestUrl { get; set; }
     public ProxySnapshot Proxy { get; set; }
 }
 
@@ -87,8 +84,6 @@ public static class SettingsEditor
             PoolMaxResults = c.PoolMaxResults, PoolUrl = c.PoolUrl, PoolTimeoutSeconds = c.PoolTimeoutSeconds,
             CloudServiceUrl = c.CloudServiceUrl, HasCloudApiToken = !string.IsNullOrEmpty(c.CloudApiToken),
             CloudPathMappings = c.CloudPathMappings, AutoDownloadOnNewMedia = c.AutoDownloadOnNewMedia,
-            SimplifiedChineseLanguage = c.SimplifiedChineseLanguage, TraditionalChineseLanguage = c.TraditionalChineseLanguage,
-            UpdateManifestUrl = c.UpdateManifestUrl,
             Proxy = new ProxySnapshot
             {
                 Enabled = p.Enabled, Address = p.Address, Username = p.Username, HasPassword = !string.IsNullOrEmpty(p.Password),
@@ -116,9 +111,11 @@ public static class SettingsEditor
             CloudApiToken = Secret(c.CloudApiToken, update.CloudApiToken, update.ClearCloudApiToken),
             CloudPathMappings = update.CloudPathMappings ?? c.CloudPathMappings,
             AutoDownloadOnNewMedia = update.AutoDownloadOnNewMedia ?? c.AutoDownloadOnNewMedia,
-            SimplifiedChineseLanguage = update.SimplifiedChineseLanguage ?? c.SimplifiedChineseLanguage,
-            TraditionalChineseLanguage = update.TraditionalChineseLanguage ?? c.TraditionalChineseLanguage,
-            UpdateManifestUrl = update.UpdateManifestUrl ?? c.UpdateManifestUrl,
+            // The language markers are fixed in code; hidden legacy values must not override them.
+            SimplifiedChineseLanguage = ChineseSubtitleLanguage.Simplified,
+            TraditionalChineseLanguage = ChineseSubtitleLanguage.Traditional,
+            // The manifest URL is not user-configurable; always point at the official pointer release.
+            UpdateManifestUrl = PluginConfiguration.OfficialUpdateManifestUrl,
             MigrationVersion = c.MigrationVersion,
             Proxy = new ProxyConfiguration
             {

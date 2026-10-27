@@ -2,6 +2,7 @@
 """Native scheduled update against a private PE-version-only candidate."""
 
 import argparse
+import copy
 import hashlib
 import json
 import re
@@ -13,8 +14,8 @@ from automation_probe import run_task
 from proxy_probe import events
 
 
-SOURCE_SHA = "2694f2991f040f5603d88ab6d250ccf9650e8c7aa3a173bab848726ee981de31"
-UPGRADE_SHA = "df0916e3cf49b64447df71846162d597e15ba4fb4678b142aa4f88aaaf635a85"
+SOURCE_SHA = "71b23a58a9f633d9bbd6e26dd8cfec1e150fd6aaeb0721cc5bbef1abe514ad45"
+UPGRADE_SHA = "faf15e09733c3418b3b92a77c06d0260ca37f350b6f2c5d82929b8bb23249832"
 TASK_KEY = "SubtitleAssistantUpdate"
 BASE = "http://172.17.0.1:19100"
 
@@ -36,25 +37,26 @@ def probe(case, candidate, source_sha, upgrade_sha):
     if digest(destination) != source_sha or digest(package) != upgrade_sha:
         raise RuntimeError("update test artifacts differ from their pinned original/upgrade hashes")
     original = client.request("GET", "/Plugins/" + PLUGIN_ID + "/Configuration")
+    restore = copy.deepcopy(original)
     credentials = json.loads((ROOT / "mock-session.json").read_text())
     started = inspect(case)["State"]["StartedAt"]
     staging = destination.parent / ".subtitle-assistant-update"
     original_backups = set(staging.glob("*.bak"))
     manifest = {
-        "version": "1.0.0.1", "download_url": BASE + "/updates/Emby.SubtitleAssistant.dll",
+        "version": "1.0.0.2", "download_url": BASE + "/updates/Emby.SubtitleAssistant.dll",
         "sha256": "0" * 64, "plugin_id": PLUGIN_ID, "channel": "stable",
         "minimum_server_versions": {"4.8": "4.8.11.0", "4.9": "4.9.1.80", "4.10": "4.10.0.40"},
     }
     report = {"ServerVersion": case.version, "Candidate": candidate,
               "OriginalPinnedSha256": source_sha, "UpgradeSha256": upgrade_sha}
-    result = client.request("POST", "/SubtitleAssistant/settings", {
-        "UpdateManifestUrl": BASE + "/updates/update.json",
-        "Proxy": {"Enabled": True, "Address": "http://172.17.0.1:19101",
-                  "Username": credentials["Username"], "Password": credentials["Password"],
-                  "Thunder": True, "Pool": False, "Cloud": False, "Updates": True,
-                  "BypassLocal": False, "BypassHosts": ""},
-    })
-    if not result.get("Ok"):
+    configured = copy.deepcopy(original)
+    configured["UpdateManifestUrl"] = BASE + "/updates/update.json"
+    configured["Proxy"] = {"Enabled": True, "Address": "http://172.17.0.1:19101",
+                           "Username": credentials["Username"], "Password": credentials["Password"],
+                           "Thunder": True, "Pool": False, "Cloud": False, "Updates": True,
+                           "BypassLocal": False, "BypassHosts": ""}
+    client.request("POST", "/Plugins/" + PLUGIN_ID + "/Configuration", configured)
+    if client.last_status not in (200, 204):
         raise RuntimeError("could not configure private native update fixture")
     try:
         pending_before = bool(client.request("GET", "/System/Info").get("HasPendingRestart"))
@@ -87,11 +89,7 @@ def probe(case, candidate, source_sha, upgrade_sha):
             "RepeatCheckDoesNotDownloadPackageAgain",
         ])
     finally:
-        proxy = dict(original.get("Proxy") or {})
-        proxy["ClearPassword"] = not bool(proxy.get("Password"))
-        client.request("POST", "/SubtitleAssistant/settings", {
-            "UpdateManifestUrl": original["UpdateManifestUrl"], "Proxy": proxy,
-        })
+        client.request("POST", "/Plugins/" + PLUGIN_ID + "/Configuration", restore)
     write_private(ROOT / "reports" / (candidate + "-update-" + case.version + ".json"), report)
     return report
 

@@ -8,7 +8,7 @@ namespace Emby.SubtitleAssistant.Tests;
 
 public class UpdateManifestTests
 {
-    internal static UpdateManifest Manifest(string version = "1.0.0.1") => new UpdateManifest
+    internal static UpdateManifest Manifest(string version = "1.0.0.2") => new UpdateManifest
     {
         version = version, download_url = "https://release.invalid/Emby.SubtitleAssistant.dll",
         sha256 = new string('a', 64), plugin_id = Plugin.PluginId.ToString(), channel = "stable",
@@ -25,7 +25,7 @@ public class UpdateManifestTests
     [InlineData("4.10.0.40")]
     [InlineData("4.10.2.0")]
     public void StableManifestSupportsEveryRequiredEmbyVersion(string server)
-        => Assert.Equal(new Version(1, 0, 0, 1), Manifest().Validate(new Version(server)));
+        => Assert.Equal(new Version(1, 0, 0, 2), Manifest().Validate(new Version(server)));
 
     [Theory]
     [InlineData("4.8.10.0")]

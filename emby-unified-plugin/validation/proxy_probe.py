@@ -55,13 +55,18 @@ def probe(case, candidate):
             for purpose in ["Thunder", "Pool", "Cloud", "Updates"]:
                 before = proxy_events(transport)
                 result = test_request(client, purpose)
-                checks[purpose] = bool(result.get("Ok")) and proxy_events(transport) > before
+                checks[purpose] = bool(result.get("Ok")) and result.get("Route") == "Proxy" \
+                    and isinstance(result.get("LatencyMs"), int) and result["LatencyMs"] >= 0 \
+                    and proxy_events(transport) > before
             save(client, {"Pool": False})
             before = proxy_events(transport)
-            checks["DisabledModuleUsesDirectRoute"] = bool(test_request(client, "Pool").get("Ok")) \
+            direct = test_request(client, "Pool")
+            checks["DisabledModuleUsesDirectRoute"] = bool(direct.get("Ok")) and direct.get("Route") == "Direct" \
+                and isinstance(direct.get("LatencyMs"), int) and direct["LatencyMs"] >= 0 \
                 and proxy_events(transport) == before
             before = proxy_events(transport)
-            checks["PartialSaveKeepsProxyPassword"] = bool(test_request(client, "Thunder").get("Ok")) \
+            partial = test_request(client, "Thunder")
+            checks["PartialSaveKeepsProxyPassword"] = bool(partial.get("Ok")) and partial.get("Route") == "Proxy" \
                 and proxy_events(transport) > before
             report["Transports"][transport] = checks
         save(client, {"Address": "http://172.17.0.1:19103", "BypassLocal": False, "Pool": True})
@@ -69,7 +74,8 @@ def probe(case, candidate):
         report["UnavailableProxyFailsWithoutDirectFallback"] = not test_request(client, "Thunder").get("Ok") \
             and health_events() == before
         save(client, {"BypassLocal": True})
-        report["BypassLocalWorksWithUnavailableProxy"] = bool(test_request(client, "Pool").get("Ok"))
+        bypass = test_request(client, "Pool")
+        report["BypassLocalWorksWithUnavailableProxy"] = bool(bypass.get("Ok")) and bypass.get("Route") == "Direct"
     finally:
         save(client, {"Enabled": False, "ClearPassword": True, "Username": "", "BypassLocal": True})
     report["Passed"] = all(value for checks in report["Transports"].values() for value in checks.values()) \

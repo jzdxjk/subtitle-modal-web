@@ -5,6 +5,8 @@ namespace Emby.SubtitleAssistant;
 
 public sealed class PluginConfiguration : BasePluginConfiguration
 {
+    public const string OfficialUpdateManifestUrl = "https://github.com/jzdxjk/subtitle-modal-web/releases/download/emby-subtitle-assistant-update/update.json";
+
     public string LocalPaths { get; set; } = "";
     public int LocalMaxResults { get; set; } = 5;
     public int ThunderMaxResults { get; set; } = 5;
@@ -15,10 +17,10 @@ public sealed class PluginConfiguration : BasePluginConfiguration
     public string CloudApiToken { get; set; } = "";
     public string CloudPathMappings { get; set; } = "";
     public bool AutoDownloadOnNewMedia { get; set; }
-    public string SimplifiedChineseLanguage { get; set; } = "zh-CN";
-    public string TraditionalChineseLanguage { get; set; } = "zh-TW";
+    public string SimplifiedChineseLanguage { get; set; } = ChineseSubtitleLanguage.Simplified;
+    public string TraditionalChineseLanguage { get; set; } = ChineseSubtitleLanguage.Traditional;
     public int MigrationVersion { get; set; }
-    public string UpdateManifestUrl { get; set; } = "https://github.com/jzdxjk/subtitle-modal-web/releases/download/emby-subtitle-assistant-update/update.json";
+    public string UpdateManifestUrl { get; set; } = OfficialUpdateManifestUrl;
     public ProxyConfiguration Proxy { get; set; } = new ProxyConfiguration();
     public void Validate()
     {
@@ -41,6 +43,12 @@ public sealed class PluginConfiguration : BasePluginConfiguration
             !string.IsNullOrEmpty(uri.UserInfo) || !string.IsNullOrEmpty(uri.Fragment))
             throw new ArgumentException(label + "必须是无内嵌凭据的HTTP或HTTPS地址。");
     }
+}
+
+public static class ChineseSubtitleLanguage
+{
+    public const string Simplified = "zh-CN";
+    public const string Traditional = "zh-TW";
 }
 
 public sealed class ProxyConfiguration

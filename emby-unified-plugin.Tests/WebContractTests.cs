@@ -30,6 +30,13 @@ public class WebContractTests
             Assert.Contains("data-tab=\"" + name + "\"", html);
         Assert.Contains("role=\"tablist\"", html);
         Assert.Contains("type=\"password\"", html);
+        Assert.Contains("data-proxy-result", html);
+        Assert.Contains("data-unsaved", html);
+        Assert.Contains("全局设置", html);
+        Assert.DoesNotContain("data-field=\"UpdateManifestUrl\"", html);
+        Assert.DoesNotContain("data-field=\"SimplifiedChineseLanguage\"", html);
+        Assert.DoesNotContain("data-field=\"TraditionalChineseLanguage\"", html);
+        Assert.DoesNotContain("data-proxy-test-url", html);
         Assert.DoesNotContain("iframe", html, StringComparison.OrdinalIgnoreCase);
     }
 

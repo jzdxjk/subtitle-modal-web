@@ -49,4 +49,28 @@ public class WebSettingsTests
         Assert.Throws<System.ArgumentException>(() => SettingsEditor.Apply(current, new SaveSettingsRequest { LocalMaxResults = 0 }));
         Assert.Equal(3, current.LocalMaxResults);
     }
+
+    [Fact]
+    public void FixedLanguageAndManifestValuesAreHiddenAndCannotBeOverridden()
+    {
+        var current = new PluginConfiguration
+        {
+            SimplifiedChineseLanguage = "zh-Hans",
+            TraditionalChineseLanguage = "zh-Hant",
+            UpdateManifestUrl = "https://mirror.invalid/update.json"
+        };
+        var snapshot = SettingsEditor.Snapshot(current);
+        Assert.Null(typeof(SettingsSnapshot).GetProperty("SimplifiedChineseLanguage"));
+        Assert.Null(typeof(SettingsSnapshot).GetProperty("TraditionalChineseLanguage"));
+        Assert.Null(typeof(SettingsSnapshot).GetProperty("UpdateManifestUrl"));
+        var next = SettingsEditor.Apply(current, new SaveSettingsRequest
+        {
+            SimplifiedChineseLanguage = "ja-JP",
+            TraditionalChineseLanguage = "ja-JP",
+            UpdateManifestUrl = "https://attacker.invalid/update.json"
+        });
+        Assert.Equal(ChineseSubtitleLanguage.Simplified, next.SimplifiedChineseLanguage);
+        Assert.Equal(ChineseSubtitleLanguage.Traditional, next.TraditionalChineseLanguage);
+        Assert.Equal(PluginConfiguration.OfficialUpdateManifestUrl, next.UpdateManifestUrl);
+    }
 }

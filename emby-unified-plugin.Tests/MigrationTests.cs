@@ -29,8 +29,8 @@ public class MigrationTests
         Assert.Equal("https://legacy-pool.test", saved.PoolUrl);
         Assert.Equal(22, saved.PoolTimeoutSeconds);
         Assert.True(saved.AutoDownloadOnNewMedia);
-        Assert.Equal("zh-Hans", saved.SimplifiedChineseLanguage);
-        Assert.Equal("zh-Hant", saved.TraditionalChineseLanguage);
+        Assert.Equal(ChineseSubtitleLanguage.Simplified, saved.SimplifiedChineseLanguage);
+        Assert.Equal(ChineseSubtitleLanguage.Traditional, saved.TraditionalChineseLanguage);
         Assert.Equal("http://nas.test:9198", saved.CloudServiceUrl);
         Assert.Equal("synthetic-test-token", saved.CloudApiToken);
         Assert.Equal("/media=/nas", saved.CloudPathMappings);

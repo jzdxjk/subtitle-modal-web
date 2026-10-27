@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using MediaBrowser.Controller.Net;
@@ -18,12 +20,22 @@ public sealed class SettingsResult
     public bool Ok { get; set; }
     public string Error { get; set; }
     public SettingsSnapshot Settings { get; set; }
+    public long? LatencyMs { get; set; }
+    public string Route { get; set; }
 }
 
 [Authenticated(Roles = "Admin")]
 public sealed class SettingsService : IService, IRequiresRequest
 {
     private static readonly object SaveLock = new object();
+    private static readonly IReadOnlyDictionary<NetworkPurpose,string> ProxyTestTargets =
+        new Dictionary<NetworkPurpose,string>
+        {
+            [NetworkPurpose.Thunder] = "https://www.google.com/generate_204",
+            [NetworkPurpose.Pool] = "https://www.google.com/generate_204",
+            [NetworkPurpose.Cloud] = "https://www.google.com/generate_204",
+            [NetworkPurpose.Updates] = PluginConfiguration.OfficialUpdateManifestUrl
+        };
     private readonly IAuthorizationContext _authorization;
     public IRequest Request { get; set; }
     public SettingsService(IAuthorizationContext authorization) => _authorization = authorization;
@@ -54,16 +66,31 @@ public sealed class SettingsService : IService, IRequiresRequest
     public async Task<object> Post(ProxyTestRequest request)
     {
         AdminAccess.Require(_authorization, Request);
-        if (request == null || !Uri.TryCreate(request.Url, UriKind.Absolute, out var uri) ||
-            (uri.Scheme != "https" && uri.Scheme != "http") || !string.IsNullOrEmpty(uri.UserInfo) ||
-            !Enum.TryParse(request.Purpose, true, out NetworkPurpose purpose) || !Enum.IsDefined(typeof(NetworkPurpose), purpose))
-            return new SettingsResult { Ok = false, Error = "请选择有效的测试地址和流量用途。" };
+        if (request == null || !Enum.TryParse(request.Purpose, true, out NetworkPurpose purpose) ||
+            !Enum.IsDefined(typeof(NetworkPurpose), purpose))
+            return new SettingsResult { Ok = false, Error = "请选择有效的流量用途。" };
+        var target = string.IsNullOrWhiteSpace(request.Url) ? ProxyTestTargets[purpose] : request.Url;
+        if (!Uri.TryCreate(target, UriKind.Absolute, out var uri) ||
+            (uri.Scheme != "https" && uri.Scheme != "http") || !string.IsNullOrEmpty(uri.UserInfo))
+            return new SettingsResult { Ok = false, Error = "测试目标地址无效。" };
+        var route = PluginHttpClient.ShouldProxy(Plugin.CurrentConfiguration.Proxy, purpose, uri) ? "Proxy" : "Direct";
+        var stopwatch = Stopwatch.StartNew();
         try
         {
             await PluginHttpClient.Shared.GetBytesAsync(uri.AbsoluteUri, purpose, CancellationToken.None,
                 timeoutSeconds: 15, maxBytes: 65536).ConfigureAwait(false);
-            return new SettingsResult { Ok = true };
+            stopwatch.Stop();
+            return new SettingsResult { Ok = true, LatencyMs = stopwatch.ElapsedMilliseconds, Route = route };
         }
-        catch { return new SettingsResult { Ok = false, Error = "连接失败，请检查当前已保存的代理、路由和测试地址。" }; }
+        catch (OperationCanceledException)
+        {
+            stopwatch.Stop();
+            return new SettingsResult { Ok = false, Error = "连接超时。", Route = route };
+        }
+        catch
+        {
+            stopwatch.Stop();
+            return new SettingsResult { Ok = false, Error = "连接失败，请检查当前已保存的代理与路由设置。", Route = route };
+        }
     }
 }

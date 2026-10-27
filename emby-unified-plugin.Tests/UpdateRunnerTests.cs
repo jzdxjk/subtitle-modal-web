@@ -24,7 +24,7 @@ public class UpdateRunnerTests
         try
         {
             var original = File.ReadAllBytes(typeof(Plugin).Assembly.Location);
-            var candidate = UpdateInstallerTests.WithVersion(original, new Version(1, 0, 0, 1));
+            var candidate = UpdateInstallerTests.WithVersion(original, new Version(1, 0, 0, 2));
             var path = Path.Combine(root, "Emby.SubtitleAssistant.dll"); File.WriteAllBytes(path, original);
             var manifest = UpdateManifestTests.Manifest(); manifest.sha256 = UpdateInstallerTests.Hash(candidate);
             var handler = new UpdateHandler(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(manifest)), candidate);

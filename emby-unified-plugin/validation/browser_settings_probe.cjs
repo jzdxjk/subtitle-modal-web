@@ -157,12 +157,18 @@ async function restore() {
     for (const key of ['LocalMaxResults', 'ThunderMaxResults', 'PoolMaxResults'])
         ensure(await page.locator(`[data-field="${key}"]`).inputValue() === '5', 'A default display limit differs from five');
     check('All three source display limits default to five in the actual page');
+    for (const field of ['SimplifiedChineseLanguage', 'TraditionalChineseLanguage', 'UpdateManifestUrl'])
+        ensure(await page.locator(`[data-field="${field}"]`).count() === 0, 'A fixed or hidden settings field is still visible');
+    ensure(await page.locator('[data-proxy-test-url]').count() === 0, 'The custom proxy test URL field is still visible');
+    check('Fixed language markers, manifest URL and custom test URL are absent from the page');
 
     stage = 'partial-save';
     await select('local');
     await page.locator('[data-field="LocalMaxResults"]').fill('7');
     changed = true;
+    ensure(await page.locator('[data-unsaved]').isVisible(), 'Unsaved indicator was not shown');
     await save();
+    ensure(await page.locator('[data-unsaved]').isHidden(), 'Unsaved indicator survived a successful save');
     let settings = await call('/SubtitleAssistant/settings');
     ensure(settings.LocalMaxResults === 7 && settings.ThunderMaxResults === 5 && settings.PoolMaxResults === 5, 'Saving one tab changed another tab');
     await select('thunder'); await page.locator('[data-field="ThunderMaxResults"]').fill('6');
@@ -201,6 +207,22 @@ async function restore() {
     await page.locator('[data-status]').filter({ hasText: '更新任务已启动' }).waitFor();
     ensure(capturedUpdate, 'Update button did not call the native task endpoint');
     check('Update button discovers the real native task and sends its POST (intercepted, no task started)');
+
+    stage = 'proxy-inline-result';
+    let proxyPayloadOk = false;
+    await page.route(url => url.pathname.endsWith('/SubtitleAssistant/proxy/test'), route => {
+        const body = route.request().postDataJSON();
+        proxyPayloadOk = !!body && body.Purpose === 'Thunder' && !Object.hasOwn(body, 'Url');
+        return route.fulfill({ status: 200, contentType: 'application/json',
+            body: JSON.stringify({ Ok: true, LatencyMs: 123, Route: 'Proxy' }) });
+    });
+    await select('proxy');
+    await page.locator('[data-proxy-purpose]').selectOption('Thunder');
+    await page.locator('[data-proxy-test]').click();
+    await page.locator('[data-proxy-result]').filter({ hasText: '延迟 123 ms' }).waitFor();
+    ensure(proxyPayloadOk, 'Proxy test did not send a purpose-only payload');
+    ensure((await page.locator('[data-proxy-result]').textContent()).includes('代理'), 'Proxy route label is missing');
+    check('Proxy test renders route and latency inline beside the button');
 
     stage = 'restore'; await restore();
     await page.reload({ waitUntil: 'domcontentloaded' }); await waitForSettings();

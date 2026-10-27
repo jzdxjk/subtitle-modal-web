@@ -36,7 +36,7 @@ public class UpdateInstallerTests : IDisposable
     }
 
     internal static string Hash(byte[] bytes) => Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
-    private UpdateManifest For(byte[] candidate, string version = "1.0.0.1")
+    private UpdateManifest For(byte[] candidate, string version = "1.0.0.2")
     {
         var manifest = UpdateManifestTests.Manifest(version); manifest.sha256 = Hash(candidate); return manifest;
     }
@@ -44,7 +44,7 @@ public class UpdateInstallerTests : IDisposable
     [Fact]
     public void ValidPackageAtomicallyReplacesFileAndKeepsOriginalBackup()
     {
-        var candidate = WithVersion(_original, new Version(1, 0, 0, 1));
+        var candidate = WithVersion(_original, new Version(1, 0, 0, 2));
         var result = PackageInstaller.Install(candidate, For(candidate), _path, new Version(1, 0, 0, 0), CancellationToken.None);
         Assert.True(result.Installed);
         Assert.Equal(candidate, File.ReadAllBytes(_path));
@@ -56,7 +56,7 @@ public class UpdateInstallerTests : IDisposable
     [Fact]
     public void PendingDiskVersionPreventsRepeatedReplacementBeforeRestart()
     {
-        var candidate = WithVersion(_original, new Version(1, 0, 0, 1)); File.WriteAllBytes(_path, candidate);
+        var candidate = WithVersion(_original, new Version(1, 0, 0, 2)); File.WriteAllBytes(_path, candidate);
         var result = PackageInstaller.Install(candidate, For(candidate), _path, new Version(1, 0, 0, 0), CancellationToken.None);
         Assert.False(result.Installed);
         Assert.Equal(candidate, File.ReadAllBytes(_path));
@@ -65,7 +65,7 @@ public class UpdateInstallerTests : IDisposable
     [Fact]
     public void BadHashCannotChangeOriginal()
     {
-        var candidate = WithVersion(_original, new Version(1, 0, 0, 1)); var manifest = For(candidate); manifest.sha256 = new string('0', 64);
+        var candidate = WithVersion(_original, new Version(1, 0, 0, 2)); var manifest = For(candidate); manifest.sha256 = new string('0', 64);
         Assert.Throws<InvalidDataException>(() => PackageInstaller.Install(candidate, manifest, _path, new Version(1, 0, 0, 0), CancellationToken.None));
         Assert.Equal(_original, File.ReadAllBytes(_path));
     }
@@ -73,17 +73,17 @@ public class UpdateInstallerTests : IDisposable
     [Fact]
     public void WrongAssemblyNameOrVersionCannotChangeOriginal()
     {
-        var wrongName = WithVersion(File.ReadAllBytes(typeof(UpdateInstallerTests).Assembly.Location), new Version(1, 0, 0, 1));
+        var wrongName = WithVersion(File.ReadAllBytes(typeof(UpdateInstallerTests).Assembly.Location), new Version(1, 0, 0, 2));
         Assert.Throws<InvalidDataException>(() => PackageInstaller.Install(wrongName, For(wrongName), _path, new Version(1, 0, 0, 0), CancellationToken.None));
-        var wrongVersion = WithVersion(_original, new Version(1, 0, 0, 1));
-        Assert.Throws<InvalidDataException>(() => PackageInstaller.Install(wrongVersion, For(wrongVersion, "1.0.0.2"), _path, new Version(1, 0, 0, 0), CancellationToken.None));
+        var wrongVersion = WithVersion(_original, new Version(1, 0, 0, 2));
+        Assert.Throws<InvalidDataException>(() => PackageInstaller.Install(wrongVersion, For(wrongVersion, "1.0.0.3"), _path, new Version(1, 0, 0, 0), CancellationToken.None));
         Assert.Equal(_original, File.ReadAllBytes(_path));
     }
 
     [Fact]
     public void CancellationAndReplacementFailureKeepOriginalAndCleanStaging()
     {
-        var candidate = WithVersion(_original, new Version(1, 0, 0, 1));
+        var candidate = WithVersion(_original, new Version(1, 0, 0, 2));
         Assert.Throws<OperationCanceledException>(() => PackageInstaller.Install(candidate, For(candidate), _path, new Version(1, 0, 0, 0), new CancellationToken(true)));
         Assert.Throws<IOException>(() => PackageInstaller.Install(candidate, For(candidate), _path, new Version(1, 0, 0, 0), CancellationToken.None,
             (_, _, _) => throw new IOException("simulated replace failure")));
@@ -94,7 +94,7 @@ public class UpdateInstallerTests : IDisposable
     [Fact]
     public void InstallerCannotOverwriteAnotherPlugin()
     {
-        var candidate = WithVersion(_original, new Version(1, 0, 0, 1)); var other = Path.Combine(_root, "other.dll"); File.WriteAllBytes(other, _original);
+        var candidate = WithVersion(_original, new Version(1, 0, 0, 2)); var other = Path.Combine(_root, "other.dll"); File.WriteAllBytes(other, _original);
         Assert.Throws<InvalidDataException>(() => PackageInstaller.Install(candidate, For(candidate), other, new Version(1, 0, 0, 0), CancellationToken.None));
         Assert.Equal(_original, File.ReadAllBytes(other));
     }

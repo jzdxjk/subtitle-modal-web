@@ -104,8 +104,8 @@ internal sealed class SubtitleCompletionService
     {
         var selected = languages.FirstOrDefault(CompletionPolicy.IsChinese) ?? "chi";
         if (selected.IndexOf("TW",StringComparison.OrdinalIgnoreCase) >= 0 || selected.IndexOf("HK",StringComparison.OrdinalIgnoreCase) >= 0 ||
-            selected.IndexOf("Hant",StringComparison.OrdinalIgnoreCase) >= 0) return Plugin.CurrentConfiguration.TraditionalChineseLanguage;
-        return selected == "chi" || selected == "zho" ? "chi" : Plugin.CurrentConfiguration.SimplifiedChineseLanguage;
+            selected.IndexOf("Hant",StringComparison.OrdinalIgnoreCase) >= 0) return ChineseSubtitleLanguage.Traditional;
+        return selected == "chi" || selected == "zho" ? "chi" : ChineseSubtitleLanguage.Simplified;
     }
 
     internal async Task RefreshAsync(BaseItem item, CancellationToken ct)
