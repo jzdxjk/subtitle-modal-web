@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <AssemblyName>Emby.SubtitleAssistant</AssemblyName>
+    <RootNamespace>Emby.SubtitleAssistant</RootNamespace>
+    <Version>1.0.0</Version>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <GenerateDependencyFile>false</GenerateDependencyFile>
+    <DebugType>none</DebugType>
+    <EmbyPackageVersion Condition="'$(EmbyPackageVersion)' == ''">4.8.11.0</EmbyPackageVersion>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Remove="validation/**/*.cs" />
+    <PackageReference Include="MediaBrowser.Common" Version="$(EmbyPackageVersion)" PrivateAssets="all" ExcludeAssets="runtime" />
+    <PackageReference Include="MediaBrowser.Server.Core" Version="$(EmbyPackageVersion)" PrivateAssets="all" ExcludeAssets="runtime" />
+    <EmbeddedResource Include="Data/*.json" />
+    <EmbeddedResource Include="Web/*.html" />
+    <EmbeddedResource Include="Web/*.js" />
+    <InternalsVisibleTo Include="Emby.SubtitleAssistant.Tests" />
+  </ItemGroup>
+</Project>

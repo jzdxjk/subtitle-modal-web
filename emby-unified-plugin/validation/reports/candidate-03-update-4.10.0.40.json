@@ -1,0 +1,20 @@
+{
+  "ServerVersion": "4.10.0.40",
+  "Candidate": "candidate-03",
+  "OriginalPinnedSha256": "2694f2991f040f5603d88ab6d250ccf9650e8c7aa3a173bab848726ee981de31",
+  "UpgradeSha256": "df0916e3cf49b64447df71846162d597e15ba4fb4678b142aa4f88aaaf635a85",
+  "RejectedChecksumTaskStatus": "Failed",
+  "RejectedChecksumPreservesOriginal": true,
+  "RejectedChecksumPreservesBackupSet": true,
+  "RejectedChecksumDoesNotIntroduceRestart": true,
+  "InstallTaskStatus": "Completed",
+  "DiskMatchesUpgrade": true,
+  "OriginalBackupRetained": true,
+  "PreexistingBackupsRetained": true,
+  "TemporaryCandidatesCleaned": true,
+  "PendingRestart": true,
+  "ContainerNotRestartedAutomatically": true,
+  "UpdateTrafficUsedIndependentProxy": true,
+  "RepeatCheckDoesNotDownloadPackageAgain": true,
+  "Passed": true
+}

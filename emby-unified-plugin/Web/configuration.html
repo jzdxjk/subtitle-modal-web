@@ -1,0 +1,89 @@
+<div id="SubtitleAssistantConfigurationPage" is="emby-scroller" class="view flex flex-direction-column scrollFrameY flex-grow" data-horizontal="false" data-forcescrollbar="true" data-centerfocus="true" data-bindheader="true" data-controller="__plugin/subtitleassistantjs" data-title="字幕助手">
+<style>
+#SubtitleAssistantConfigurationPage .sa-content{max-width:1100px;padding:2em;margin:0 auto;width:100%;box-sizing:border-box}
+#SubtitleAssistantConfigurationPage .sa-tabs{display:flex;flex-wrap:wrap;gap:.5em;border-bottom:1px solid #777;padding-bottom:.8em;margin:1.5em 0}
+#SubtitleAssistantConfigurationPage .sa-tabs button[aria-selected="true"]{border-bottom:3px solid #52b54b;font-weight:bold}
+#SubtitleAssistantConfigurationPage label{display:block;margin:1em 0}
+#SubtitleAssistantConfigurationPage input:not([type="checkbox"]),#SubtitleAssistantConfigurationPage textarea,#SubtitleAssistantConfigurationPage select{display:block;box-sizing:border-box;width:100%;max-width:50em;margin:.5em 0;padding:.6em}
+#SubtitleAssistantConfigurationPage textarea{min-height:7em}
+#SubtitleAssistantConfigurationPage input[type="number"]{max-width:10em}
+#SubtitleAssistantConfigurationPage .sa-hint{opacity:.75;font-size:.9em}
+#SubtitleAssistantConfigurationPage .sa-actions{display:flex;flex-wrap:wrap;gap:1em;align-items:center;margin:1.2em 0}
+#SubtitleAssistantConfigurationPage button{padding:.6em 1em;cursor:pointer}
+#SubtitleAssistantConfigurationPage table{width:100%;border-collapse:collapse}#SubtitleAssistantConfigurationPage th,#SubtitleAssistantConfigurationPage td{padding:.6em;border-bottom:1px solid #777;text-align:left;overflow-wrap:anywhere}
+#SubtitleAssistantConfigurationPage [hidden]{display:none!important}
+</style>
+<div class="scrollSlider"><main class="sa-content">
+    <h1>字幕助手</h1>
+    <p>版本 <span data-version>—</span> <span class="sa-hint">设置与云字幕操作仅限 Emby 管理员。</span></p>
+    <p data-admin-warning hidden role="alert">请使用 Emby 管理员账户打开此页面。</p>
+    <form data-settings-form hidden>
+        <div class="sa-actions">
+            <button type="submit" is="emby-button" class="raised button-submit">保存设置</button>
+            <button type="button" is="emby-button" data-update>检查并更新插件</button>
+            <span data-status role="status" aria-live="polite"></span>
+        </div>
+        <label><input type="checkbox" data-field="AutoDownloadOnNewMedia"> 新入库媒体延迟 60 秒自动补全缺失的中文字幕</label>
+        <p class="sa-hint">遵守媒体库中本地、迅雷、海南鸡下载器的开关与顺序。已有中文字幕时跳过；没有结果时结束。历史补全和自动更新的时间可在 Emby 计划任务中设置。</p>
+        <details><summary>中文字幕语言标记</summary>
+            <label>简体中文标记 <input type="text" data-field="SimplifiedChineseLanguage"></label>
+            <label>繁体中文标记 <input type="text" data-field="TraditionalChineseLanguage"></label>
+        </details>
+        <details><summary>高级更新设置</summary><label>正式版更新清单地址 <input type="url" data-field="UpdateManifestUrl" required spellcheck="false"></label><p class="sa-hint">默认使用项目发布的更新清单。镜像地址应由你信任的发布者维护。</p></details>
+        <div class="sa-tabs" role="tablist" aria-label="字幕助手设置">
+            <button type="button" role="tab" id="sa-tab-local" aria-controls="sa-panel-local" aria-selected="true" data-tab="local">本地字幕</button>
+            <button type="button" role="tab" id="sa-tab-thunder" aria-controls="sa-panel-thunder" aria-selected="false" tabindex="-1" data-tab="thunder">迅雷字幕</button>
+            <button type="button" role="tab" id="sa-tab-pool" aria-controls="sa-panel-pool" aria-selected="false" tabindex="-1" data-tab="pool">海南鸡字幕</button>
+            <button type="button" role="tab" id="sa-tab-cloud" aria-controls="sa-panel-cloud" aria-selected="false" tabindex="-1" data-tab="cloud">字幕云</button>
+            <button type="button" role="tab" id="sa-tab-proxy" aria-controls="sa-panel-proxy" aria-selected="false" tabindex="-1" data-tab="proxy">全局代理</button>
+        </div>
+        <section id="sa-panel-local" role="tabpanel" aria-labelledby="sa-tab-local" data-panel="local">
+            <h2>本地字幕</h2>
+            <label>字幕库目录（每行一个，使用 Emby 服务器可读的路径）<textarea data-field="LocalPaths" spellcheck="false"></textarea></label>
+            <label>最多展示结果数 <input type="number" min="1" step="1" required data-field="LocalMaxResults" value="5"></label>
+            <p class="sa-hint">展示数量不限制自动补全查找候选。字幕按与视频时长的差值排序，同等差值优先较大的文件。</p>
+        </section>
+        <section id="sa-panel-thunder" role="tabpanel" aria-labelledby="sa-tab-thunder" data-panel="thunder" hidden>
+            <h2>迅雷字幕</h2>
+            <label>最多展示结果数 <input type="number" min="1" step="1" required data-field="ThunderMaxResults" value="5"></label>
+            <p class="sa-hint">仅从文件名提取番号，查询等价写法并过滤其他作品。代理流量可在“全局代理”标签页设置。</p>
+        </section>
+        <section id="sa-panel-pool" role="tabpanel" aria-labelledby="sa-tab-pool" data-panel="pool" hidden>
+            <h2>海南鸡字幕</h2>
+            <label>字幕池服务地址 <input type="url" data-field="PoolUrl" required spellcheck="false"></label>
+            <label>请求超时（秒）<input type="number" min="1" max="120" step="1" data-field="PoolTimeoutSeconds" required></label>
+            <label>最多展示结果数 <input type="number" min="1" step="1" required data-field="PoolMaxResults" value="5"></label>
+        </section>
+        <section id="sa-panel-cloud" role="tabpanel" aria-labelledby="sa-tab-cloud" data-panel="cloud" hidden>
+            <h2>字幕云</h2>
+            <label>字幕云服务地址 <input type="url" data-field="CloudServiceUrl" spellcheck="false" placeholder="http://服务器:端口"></label>
+            <label>API Token <input type="password" data-field="CloudApiToken" data-secret="HasCloudApiToken" autocomplete="new-password" placeholder="留空保留现有值"></label>
+            <label><input type="checkbox" data-clear="ClearCloudApiToken"> 清除已保存的 API Token</label>
+            <label>路径映射（每行 Emby路径=字幕云路径）<textarea data-field="CloudPathMappings" spellcheck="false" placeholder="/emby/media=/media"></textarea></label>
+            <p class="sa-hint">字幕云服务独立运行。管理员可在电影或单集的菜单中选择“生成云字幕”，完成后自动刷新该项目。</p>
+            <button type="button" data-refresh-jobs>刷新任务</button>
+            <p data-jobs-status role="status"></p>
+            <h3>执行中任务</h3><table><thead><tr><th>媒体</th><th>状态</th><th>阶段</th><th>进度</th><th>消息</th></tr></thead><tbody data-jobs="active"></tbody></table>
+            <h3>最近完成</h3><table><thead><tr><th>媒体</th><th>状态</th><th>阶段</th><th>进度</th><th>消息</th></tr></thead><tbody data-jobs="done"></tbody></table>
+            <h3>最近失败</h3><table><thead><tr><th>媒体</th><th>状态</th><th>阶段</th><th>进度</th><th>消息</th></tr></thead><tbody data-jobs="failed"></tbody></table>
+        </section>
+        <section id="sa-panel-proxy" role="tabpanel" aria-labelledby="sa-tab-proxy" data-panel="proxy" hidden>
+            <h2>全局代理</h2>
+            <label><input type="checkbox" data-field="Proxy.Enabled"> 启用本插件代理</label>
+            <label>代理地址 <input type="text" data-field="Proxy.Address" spellcheck="false" placeholder="http://主机:端口 或 socks5://主机:端口"></label>
+            <label>认证用户名（可选）<input type="text" data-field="Proxy.Username" autocomplete="off"></label>
+            <label>认证密码（可选）<input type="password" data-field="Proxy.Password" data-secret="Proxy.HasPassword" autocomplete="new-password" placeholder="留空保留现有值"></label>
+            <label><input type="checkbox" data-clear="Proxy.ClearPassword"> 清除已保存的代理密码</label>
+            <label><input type="checkbox" data-field="Proxy.Thunder"> 迅雷字幕搜索与下载走代理</label>
+            <label><input type="checkbox" data-field="Proxy.Pool"> 海南鸡字幕搜索与下载走代理</label>
+            <label><input type="checkbox" data-field="Proxy.Cloud"> 字幕云服务请求走代理</label>
+            <label><input type="checkbox" data-field="Proxy.Updates"> 插件更新请求走代理</label>
+            <label><input type="checkbox" data-field="Proxy.BypassLocal"> 局域网与本机地址直连</label>
+            <label>额外直连主机（逗号或换行分隔）<textarea data-field="Proxy.BypassHosts" spellcheck="false" placeholder="nas.local&#10;*.example.com"></textarea></label>
+            <p class="sa-hint">仅影响本插件。代理失败不会自动改用直连。本地文件读取不经过网络代理。</p>
+            <label>测试流量用途 <select data-proxy-purpose><option value="Thunder">迅雷字幕</option><option value="Pool">海南鸡字幕</option><option value="Cloud">字幕云</option><option value="Updates">插件更新</option></select></label>
+            <label>测试地址 <input type="url" data-proxy-test-url value="https://www.google.com/generate_204" spellcheck="false"></label>
+            <button type="button" data-proxy-test>保存并测试当前路由</button>
+        </section>
+    </form>
+</main></div></div>

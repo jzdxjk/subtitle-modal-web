@@ -1,0 +1,25 @@
+{
+  "ServerVersion": "4.10.2.0",
+  "Candidate": "candidate-03",
+  "Transports": {
+    "HTTP": {
+      "Thunder": true,
+      "Pool": true,
+      "Cloud": true,
+      "Updates": true,
+      "DisabledModuleUsesDirectRoute": true,
+      "PartialSaveKeepsProxyPassword": true
+    },
+    "SOCKS5": {
+      "Thunder": true,
+      "Pool": true,
+      "Cloud": true,
+      "Updates": true,
+      "DisabledModuleUsesDirectRoute": true,
+      "PartialSaveKeepsProxyPassword": true
+    }
+  },
+  "UnavailableProxyFailsWithoutDirectFallback": true,
+  "BypassLocalWorksWithUnavailableProxy": true,
+  "Passed": true
+}

@@ -1,0 +1,73 @@
+{
+  "ServerVersion": "4.9.5.0",
+  "Candidate": "candidate-03",
+  "OrdinaryUserIsAdministrator": false,
+  "Administrator": {
+    "NativeConfiguration": {
+      "Status": 200,
+      "Denied": false,
+      "SecretFieldsVisible": true
+    },
+    "PluginSettings": {
+      "Status": 200,
+      "Denied": false,
+      "SecretFieldsVisible": false
+    },
+    "CloudJobs": {
+      "Status": 200,
+      "Denied": false,
+      "SecretFieldsVisible": false
+    },
+    "CloudSubmit": {
+      "Status": 200,
+      "Denied": false,
+      "SecretFieldsVisible": false
+    }
+  },
+  "OrdinaryUser": {
+    "NativeConfiguration": {
+      "Status": 403,
+      "Denied": true,
+      "SecretFieldsVisible": false
+    },
+    "PluginSettings": {
+      "Status": 403,
+      "Denied": true,
+      "SecretFieldsVisible": false
+    },
+    "CloudJobs": {
+      "Status": 403,
+      "Denied": true,
+      "SecretFieldsVisible": false
+    },
+    "CloudSubmit": {
+      "Status": 403,
+      "Denied": true,
+      "SecretFieldsVisible": false
+    }
+  },
+  "Unauthenticated": {
+    "NativeConfiguration": {
+      "Status": 401,
+      "Denied": true,
+      "SecretFieldsVisible": false
+    },
+    "PluginSettings": {
+      "Status": 401,
+      "Denied": true,
+      "SecretFieldsVisible": false
+    },
+    "CloudJobs": {
+      "Status": 401,
+      "Denied": true,
+      "SecretFieldsVisible": false
+    },
+    "CloudSubmit": {
+      "Status": 401,
+      "Denied": true,
+      "SecretFieldsVisible": false
+    }
+  },
+  "NonAdminBoundariesPassed": true,
+  "AdminCustomSettingsHideSecrets": true
+}

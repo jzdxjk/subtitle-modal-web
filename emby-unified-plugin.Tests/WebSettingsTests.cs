@@ -1,0 +1,52 @@
+using Emby.SubtitleAssistant.Web;
+using Xunit;
+
+namespace Emby.SubtitleAssistant.Tests;
+
+public class WebSettingsTests
+{
+    [Fact]
+    public void PartialSavePreservesOtherTabsAndSecretEmptyMeansKeep()
+    {
+        var current = new PluginConfiguration
+        {
+            LocalPaths = "/existing", ThunderMaxResults = 7, CloudApiToken = "cloud-secret",
+            Proxy = new ProxyConfiguration { Password = "proxy-secret", Address = "http://127.0.0.1:7890" }
+        };
+        var next = SettingsEditor.Apply(current, new SaveSettingsRequest
+        {
+            LocalMaxResults = 9, CloudApiToken = "", Proxy = new ProxySettingsUpdate { Password = "" }
+        });
+        Assert.Equal(9, next.LocalMaxResults);
+        Assert.Equal("/existing", next.LocalPaths);
+        Assert.Equal(7, next.ThunderMaxResults);
+        Assert.Equal("cloud-secret", next.CloudApiToken);
+        Assert.Equal("proxy-secret", next.Proxy.Password);
+        Assert.Equal(5, current.LocalMaxResults);
+    }
+
+    [Fact]
+    public void ExplicitSecretClearIsSupportedAndReadSnapshotHasNoSecretFields()
+    {
+        var current = new PluginConfiguration { CloudApiToken = "secret", Proxy = new ProxyConfiguration { Password = "password" } };
+        var snapshot = SettingsEditor.Snapshot(current);
+        Assert.True(snapshot.HasCloudApiToken);
+        Assert.True(snapshot.Proxy.HasPassword);
+        Assert.Null(snapshot.GetType().GetProperty("CloudApiToken"));
+        Assert.Null(snapshot.Proxy.GetType().GetProperty("Password"));
+        var cleared = SettingsEditor.Apply(current, new SaveSettingsRequest
+        {
+            ClearCloudApiToken = true, Proxy = new ProxySettingsUpdate { ClearPassword = true }
+        });
+        Assert.Equal("", cleared.CloudApiToken);
+        Assert.Equal("", cleared.Proxy.Password);
+    }
+
+    [Fact]
+    public void InvalidPartialUpdateDoesNotMutateExistingConfiguration()
+    {
+        var current = new PluginConfiguration { LocalMaxResults = 3 };
+        Assert.Throws<System.ArgumentException>(() => SettingsEditor.Apply(current, new SaveSettingsRequest { LocalMaxResults = 0 }));
+        Assert.Equal(3, current.LocalMaxResults);
+    }
+}
