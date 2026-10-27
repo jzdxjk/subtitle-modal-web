@@ -47,7 +47,7 @@
 - [x] 海南鸡向后兼容接口与测试（pool/cloud代理）。
 - [x] 字幕云桥接、五标签Web与权限（cloud代理）。
 - [x] 集成构建、独立审查、5版本实机验证（主代理协调）。
-- [ ] 正式发布（GitHub 版本包 + 更新清单）与 NAS 生产迁移（主代理协调）。
+- [x] 正式发布（GitHub 版本包 + 更新清单）与 NAS 生产迁移（主代理协调）。
 
 ## 验证结论：五版本运行矩阵已通过
 
@@ -61,4 +61,14 @@
 - 真实4.10.2源码仅声明未发SubtitlesDownloaded，已用原响应流释放后的落盘快照观察弥补，专门回归覆盖无落盘/旧文件不误刷新。
 - 独立审查的别名400、legacy零填充漏查、中文混合语言误筛、Cloud自定义认证头跨源跳转均已红绿验证修复。
 - 4.9.5 早期失败是旧验证容器 UID 2 无法写入 NAS 私有 bind 的验证环境问题；用 `plugin_smoke.py ... --install` 以 UID 0 重建自有验证容器后全部通过，非插件缺陷。
-- 生产NAS尚未安装新DLL；GitHub 正式发布与 NAS 迁移按本计划下一步执行，安装后仅标记待重启，不自动重启 Emby。
+- 生产已暂存新 DLL 并移出五个旧 DLL，等待管理员手动重启 Emby 后才加载；未自动重启生产容器。
+
+## 发布与生产迁移记录（2026-10-27）
+
+- 功能分支：`codex/subtitle-assistant`，发布提交 `befc5bc0dd695fb6a16da077aec6bcc560311600`。
+- GitHub 版本 release：`emby-subtitle-assistant-v1.0.0.0`（含 `Emby.SubtitleAssistant.dll` / `update.json` / `SHA256SUMS.txt`，DLL digest `sha256:2694f299...de31`）。
+- GitHub 指针 release：`emby-subtitle-assistant-update` 的 `update.json` 已指向 1.0.0.0，sha256 与版本包一致。
+- 草稿 PR：https://github.com/jzdxjk/subtitle-modal-web/pull/1 （`codex/subtitle-assistant` → `dev`）。
+- 池端 Worker：`chickenrice-subtitle-pool` 已部署（Version `2cb5022d-c723-49e3-9803-af7264046fdb`）；生产 D1 无待应用迁移；线上 `/health`、`match=work&codes=`（200）、旧单号搜索（200）、非法编号（400）均符合预期。
+- NAS 生产暂存：备份目录 `/volume1/docker/emby/backups/subtitle-assistant-20261027T080421Z-ba21a7a8`（含 5 个旧 DLL、5 个旧配置、91MB `library.snapshot.db`、`stage.json`）。生产 `emby` 容器未重启（StartedAt 仍为 2026-10-22）。
+- 回滚路径：按 `stage.json` 从备份目录恢复五个旧 DLL 与原配置；新 DLL 对应文件为 `Emby.SubtitleAssistant.dll`。回滚同样需要手动重启。

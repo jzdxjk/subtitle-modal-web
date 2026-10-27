@@ -1,0 +1,254 @@
+{
+  "host": "http://127.0.0.1:19040",
+  "playwright": "1.62.1",
+  "checks": [
+    "Administrator API settings snapshot is available",
+    "Real Emby browser login completed with the isolated administrator",
+    "All five real settings tabs switch with only their matching panel visible",
+    "All three source display limits default to five in the actual page",
+    "Local-only save and cross-tab save preserve the other source settings",
+    "Token and proxy password remain blank after save/reload while presence placeholders survive",
+    "Update button discovers the real native task and sends its POST (intercepted, no task started)"
+  ],
+  "screenshots": [
+    "410040-local.png",
+    "410040-thunder.png",
+    "410040-pool.png",
+    "410040-cloud.png",
+    "410040-proxy.png"
+  ],
+  "restored": true,
+  "serverVersion": "4.10.0.40",
+  "browserErrors": [],
+  "failedResources": [],
+  "recentResources": [
+    {
+      "path": "/web/modules/notifications.js",
+      "status": 200,
+      "type": "script"
+    },
+    {
+      "path": "/web/modules/nowplayingbar/nowplayingbar.js",
+      "status": 200,
+      "type": "script"
+    },
+    {
+      "path": "/web/modules/playback/mediasession.js",
+      "status": 200,
+      "type": "script"
+    },
+    {
+      "path": "/web/modules/fullscreen/fullscreen-dc.js",
+      "status": 200,
+      "type": "script"
+    },
+    {
+      "path": "/web/modules/themes/themecontroller.js",
+      "status": 200,
+      "type": "script"
+    },
+    {
+      "path": "/web/modules/appfooter/appfooter.js",
+      "status": 200,
+      "type": "script"
+    },
+    {
+      "path": "/web/modules/input/keyboard.js",
+      "status": 200,
+      "type": "script"
+    },
+    {
+      "path": "/web/modules/screensavermanager.js",
+      "status": 200,
+      "type": "script"
+    },
+    {
+      "path": "/web/modules/actionsheet/actionsheet.js",
+      "status": 200,
+      "type": "script"
+    },
+    {
+      "path": "/emby/usersettings/[redacted]",
+      "status": 200,
+      "type": "fetch"
+    },
+    {
+      "path": "/emby/Sessions/Capabilities/Full",
+      "status": 204,
+      "type": "fetch"
+    },
+    {
+      "path": "/web/modules/themes/dark/theme.json",
+      "status": 200,
+      "type": "xhr"
+    },
+    {
+      "path": "/web/modules/appfooter/appfooter.css",
+      "status": 200,
+      "type": "stylesheet"
+    },
+    {
+      "path": "/web/modules/dockedtabs/dockedtabs.css",
+      "status": 200,
+      "type": "stylesheet"
+    },
+    {
+      "path": "/web/modules/actionsheet/actionsheet.css",
+      "status": 200,
+      "type": "stylesheet"
+    },
+    {
+      "path": "/web/modules/playback/osdcontroller.js",
+      "status": 200,
+      "type": "script"
+    },
+    {
+      "path": "/web/modules/registrationservices/registrationservices.js",
+      "status": 200,
+      "type": "script"
+    },
+    {
+      "path": "/emby/web/configurationpages",
+      "status": 200,
+      "type": "fetch"
+    },
+    {
+      "path": "/web/configurationpage",
+      "status": 200,
+      "type": "xhr"
+    },
+    {
+      "path": "/web/legacy/dashboard.js",
+      "status": 200,
+      "type": "script"
+    },
+    {
+      "path": "/web/legacy/dashboard.css",
+      "status": 200,
+      "type": "stylesheet"
+    },
+    {
+      "path": "/web/configurationpage",
+      "status": 200,
+      "type": "script"
+    },
+    {
+      "path": "/web/modules/viewmanager/baseview.js",
+      "status": 200,
+      "type": "script"
+    },
+    {
+      "path": "/web/modules/viewmanager/basecomponent.js",
+      "status": 200,
+      "type": "script"
+    },
+    {
+      "path": "/web/modules/fonts/material-icons/mi_2024_05.woff2",
+      "status": 200,
+      "type": "font"
+    },
+    {
+      "path": "/web/modules/themes/light/theme.css",
+      "status": 200,
+      "type": "stylesheet"
+    },
+    {
+      "path": "/web/modules/themes/light/theme_nontv.css",
+      "status": 200,
+      "type": "stylesheet"
+    },
+    {
+      "path": "/web/modules/emby-elements/emby-collapse/emby-collapse.js",
+      "status": 200,
+      "type": "script"
+    },
+    {
+      "path": "/web/modules/emby-elements/emby-input/emby-input.js",
+      "status": 200,
+      "type": "script"
+    },
+    {
+      "path": "/emby/SubtitleAssistant/settings",
+      "status": 200,
+      "type": "fetch"
+    },
+    {
+      "path": "/emby/web/configurationpages",
+      "status": 200,
+      "type": "fetch"
+    },
+    {
+      "path": "/emby/Users/[redacted]/Views",
+      "status": 200,
+      "type": "fetch"
+    },
+    {
+      "path": "/web/modules/themes/light/theme.json",
+      "status": 200,
+      "type": "xhr"
+    },
+    {
+      "path": "/web/modules/emby-elements/emby-collapse/emby-collapse.css",
+      "status": 200,
+      "type": "stylesheet"
+    },
+    {
+      "path": "/web/modules/emby-elements/emby-input/emby-input.css",
+      "status": 200,
+      "type": "stylesheet"
+    },
+    {
+      "path": "/web/modules/emby-elements/emby-input/emby-input_3_nontv.css",
+      "status": 200,
+      "type": "stylesheet"
+    },
+    {
+      "path": "/web/modules/themes/logodark.png",
+      "status": 200,
+      "type": "image"
+    },
+    {
+      "path": "/emby/web/configurationpages",
+      "status": 200,
+      "type": "fetch"
+    },
+    {
+      "path": "/web/modules/polyfills/dragdroptouch.js",
+      "status": 200,
+      "type": "script"
+    },
+    {
+      "path": "/emby/SubtitleAssistant/cloud/jobs",
+      "status": 200,
+      "type": "fetch"
+    }
+  ],
+  "settingsRequests": [
+    {
+      "method": "GET",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "status": 200
+    }
+  ],
+  "initialDefaultsWereFive": true,
+  "ok": true
+}

@@ -1,0 +1,254 @@
+{
+  "host": "http://127.0.0.1:19059",
+  "playwright": "1.62.1",
+  "checks": [
+    "Administrator API settings snapshot is available",
+    "Real Emby browser login completed with the isolated administrator",
+    "All five real settings tabs switch with only their matching panel visible",
+    "All three source display limits default to five in the actual page",
+    "Local-only save and cross-tab save preserve the other source settings",
+    "Token and proxy password remain blank after save/reload while presence placeholders survive",
+    "Update button discovers the real native task and sends its POST (intercepted, no task started)"
+  ],
+  "screenshots": [
+    "495-local.png",
+    "495-thunder.png",
+    "495-pool.png",
+    "495-cloud.png",
+    "495-proxy.png"
+  ],
+  "restored": true,
+  "serverVersion": "4.9.5.0",
+  "browserErrors": [],
+  "failedResources": [],
+  "recentResources": [
+    {
+      "path": "/web/modules/actionsheet/actionsheet.js",
+      "status": 200,
+      "type": "script"
+    },
+    {
+      "path": "/web/modules/appfooter/appfooter.js",
+      "status": 200,
+      "type": "script"
+    },
+    {
+      "path": "/emby/System/Info",
+      "status": 200,
+      "type": "fetch"
+    },
+    {
+      "path": "/web/modules/playback/osdcontroller.js",
+      "status": 200,
+      "type": "script"
+    },
+    {
+      "path": "/web/modules/themes/dark/theme.json",
+      "status": 200,
+      "type": "xhr"
+    },
+    {
+      "path": "/web/modules/actionsheet/actionsheet.css",
+      "status": 200,
+      "type": "stylesheet"
+    },
+    {
+      "path": "/web/modules/appfooter/appfooter.css",
+      "status": 200,
+      "type": "stylesheet"
+    },
+    {
+      "path": "/web/modules/dockedtabs/dockedtabs.css",
+      "status": 200,
+      "type": "stylesheet"
+    },
+    {
+      "path": "/emby/usersettings/[redacted]",
+      "status": 200,
+      "type": "fetch"
+    },
+    {
+      "path": "/emby/Sessions/Capabilities/Full",
+      "status": 204,
+      "type": "fetch"
+    },
+    {
+      "path": "/web/modules/registrationservices/registrationservices.js",
+      "status": 200,
+      "type": "script"
+    },
+    {
+      "path": "/web/configurationpage",
+      "status": 200,
+      "type": "xhr"
+    },
+    {
+      "path": "/emby/web/configurationpages",
+      "status": 200,
+      "type": "fetch"
+    },
+    {
+      "path": "/web/modules/emby-elements/emby-dialogclosebutton/emby-dialogclosebutton.js",
+      "status": 200,
+      "type": "script"
+    },
+    {
+      "path": "/web/legacy/dashboard.js",
+      "status": 200,
+      "type": "script"
+    },
+    {
+      "path": "/web/legacy/dashboard.css",
+      "status": 200,
+      "type": "stylesheet"
+    },
+    {
+      "path": "/web/modules/emby-elements/emby-dialogclosebutton/emby-dialogclosebutton.css",
+      "status": 200,
+      "type": "stylesheet"
+    },
+    {
+      "path": "/web/modules/emby-elements/emby-dialogclosebutton/emby-dialogclosebutton_nontv.css",
+      "status": 200,
+      "type": "stylesheet"
+    },
+    {
+      "path": "/web/configurationpage",
+      "status": 200,
+      "type": "script"
+    },
+    {
+      "path": "/web/modules/viewmanager/baseview.js",
+      "status": 200,
+      "type": "script"
+    },
+    {
+      "path": "/web/modules/viewmanager/transitions.css",
+      "status": 200,
+      "type": "stylesheet"
+    },
+    {
+      "path": "/web/modules/themes/light/theme.css",
+      "status": 200,
+      "type": "stylesheet"
+    },
+    {
+      "path": "/web/modules/themes/light/theme_nontv.css",
+      "status": 200,
+      "type": "stylesheet"
+    },
+    {
+      "path": "/web/modules/themes/common/darkcontentcontainer_item.css",
+      "status": 200,
+      "type": "stylesheet"
+    },
+    {
+      "path": "/web/modules/themes/common/darkcontentcontainer.css",
+      "status": 200,
+      "type": "stylesheet"
+    },
+    {
+      "path": "/web/modules/themes/common/darkcontentcontainer_nontv.css",
+      "status": 200,
+      "type": "stylesheet"
+    },
+    {
+      "path": "/web/modules/emby-elements/emby-collapse/emby-collapse.js",
+      "status": 200,
+      "type": "script"
+    },
+    {
+      "path": "/web/modules/fonts/material-icons/mi_2024_05.woff2",
+      "status": 200,
+      "type": "font"
+    },
+    {
+      "path": "/emby/SubtitleAssistant/settings",
+      "status": 200,
+      "type": "fetch"
+    },
+    {
+      "path": "/emby/web/configurationpages",
+      "status": 200,
+      "type": "fetch"
+    },
+    {
+      "path": "/web/modules/emby-elements/emby-collapse/emby-collapse.css",
+      "status": 200,
+      "type": "stylesheet"
+    },
+    {
+      "path": "/emby/Users/[redacted]/Views",
+      "status": 200,
+      "type": "fetch"
+    },
+    {
+      "path": "/web/modules/emby-elements/emby-input/emby-input.js",
+      "status": 200,
+      "type": "script"
+    },
+    {
+      "path": "/web/modules/themes/light/theme.json",
+      "status": 200,
+      "type": "xhr"
+    },
+    {
+      "path": "/web/modules/emby-elements/emby-input/emby-input.css",
+      "status": 200,
+      "type": "stylesheet"
+    },
+    {
+      "path": "/web/modules/emby-elements/emby-input/emby-input_3_nontv.css",
+      "status": 200,
+      "type": "stylesheet"
+    },
+    {
+      "path": "/web/modules/themes/logodark.png",
+      "status": 200,
+      "type": "image"
+    },
+    {
+      "path": "/web/modules/polyfills/dragdroptouch.js",
+      "status": 200,
+      "type": "script"
+    },
+    {
+      "path": "/emby/web/configurationpages",
+      "status": 200,
+      "type": "fetch"
+    },
+    {
+      "path": "/emby/SubtitleAssistant/cloud/jobs",
+      "status": 200,
+      "type": "fetch"
+    }
+  ],
+  "settingsRequests": [
+    {
+      "method": "GET",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "status": 200
+    }
+  ],
+  "initialDefaultsWereFive": true,
+  "ok": true
+}

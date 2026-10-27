@@ -21,11 +21,17 @@
 
 ## 尚未完成
 
-1. 创建正式 Git 提交（当前主要代码、测试、发布工具、`subtitle-pool/` 与计划均未提交）。
-2. 生成发布件：`update.json`、`SHA256SUMS.txt`、发布说明、PR 描述；由 `emby-unified-plugin/tools/github_release.py` 发布到 `jzdxjk/subtitle-modal-web`（版本 tag `emby-subtitle-assistant-v1.0.0.0`，指针 release tag `emby-subtitle-assistant-update`）。
-3. 部署 `subtitle-pool` Worker（Cloudflare D1/R2；`wrangler.toml` 已含生产 database_id）。
-4. NAS 生产迁移：`emby-unified-plugin/tools/deploy_stage.py --apply`，备份配置与 SQLite 快照，仅移出五个旧 DLL 并原子放入新 DLL；**安装后只标记待重启，由用户手动重启 Emby**。
-5. 验证证据归档后停止自有 4.10.2 验证容器与 NAS 校验 mock 服务；**绝不停止生产 `emby` 容器**。
+1. **用户手动重启 Emby**：生产已暂存新 DLL 并移出五个旧 DLL，重启后才加载并触发旧配置迁移。
+2. 重启后核对：插件加载、五标签、三下载器、旧配置迁移结果、代理与更新任务。
+3. 验证证据归档后停止自有 4.10.2 验证容器与 NAS 校验 mock 服务；**绝不停止生产 `emby` 容器**。
+
+## 已完成（2026-10-27）
+
+- Git 提交 `befc5bc`，分支 `codex/subtitle-assistant` 已推送。
+- GitHub 版本 release `emby-subtitle-assistant-v1.0.0.0` 与指针 release `emby-subtitle-assistant-update` 已发布并通过校验。
+- 草稿 PR：https://github.com/jzdxjk/subtitle-modal-web/pull/1
+- 池端 Worker `chickenrice-subtitle-pool` 已部署（Version `2cb5022d-c723-49e3-9803-af7264046fdb`，线上健康与新查询已验证）。
+- NAS 生产暂存完成，备份 `/volume1/docker/emby/backups/subtitle-assistant-20261027T080421Z-ba21a7a8`；生产容器未重启。
 
 ## 不可违反的边界
 
