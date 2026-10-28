@@ -177,7 +177,7 @@ def start(case):
     else:
         root = ROOT / case.version
         root.mkdir(mode=0o700, exist_ok=True)
-        for name in ["config", "media", "media/videos", "media/pool"]:
+        for name in ["config", "media", "media/videos", "media/subtitle-fixtures"]:
             path = root / name
             path.mkdir(mode=0o700, exist_ok=True)
             os.chown(path, 2, 2)
@@ -233,12 +233,12 @@ def bootstrap(case):
         raise RuntimeError("isolated startup account is not an administrator")
     libraries = library_items(client.request("GET", "/Library/VirtualFolders/Query"))
     matching = [item for item in libraries if item.get("Name") == LIBRARY_NAME]
+    root = ROOT / case.version
+    for name in ["media/videos", "media/subtitle-fixtures"]:
+        directory = root / name
+        directory.mkdir(mode=0o700, exist_ok=True)
+        os.chown(directory, 2, 2)
     if not matching:
-        root = ROOT / case.version
-        for name in ["media/videos", "media/pool"]:
-            directory = root / name
-            directory.mkdir(mode=0o700, exist_ok=True)
-            os.chown(directory, 2, 2)
         client.request("POST", "/Library/VirtualFolders", {
             "Name": LIBRARY_NAME,
             "CollectionType": "movies",
@@ -275,7 +275,7 @@ def fixtures(case):
         docker("exec", case.container, "/bin/ffmpeg", "-hide_banner", "-loglevel", "error",
                "-f", "lavfi", "-i", "color=c=black:s=160x90:r=1", "-t", "12",
                "-c:v", "mpeg4", "-q:v", "31", "-an", "/media/videos/" + target.name)
-    subtitle = ROOT / case.version / "media" / "pool" / "ABP-192.fixture.srt"
+    subtitle = ROOT / case.version / "media" / "subtitle-fixtures" / "ABP-192.fixture.srt"
     if not subtitle.exists():
         subtitle.write_text("1\n00:00:00,000 --> 00:00:11,000\n独立验收字幕，不包含真实影片内容。\n", encoding="utf-8")
         os.chown(subtitle, 2, 2)

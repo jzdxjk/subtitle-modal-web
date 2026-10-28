@@ -50,21 +50,6 @@ class MockServiceTests(unittest.TestCase):
         with urlopen(request, timeout=5) as response:
             return json.load(response)
 
-    def test_fallback_pool_returns_all_six_and_only_sixth_download_succeeds(self):
-        module = mock_module()
-        result = self.request("/pool/fallback/api/v1/subtitles/search?match=work&codes=ABP-192&duration=12")
-        self.assertEqual(len(result["items"]), 6)
-        self.assertEqual([item["size_bytes"] for item in result["items"]], sorted(
-            [item["size_bytes"] for item in result["items"]], reverse=True))
-        for item in result["items"][:5]:
-            with self.assertRaises(HTTPError) as raised:
-                urlopen(self.base + "/pool/fallback" + item["download_url"], timeout=5)
-            self.assertEqual(raised.exception.code, 404)
-        last = result["items"][-1]
-        with urlopen(self.base + "/pool/fallback" + last["download_url"], timeout=5) as response:
-            data = response.read()
-        self.assertEqual(module.hashlib.sha256(data).hexdigest(), last["sha256"])
-
     def test_cloud_done_writes_only_owned_fixture_and_records_refresh_success(self):
         video = self.root / "4.10.2.0/media/videos/FNS-192-CD2-1080p.mp4"
         video.parent.mkdir(parents=True)

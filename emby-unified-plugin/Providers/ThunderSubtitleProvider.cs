@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.Concurrent;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Runtime.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
@@ -20,6 +21,9 @@ namespace Emby.SubtitleAssistant.Providers
         private readonly SemaphoreSlim _prefetch = new SemaphoreSlim(4);
         private readonly SubtitleBodyCache _bodies = new SubtitleBodyCache();
         private readonly ConcurrentDictionary<string, CachedDocuments> _urls = new ConcurrentDictionary<string, CachedDocuments>(StringComparer.Ordinal);
+        private static readonly Regex ChickenRiceUploadName = new Regex(
+            @"^(?<code>[A-Z0-9]+(?:-[A-Z0-9]+)*)\.海南鸡字幕\.\d+(?:\.\d+)?KB\.\d{8}\.(?<format>srt|ass|ssa)$",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
         public ThunderSubtitleProvider(ILogManager logManager) : this(PluginHttpClient.Shared) { _logger = logManager?.GetLogger(GetType().Name); }
         internal ThunderSubtitleProvider(PluginHttpClient http) { _http = http; }
         public string Name => ProviderNames.Thunder;
@@ -52,8 +56,11 @@ namespace Emby.SubtitleAssistant.Providers
         private async Task<IEnumerable<RemoteSubtitleInfo>> SearchCore(SubtitleSearchRequest request, MediaIdentifier identifier,
             PluginConfiguration config, CancellationToken ct)
         {
-            // WhenAll preserves input order, so API response races do not choose duplicate metadata.
-            var responses = await Task.WhenAll(identifier.QueryVariants.Select(x => Query(x, ct))).ConfigureAwait(false);
+            // Query the normal aliases and the uploaded-name aliases independently. A failed tagged lookup
+            // must not discard successful ordinary Thunder results.
+            var codes = identifier.QueryVariants.ToArray();
+            var responses = await Task.WhenAll(codes.Select(x => Query(x, ct))
+                .Concat(codes.Select(x => Query("海南鸡字幕 " + x, ct)))).ConfigureAwait(false);
             // A cached empty result must mean the source answered; a total transport failure is retried next time.
             if (responses.Length != 0 && responses.All(x => x.Failed)) throw new IOException("Thunder subtitle search failed.");
             var rows = responses.SelectMany(x => x.Items ?? Array.Empty<ThunderItem>()).Where(x => x != null && ProviderSupport.HttpUrl(x.Url)
@@ -67,13 +74,15 @@ namespace Emby.SubtitleAssistant.Providers
             {
                 ct.ThrowIfCancellationRequested();
                 var docs = byUrl[row.Url];
+                var chickenRiceUpload = IsChickenRiceUpload(row,identifier);
                 var hintedLanguages = (row.Languages ?? Array.Empty<string>()).Select(SubtitleContent.NormalizeLanguage).Where(x => x != "unknown").ToArray();
                 if (docs == null)
                 {
                     var format = (row.Ext ?? "").TrimStart('.').ToLowerInvariant();
                     if (!SubtitleContent.IsSupported(format)) continue;
                     var language = hintedLanguages.FirstOrDefault(x => SubtitleContent.AcceptLanguage(request.Language, x)) ?? hintedLanguages.FirstOrDefault() ?? "unknown";
-                    if (SubtitleContent.AcceptLanguage(request.Language, language)) candidates.Add(Candidate(row, request, null, language, candidates.Count));
+                    if (SubtitleContent.AcceptLanguage(request.Language, language)) candidates.Add(Candidate(row, request, null, language, candidates.Count,
+                        chickenRiceUpload,chickenRiceUpload && IsRequestedLanguage(request.Language, language)));
                     continue;
                 }
                 foreach (var document in docs)
@@ -81,13 +90,35 @@ namespace Emby.SubtitleAssistant.Providers
                     var language = document.Language == "unknown" ? hintedLanguages.FirstOrDefault(x => SubtitleContent.AcceptLanguage(request.Language, x)) ?? hintedLanguages.FirstOrDefault() ?? "unknown" : document.Language;
                     if (!SubtitleContent.AcceptLanguage(request.Language, language)) continue;
                     if (MediaIdentifier.ContainsAnyCode(document.Name) && !identifier.Matches(document.Name)) continue;
-                    candidates.Add(Candidate(row, request, document, language, candidates.Count));
+                    candidates.Add(Candidate(row, request, document, language, candidates.Count,
+                        chickenRiceUpload,chickenRiceUpload && IsRequestedLanguage(request.Language, language)));
                 }
             }
-            return ProviderSupport.Complete(ProviderSupport.Deduplicate(candidates), request, Name, config.ThunderMaxResults, "迅雷API");
+            // Deduplication keeps the first candidate's display metadata and primary URL. Put a
+            // validated uploaded name first so its alternate ordinary URL remains a fallback.
+            var preferred = candidates.OrderByDescending(x => x.IsChickenRice).ThenBy(x => x.StableOrder);
+            var manualLimit = Math.Min(10, Math.Max(1, config.ThunderMaxResults));
+            return ProviderSupport.Complete(ProviderSupport.Deduplicate(preferred), request, Name, manualLimit, "迅雷API", chickenRiceFirst: true);
         }
 
-        private SubtitleCandidate Candidate(ThunderItem row, SubtitleSearchRequest request, SubtitleDocument document, string language, int index)
+        private static bool IsChickenRiceUpload(ThunderItem row, MediaIdentifier identifier)
+        {
+            var filename = Path.GetFileName((row?.Name ?? "").Replace('\\', '/'));
+            var match = ChickenRiceUploadName.Match(filename ?? "");
+            var extension = (row?.Ext ?? "").TrimStart('.');
+            return match.Success && identifier.Matches(match.Groups["code"].Value) &&
+                (string.IsNullOrEmpty(extension) || string.Equals(extension, match.Groups["format"].Value, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static bool IsRequestedLanguage(string requested, string actual)
+        {
+            var requestedLanguage = SubtitleContent.NormalizeLanguage(requested);
+            var actualLanguage = SubtitleContent.NormalizeLanguage(actual);
+            return requestedLanguage != "unknown" && actualLanguage != "unknown" && requestedLanguage == actualLanguage;
+        }
+
+        private SubtitleCandidate Candidate(ThunderItem row, SubtitleSearchRequest request, SubtitleDocument document, string language,
+            int index, bool isChickenRiceUpload, bool prioritizeChickenRice)
         {
             var payload = new DownloadPayload { Url = row.Url, Name = row.Name, Format = document?.Format ?? (row.Ext ?? "").TrimStart('.').ToLowerInvariant(), Language = request.Language,
                 ContentHash = document?.ContentHash, EntryName = document?.Name, MediaPath = request.MediaPath };
@@ -95,9 +126,16 @@ namespace Emby.SubtitleAssistant.Providers
             var apiSeconds = row.Duration > 0 ? row.Duration.Value / 1000d : (double?)null;
             var durationSeconds = timelineSeconds ?? apiSeconds;
             var durationSource = timelineSeconds.HasValue ? "字幕轴" : "迅雷API";
-            return new SubtitleCandidate { Id = ProviderSupport.Encode(payload), Name = row.Name ?? document?.Name ?? "字幕", Format = payload.Format, Language = language,
+            var displayName = row.Name ?? document?.Name ?? "字幕";
+            if (isChickenRiceUpload)
+            {
+                var filename = Path.GetFileName((row?.Name ?? "").Replace('\\','/'));
+                var match = ChickenRiceUploadName.Match(filename ?? "");
+                if (match.Success) displayName = "[海南鸡字幕] " + match.Groups["code"].Value + "." + match.Groups["format"].Value;
+            }
+            return new SubtitleCandidate { Id = ProviderSupport.Encode(payload), Name = displayName, Format = payload.Format, Language = language,
                 DurationSeconds = durationSeconds, DurationSource = durationSource, SizeBytes = document?.Bytes.LongLength,
-                ContentHash = document?.ContentHash, DownloadUrl = row.Url, StableOrder = index };
+                ContentHash = document?.ContentHash, DownloadUrl = row.Url, StableOrder = index, IsChickenRice = prioritizeChickenRice };
         }
 
         private async Task<QueryOutcome> Query(string code, CancellationToken ct)

@@ -25,14 +25,16 @@ public class ProviderSearchTests
     [InlineData("SSIS-157-LTX【2021-08-19】（小宵虎南）出差和一直蔑视的中年性骚扰上司共处一室…直到早晨的绝伦性交HCUP新入社员.mp4", "SSIS-157")]
     [InlineData("SSIS-157-c-无码破解.mp4", "SSIS-157")]
     [InlineData("SAVR00143.mp4", "SAVR-00143")]
-    public async Task OrdinaryThunderSearchSendsExactlyOneCleanQuery(string path, string expected)
+    public async Task OrdinaryThunderSearchQueriesCleanCodeAndChickenRiceAlias(string path, string expected)
     {
         var config = new PluginConfiguration();
         using var scope = Plugin.OverrideConfigurationForTests(config);
         var handler = new FixtureHandler(_ => "{\"code\":0,\"data\":[]}");
         using var http = new PluginHttpClient(() => config, _ => handler);
         Assert.Empty(await new ThunderSubtitleProvider(http).Search(Request(path), CancellationToken.None));
-        Assert.Equal("?name=" + expected, Uri.UnescapeDataString(Assert.Single(handler.Calls).Query));
+        var queries = handler.Calls.Select(x => Uri.UnescapeDataString(x.Query)).ToArray();
+        Assert.Contains("?name=" + expected, queries);
+        Assert.Contains(queries, x => x == "?name=海南鸡字幕 " + expected);
     }
 
     [Fact]
@@ -56,10 +58,11 @@ public class ProviderSearchTests
         Assert.Contains("第1版", display[0].Name); // Parsed timeline (100s) wins over the misleading API value.
         Assert.Contains("(字幕轴)", display[0].Name);
         var queries = handler.Calls.Where(x => x.Host == "api-shoulei-ssl.xunlei.com").Select(x => Uri.UnescapeDataString(x.Query)).ToArray();
-        Assert.Equal(3, queries.Length);
+        Assert.Equal(6, queries.Length);
         Assert.Contains(queries, x => x.Contains("FC2-PPV-1234567"));
         Assert.Contains(queries, x => x.Contains("FC2PPV-1234567"));
         Assert.Contains(queries, x => x.Contains("FC2-1234567"));
+        Assert.Contains(queries, x => x.Contains("海南鸡字幕 FC2-PPV-1234567"));
         Assert.Equal(6, handler.Calls.Count(x => x.Host == "files.test"));
         using (SearchExecutionContext.BeginAutomation())
             Assert.Equal(6, (await provider.Search(request, CancellationToken.None)).Count());
@@ -91,56 +94,12 @@ public class ProviderSearchTests
     [Fact]
     public async Task NoNumberDoesNotCallAnyRemoteEndpoint()
     {
-        var config = new PluginConfiguration { PoolUrl = "https://pool.test" };
+        var config = new PluginConfiguration();
         using var scope = Plugin.OverrideConfigurationForTests(config);
         var handler = new FixtureHandler(_ => throw new InvalidOperationException("Unexpected HTTP"));
         using var http = new PluginHttpClient(() => config, _ => handler);
         Assert.Empty(await new ThunderSubtitleProvider(http).Search(Request("/SSIS-157/title.mp4"), CancellationToken.None));
-        Assert.Empty(await new PoolSubtitleProvider(http).Search(Request("title.mp4"), CancellationToken.None));
         Assert.Empty(handler.Calls);
-    }
-
-    [Fact]
-    public async Task PoolUsesUnlimitedBatchWorkSearchAndChecksReturnedCodes()
-    {
-        var config = new PluginConfiguration { PoolUrl = "https://pool.test/", PoolMaxResults = 1 };
-        using var scope = Plugin.OverrideConfigurationForTests(config);
-        var handler = new FixtureHandler(_ => JsonSerializer.Serialize(new { items = new[] {
-            new { id = "far", code = "MIUM-00123-CD2", format = "srt", duration_seconds = 80, size_bytes = 5000, sha256 = "far" },
-            new { id = "near", code = "300MIUM-00123", format = "ass", duration_seconds = 99, size_bytes = 100, sha256 = "near" },
-            new { id = "wrong", code = "MIUM-00124", format = "srt", duration_seconds = 100, size_bytes = 9999, sha256 = "wrong" }
-        } }));
-        using var http = new PluginHttpClient(() => config, _ => handler);
-        var provider = new PoolSubtitleProvider(http);
-        var results = (await provider.Search(Request("MIUM-00123-CD1.mp4"), CancellationToken.None)).ToArray();
-        Assert.Single(results);
-        Assert.Equal("ass", results[0].Format);
-        Assert.Equal("MIUM-00123-CD1.mp4", ProviderSupport.Decode(results[0].Id).MediaPath);
-        var url = Uri.UnescapeDataString(Assert.Single(handler.Calls).Query);
-        Assert.Contains("match=work", url);
-        Assert.Contains("codes=300MIUM-00123", url);
-        Assert.Contains("codes=MIUM-00123", url);
-        Assert.Equal(2, url.Split('&').Count(x => x.StartsWith("codes=", StringComparison.Ordinal)));
-        Assert.DoesNotContain("limit=", url);
-        using (SearchExecutionContext.BeginAutomation())
-            Assert.Equal(2, (await provider.Search(Request("MIUM-00123.mp4"), CancellationToken.None)).Count());
-    }
-
-    [Fact]
-    public async Task PoolSearchDeduplicatesBackToBackIdenticalRequests()
-    {
-        var config = new PluginConfiguration { PoolUrl = "https://pool.test" };
-        using var scope = Plugin.OverrideConfigurationForTests(config);
-        var handler = new FixtureHandler(_ => JsonSerializer.Serialize(new { items = new[] {
-            new { id = "one", code = "SSIS-157", format = "srt", duration_seconds = 100, size_bytes = 1000, sha256 = "hash" }
-        } }));
-        using var http = new PluginHttpClient(() => config, _ => handler);
-        var provider = new PoolSubtitleProvider(http);
-        var first = (await provider.Search(Request("SSIS-157.mp4"), CancellationToken.None)).ToArray();
-        var second = (await provider.Search(Request("SSIS-157.mp4"), CancellationToken.None)).ToArray();
-        Assert.Single(first);
-        Assert.Equal(first[0].Id, Assert.Single(second).Id);
-        Assert.Single(handler.Calls);
     }
 
     [Fact]
@@ -345,17 +304,16 @@ public class ProviderSearchTests
     [Fact]
     public async Task TamperedDownloadIdIsRejectedBeforeAnyNetworkRequest()
     {
-        var config = new PluginConfiguration { PoolUrl = "https://pool.test" };
+        var config = new PluginConfiguration();
         using var scope = Plugin.OverrideConfigurationForTests(config);
         var handler = new FixtureHandler(_ => throw new InvalidOperationException("Forged ID reached HTTP"));
         using var http = new PluginHttpClient(() => config, _ => handler);
-        var id = ProviderSupport.Encode(new DownloadPayload { Url = "https://issued.test/sub.srt", PoolId = "issued", Format = "srt", Language = "chi" });
+        var id = ProviderSupport.Encode(new DownloadPayload { Url = "https://issued.test/sub.srt", Format = "srt", Language = "chi" });
         var segments = id.Substring(4).Split('.');
         var json = Encoding.UTF8.GetString(Convert.FromBase64String(segments[0].Replace('-', '+').Replace('_', '/') + new string('=', (4 - segments[0].Length % 4) % 4)));
         json = json.Replace("issued.test", "127.0.0.1");
         var forged = "sa1." + Convert.ToBase64String(Encoding.UTF8.GetBytes(json)).TrimEnd('=').Replace('+', '-').Replace('/', '_') + (segments.Length > 1 ? "." + segments[1] : "");
         await Assert.ThrowsAnyAsync<InvalidDataException>(() => new ThunderSubtitleProvider(http).GetSubtitles(forged, CancellationToken.None));
-        await Assert.ThrowsAnyAsync<InvalidDataException>(() => new PoolSubtitleProvider(http).GetSubtitles(forged, CancellationToken.None));
         Assert.Empty(handler.Calls);
     }
 

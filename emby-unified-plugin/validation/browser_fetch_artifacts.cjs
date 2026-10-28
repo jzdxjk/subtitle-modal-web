@@ -12,7 +12,7 @@ if (!fs.existsSync(retained) && fs.existsSync(initial)) {
     const report = JSON.parse(fs.readFileSync(initial, 'utf8'));
     if (report.ok && report.host === 'http://127.0.0.1:19042') fs.copyFileSync(initial, retained);
 }
-const files = [`${suffix}-report.json`, ...['local', 'thunder', 'pool', 'cloud', 'proxy'].map(tab => `${suffix}-${tab}.png`)];
+const files = [`${suffix}-report.json`, ...['local', 'thunder', 'cloud', 'proxy'].map(tab => `${suffix}-${tab}.png`)];
 if (suffix === '4811') files.push('4811-pre-network-idle-failure.json');
 const remote = 'set -eu; tar -czf - -C /volume1/docker/emby-subtitle-assistant-validation-20261027/browser/browser-output ' + files.join(' ') + ' | base64 -w 0';
 const encoded = execFileSync('pwsh', ['-NoLogo', '-NoProfile', '-File', 'C:/Users/jzdxjk/.codex/nas-sudo.ps1', '-Command', remote],
@@ -23,7 +23,7 @@ const entries = execFileSync('tar', ['-tzf', archive], { encoding: 'utf8' }).tri
 if (entries.some(entry => !files.includes(entry))) throw Error('Unexpected archive entry');
 execFileSync('tar', ['-xzf', archive, '-C', directory], { stdio: ['ignore', 'pipe', 'pipe'] });
 const report = JSON.parse(fs.readFileSync(path.join(directory, `${suffix}-report.json`), 'utf8'));
-if (!report.ok || !report.restored || report.screenshots.length !== 5) throw Error('Browser report is incomplete');
+if (!report.ok || !report.restored || report.screenshots.length !== 4) throw Error('Browser report is incomplete');
 const text = JSON.stringify(report);
 if (/"(?:Password|AccessToken|Username|CloudApiToken)"\s*:|Bearer |X-Emby-Token/i.test(text)) throw Error('Unexpected credential field in public report');
 if ((report.recentResources || []).some(resource => resource.path.includes('?'))) throw Error('Query string in resource diagnostics');

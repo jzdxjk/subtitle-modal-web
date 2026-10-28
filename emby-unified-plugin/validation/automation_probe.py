@@ -1,19 +1,17 @@
 #!/usr/bin/env python3
-"""Observe native scheduled/new-item completion beyond the five displayed results."""
+"""Verify native new-item/backfill downloads and single-item subtitle refresh."""
 
 import argparse
 import json
 import re
 import sys
 import time
-from urllib.parse import urlencode
 import uuid
+from urllib.parse import urlencode
 
 from emby_validation import CASES, ROOT, bootstrap, write_private
 from business_probe import copy_video, find_movie, movies, set_library_sources
 from cloud_probe import scan_signature
-from mock_services import subtitle_bytes
-from proxy_probe import events
 
 
 TASK_KEY = "SubtitleAssistantMissingSubtitles"
@@ -39,26 +37,30 @@ def run_task(client, key=TASK_KEY, expected_status="Completed"):
 
 
 def prepare(client, case, candidate, scenario, code):
-    credentials = json.loads((ROOT / "mock-session.json").read_text())
     result = client.request("POST", "/SubtitleAssistant/settings", {
-        "PoolUrl": "http://172.17.0.1:19100/pool/fallback", "PoolMaxResults": 5,
-        "LocalPaths": "/media/subtitles", "AutoDownloadOnNewMedia": scenario == "new",
-        "Proxy": {"Enabled": True, "Address": "http://172.17.0.1:19101",
-                  "Username": credentials["Username"], "Password": credentials["Password"],
-                  "Thunder": True, "Pool": False, "Cloud": False, "Updates": False, "BypassLocal": False},
+        "LocalPaths": "/media/subtitles", "LocalMaxResults": 5, "ThunderMaxResults": 10,
+        "AutoDownloadOnNewMedia": scenario == "new",
+        "Proxy": {"Enabled": False, "ClearPassword": True, "Username": ""},
     })
     if not result.get("Ok"):
-        raise RuntimeError("could not configure fallback-only subtitle fixture")
-    set_library_sources(client, ["海南鸡字幕"], languages=[])
+        raise RuntimeError("could not configure local subtitle fixture")
+    subtitle_root = ROOT / case.version / "media/subtitles"
+    subtitle_root.mkdir(mode=0o700, exist_ok=True)
+    fixture = ROOT / case.version / "media/subtitle-fixtures/ABP-192.fixture.srt"
+    subtitle = subtitle_root / (code + ".zh-CN.srt")
+    subtitle.write_bytes(fixture.read_bytes())
+    # Keep Emby's native auto-downloader from saving the same fixture during the
+    # scan; the plugin completion service selects Chinese when this list is empty.
+    sources = set_library_sources(client, ["本地字幕"], languages=[])
     started = time.monotonic()
-    video, path = copy_video(case, scenario + "-" + candidate + "-" + uuid.uuid4().hex[:8], code=code)
+    stem = "abc-123-4k-无码破解" if scenario == "new" else None
+    video, path = copy_video(case, scenario + "-" + candidate + "-" + uuid.uuid4().hex[:8], code=code, stem=stem)
     client.request("POST", "/Library/Refresh", {})
     item = find_movie(client, path)
     scan_signature(client, wait=True)
-    sources = set_library_sources(client, ["海南鸡字幕"], languages=["zh-CN"])
     if list(video.parent.glob(video.stem + ".*.srt")):
         raise RuntimeError("fixture already has a subtitle before plugin automation starts")
-    return video, path, item, sources, started
+    return video, path, item, sources, subtitle, started
 
 
 def observe(client, video, path, timeout=95):
@@ -74,24 +76,10 @@ def observe(client, video, path, timeout=95):
     return list(video.parent.glob(video.stem + ".*.srt")), []
 
 
-def summarize_window(start):
-    window = events()[start:]
-    downloads = [event["Path"] for event in window
-                 if event.get("Method") == "GET" and event.get("Path", "").startswith("/pool/fallback/")
-                 and event.get("Path", "").endswith("/download")]
-    return {
-        "PoolDownloadRequests": len(downloads),
-        "SixthCandidateRequested": any(path.endswith("000000000006/download") for path in downloads),
-        "FirstFiveCandidatesRequested": all(any(path.endswith(str(index).zfill(12) + "/download") for path in downloads)
-                                              for index in range(1, 6)),
-        "DisabledRemoteSourceProxyRequests": len([event for event in window if event.get("Proxy")]),
-    }
-
-
 def probe(case, candidate, scenario):
     client = bootstrap(case)
-    code = "MEYD-040" if scenario == "backfill" else "IPX-697"
-    video, path, item, sources, started = prepare(client, case, candidate, scenario, code)
+    code = "MEYD-040" if scenario == "backfill" else "ABC-123"
+    video, path, item, sources, fixture, started = prepare(client, case, candidate, scenario, code)
     report = {"ServerVersion": case.version, "Candidate": candidate, "Scenario": scenario,
               "VideoStem": video.stem, "NativeLibrarySources": sources}
     try:
@@ -99,17 +87,21 @@ def probe(case, candidate, scenario):
             source = next(source for source in item["MediaSources"] if source["Path"] == path)
             query = urlencode({"MediaSourceId": source["Id"], "IsPerfectMatch": "false"})
             results = client.request("GET", "/Items/" + item["Id"] + "/RemoteSearch/Subtitles/zh-CN?" + query)
-            report["DisplayedPoolResults"] = len([value for value in results if value.get("ProviderName") == "海南鸡字幕"])
+            report["DisplayedLocalResults"] = len([value for value in results if value.get("ProviderName") == "本地字幕"])
         before_scan = scan_signature(client, wait=True)
-        event_start = len(events())
         if scenario == "backfill":
             report["NativeTaskStatus"] = run_task(client)
         saved, streams = observe(client, video, path)
-        report.update(summarize_window(event_start))
+        content_equal = len(saved) == 1 and saved[0].read_bytes() == fixture.read_bytes()
+        native_name = video.stem + ".zh-CN.srt"
+        legacy_zh_name = video.stem + ".zh.srt"
         report.update({
             "SavedSubtitleNames": [file.name for file in saved],
             "CompleteStemPreserved": len(saved) == 1 and saved[0].name.startswith(video.stem + "."),
-            "SixthCandidateBytesSaved": len(saved) == 1 and saved[0].read_bytes() == subtitle_bytes(6),
+            "NativeLanguageSuffixPreserved": len(saved) == 1 and saved[0].name in {native_name, legacy_zh_name},
+            "NativeLanguageSuffix": "zh-CN" if len(saved) == 1 and saved[0].name == native_name else
+                "zh" if len(saved) == 1 and saved[0].name == legacy_zh_name else None,
+            "OriginalBytesPreserved": content_equal,
             "ExternalSubtitleStreamsVisible": bool(streams),
             "NoFullLibraryScanOnCompletion": before_scan == scan_signature(client),
         })
@@ -117,22 +109,21 @@ def probe(case, candidate, scenario):
             report["SecondsSinceNewFixtureCreated"] = round(time.monotonic() - started, 1)
             report["SixtySecondDelayObserved"] = report["SecondsSinceNewFixtureCreated"] >= 55
         else:
-            second_start = len(events())
+            before = saved[0].stat().st_mtime_ns if saved else None
             run_task(client)
-            report["ExistingChineseSubtitleSkipsDownload"] = summarize_window(second_start)["PoolDownloadRequests"] == 0
+            after = saved[0].stat().st_mtime_ns if saved else None
+            report["ExistingChineseSubtitleSkipsRewrite"] = before == after
         report["Passed"] = all(report[key] for key in [
-            "CompleteStemPreserved", "SixthCandidateBytesSaved", "ExternalSubtitleStreamsVisible",
-            "FirstFiveCandidatesRequested", "SixthCandidateRequested", "NoFullLibraryScanOnCompletion",
-        ]) and report["DisabledRemoteSourceProxyRequests"] == 0
+            "CompleteStemPreserved", "NativeLanguageSuffixPreserved", "OriginalBytesPreserved",
+            "ExternalSubtitleStreamsVisible", "NoFullLibraryScanOnCompletion",
+        ])
         if scenario == "new":
             report["Passed"] = report["Passed"] and report["SixtySecondDelayObserved"]
         else:
-            report["Passed"] = report["Passed"] and report["DisplayedPoolResults"] == 5 \
-                and report["ExistingChineseSubtitleSkipsDownload"]
+            report["Passed"] = report["Passed"] and report["DisplayedLocalResults"] == 1 \
+                and report["ExistingChineseSubtitleSkipsRewrite"]
     finally:
-        client.request("POST", "/SubtitleAssistant/settings", {
-            "AutoDownloadOnNewMedia": False, "Proxy": {"Enabled": False, "ClearPassword": True, "Username": ""},
-        })
+        client.request("POST", "/SubtitleAssistant/settings", {"AutoDownloadOnNewMedia": False})
     write_private(ROOT / "reports" / (candidate + "-automation-" + scenario + "-" + case.version + ".json"), report)
     return report
 

@@ -10,6 +10,11 @@ namespace Emby.SubtitleAssistant.Migration;
 internal static class LegacySettingsImporter
 {
     private static readonly string[] LegacyFiles = { "MeiamSub.LocalPool.json", "ThunderSubtitle.json", "ChickenRicePool.json", "SubtitleCloudPlugin.xml" };
+    internal static void NormalizeThunderMaxResults(PluginConfiguration configuration)
+    {
+        if (configuration.ThunderMaxResults == 5 || configuration.ThunderMaxResults > 10) configuration.ThunderMaxResults = 10;
+    }
+
     public static bool HasLegacySettings(string directory) =>
         !string.IsNullOrEmpty(directory) && LegacyFiles.Any(name => File.Exists(Path.Combine(directory, name)));
     public static PluginConfiguration Merge(string directory, PluginConfiguration current, IJsonSerializer json)
@@ -18,7 +23,7 @@ internal static class LegacySettingsImporter
         {
             var local = Read<LocalSettings>(directory, "MeiamSub.LocalPool.json", json);
             var thunder = Read<ThunderSettings>(directory, "ThunderSubtitle.json", json);
-            var pool = Read<PoolSettings>(directory, "ChickenRicePool.json", json);
+            var legacyChickenRice = Read<LegacyChickenRiceSettings>(directory, "ChickenRicePool.json", json);
             var cloudFile = Path.Combine(directory, "SubtitleCloudPlugin.xml");
             XElement cloud = null;
             if (File.Exists(cloudFile))
@@ -29,10 +34,8 @@ internal static class LegacySettingsImporter
             }
             var result = MigrationRunner.Clone(current, json);
             if (local?.SubtitleLibraryPaths != null) result.LocalPaths = local.SubtitleLibraryPaths;
-            // The pool address is fixed in code; legacy custom addresses are ignored.
-            if (pool?.RequestTimeoutSeconds != null) result.PoolTimeoutSeconds = pool.RequestTimeoutSeconds.Value;
-            if (thunder?.EnableAutoDownloadOnNewMedia != null || pool?.EnableAutoDownloadOnNewMedia != null)
-                result.AutoDownloadOnNewMedia = thunder?.EnableAutoDownloadOnNewMedia == true || pool?.EnableAutoDownloadOnNewMedia == true;
+            if (thunder?.EnableAutoDownloadOnNewMedia != null || legacyChickenRice?.EnableAutoDownloadOnNewMedia != null)
+                result.AutoDownloadOnNewMedia = thunder?.EnableAutoDownloadOnNewMedia == true || legacyChickenRice?.EnableAutoDownloadOnNewMedia == true;
             if (cloud != null)
             {
                 string Value(string name) => cloud.Elements().SingleOrDefault(x => x.Name.LocalName == name)?.Value;
@@ -40,6 +43,8 @@ internal static class LegacySettingsImporter
                 result.CloudApiToken = Value("ApiToken") ?? result.CloudApiToken;
                 result.CloudPathMappings = Value("PathMappings") ?? result.CloudPathMappings;
             }
+            result.ProviderDisplayOrder = ProviderKeyMigration.ProjectProviderOrder(result.ProviderDisplayOrder);
+            NormalizeThunderMaxResults(result);
             result.Validate();
             return result;
         }
@@ -54,12 +59,8 @@ internal static class LegacySettingsImporter
     }
     public sealed class LocalSettings { public string SubtitleLibraryPaths { get; set; } }
     public sealed class ThunderSettings { public bool? EnableAutoDownloadOnNewMedia { get; set; } }
-    public sealed class PoolSettings
+    public sealed class LegacyChickenRiceSettings
     {
-        public string PoolBaseUrl { get; set; }
-        public int? RequestTimeoutSeconds { get; set; }
         public bool? EnableAutoDownloadOnNewMedia { get; set; }
-        public string SimplifiedChineseLanguage { get; set; }
-        public string TraditionalChineseLanguage { get; set; }
     }
 }

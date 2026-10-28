@@ -51,16 +51,17 @@ public class WebSettingsTests
     }
 
     [Fact]
-    public void PoolUrlIsFixedAndHiddenAndThunderTimeoutRoundTrips()
+    public void RetiredPoolSettingsAreAbsentAndThunderTimeoutRoundTrips()
     {
-        var current = new PluginConfiguration { PoolUrl = "https://legacy-pool.example", ThunderTimeoutSeconds = 33 };
+        var current = new PluginConfiguration { ThunderTimeoutSeconds = 33 };
         var snapshot = SettingsEditor.Snapshot(current);
         Assert.Null(typeof(SettingsSnapshot).GetProperty("PoolUrl"));
         var unchanged = SettingsEditor.Apply(current, new SaveSettingsRequest { LocalMaxResults = 4 });
-        Assert.Equal(PluginConfiguration.OfficialPoolUrl, unchanged.PoolUrl);
+        Assert.Null(typeof(PluginConfiguration).GetProperty("PoolUrl"));
+        Assert.Null(typeof(ProxySnapshot).GetProperty("Pool"));
+        Assert.Null(typeof(ProxySettingsUpdate).GetProperty("Pool"));
         Assert.Equal(33, unchanged.ThunderTimeoutSeconds);
         var updated = SettingsEditor.Apply(current, new SaveSettingsRequest { ThunderTimeoutSeconds = 25 });
-        Assert.Equal(PluginConfiguration.OfficialPoolUrl, updated.PoolUrl);
         Assert.Equal(25, updated.ThunderTimeoutSeconds);
     }
 
@@ -91,17 +92,26 @@ public class WebSettingsTests
     [Fact]
     public void ProviderDisplayOrderRoundTripsAndRejectsInvalidUpdate()
     {
-        var current = new PluginConfiguration { ProviderDisplayOrder = new[] { "Pool", "Local", "Thunder" } };
+        var current = new PluginConfiguration { ProviderDisplayOrder = new[] { "Local", "Thunder" } };
         var snapshot = SettingsEditor.Snapshot(current);
-        Assert.Equal(new[] { "Pool", "Local", "Thunder" }, snapshot.ProviderDisplayOrder);
+        Assert.Equal(new[] { "Local", "Thunder" }, snapshot.ProviderDisplayOrder);
         var unchanged = SettingsEditor.Apply(current, new SaveSettingsRequest { LocalMaxResults = 4 });
-        Assert.Equal(new[] { "Pool", "Local", "Thunder" }, unchanged.ProviderDisplayOrder);
+        Assert.Equal(new[] { "Local", "Thunder" }, unchanged.ProviderDisplayOrder);
         var emptyKeepsCurrent = SettingsEditor.Apply(current, new SaveSettingsRequest { ProviderDisplayOrder = new string[0] });
-        Assert.Equal(new[] { "Pool", "Local", "Thunder" }, emptyKeepsCurrent.ProviderDisplayOrder);
-        var updated = SettingsEditor.Apply(current, new SaveSettingsRequest { ProviderDisplayOrder = new[] { "Thunder", "Local", "Pool" } });
-        Assert.Equal(new[] { "Thunder", "Local", "Pool" }, updated.ProviderDisplayOrder);
-        Assert.Throws<System.ArgumentException>(() => SettingsEditor.Apply(current, new SaveSettingsRequest { ProviderDisplayOrder = new[] { "Local", "Thunder" } }));
+        Assert.Equal(new[] { "Local", "Thunder" }, emptyKeepsCurrent.ProviderDisplayOrder);
+        Assert.Throws<System.ArgumentException>(() => SettingsEditor.Apply(current, new SaveSettingsRequest { ProviderDisplayOrder = new[] { "Thunder", "Local", "Pool" } }));
+        Assert.Equal(new[] { "Thunder", "Local" }, SettingsEditor.Apply(current, new SaveSettingsRequest { ProviderDisplayOrder = new[] { "Thunder", "Local" } }).ProviderDisplayOrder);
+        Assert.Throws<System.ArgumentException>(() => SettingsEditor.Apply(current, new SaveSettingsRequest { ProviderDisplayOrder = new[] { "Local", "Local" } }));
         var nullSnapshot = SettingsEditor.Snapshot(new PluginConfiguration { ProviderDisplayOrder = null });
-        Assert.Equal(new[] { "Pool", "Local", "Thunder" }, nullSnapshot.ProviderDisplayOrder);
+        Assert.Equal(new[] { "Local", "Thunder" }, nullSnapshot.ProviderDisplayOrder);
+    }
+
+    [Fact]
+    public void ThunderResultLimitCannotExceedTen()
+    {
+        var current = new PluginConfiguration();
+        Assert.Equal(10, current.ThunderMaxResults);
+        Assert.Throws<System.ArgumentException>(() => SettingsEditor.Apply(current, new SaveSettingsRequest { ThunderMaxResults = 11 }));
+        Assert.Equal(10, current.ThunderMaxResults);
     }
 }

@@ -22,9 +22,8 @@ public sealed class ProviderRegistration
 
 public enum CompletionScope
 {
-    // Historical backfill never touches the shared pool; only local files and Thunder.
+    // Historical and newly added media use only enabled native Local and Thunder sources.
     Historical,
-    // Newly added media may use the pool when the library keeps that source enabled.
     NewMedia
 }
 
@@ -34,9 +33,7 @@ public static class CompletionPolicy
         CompletionScope scope = CompletionScope.NewMedia)
     {
         if (options == null) return Array.Empty<ProviderRegistration>();
-        var own = scope == CompletionScope.Historical
-            ? new[] { ProviderNames.Local, ProviderNames.Thunder }
-            : new[] { ProviderNames.Local, ProviderNames.Thunder, ProviderNames.Pool };
+        var own = new[] { ProviderNames.Local, ProviderNames.Thunder };
         var disabled = new HashSet<string>(options.DisabledSubtitleFetchers ?? Array.Empty<string>(), StringComparer.OrdinalIgnoreCase);
         var order = options.SubtitleFetcherOrder ?? Array.Empty<string>();
         return (registered ?? Array.Empty<ProviderRegistration>())
@@ -77,12 +74,11 @@ public static class CompletionPolicy
         return value == "chi" || value == "zho" || value == "zh" || value.StartsWith("zh-",StringComparison.Ordinal);
     }
 
-    public static bool SkipForStreams(LibraryOptions options, IEnumerable<MediaStream> streams)
+    public static bool SkipForStreams(LibraryOptions options, IEnumerable<MediaStream> streams, bool streamLookupFailed = false)
     {
-        if (options == null) return true;
+        if (options == null || streamLookupFailed) return true;
         var items = (streams ?? Array.Empty<MediaStream>()).Where(s => s != null).ToArray();
-        return items.Any(s => s.Type == MediaStreamType.Subtitle && IsChinese(s.Language)) ||
-            (options.SkipSubtitlesIfEmbeddedSubtitlesPresent && items.Any(s => s.Type == MediaStreamType.Subtitle && !s.IsExternal)) ||
+        return items.Any(s => s.Type == MediaStreamType.Subtitle) ||
             (options.SkipSubtitlesIfAudioTrackMatches && items.Any(s => s.Type == MediaStreamType.Audio && IsChinese(s.Language)));
     }
 

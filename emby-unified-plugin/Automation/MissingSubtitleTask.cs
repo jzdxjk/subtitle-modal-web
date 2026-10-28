@@ -26,7 +26,7 @@ public sealed class MissingSubtitleTask : IScheduledTask
     public string Name => "字幕助手：补全缺失中文字幕";
     public string Key => "SubtitleAssistantMissingSubtitles";
     public string Category => "字幕助手";
-    public string Description => "历史补全仅使用媒体库启用的本地、迅雷来源，按库内顺序补全缺少中文字幕的影片；海南鸡字幕仅参与新入库自动补全。";
+    public string Description => "按媒体库启用的本地、迅雷来源及库内顺序补全缺少中文字幕的影片。";
     public IEnumerable<TaskTriggerInfo> GetDefaultTriggers() => Array.Empty<TaskTriggerInfo>();
 
     public async Task Execute(CancellationToken cancellationToken, IProgress<double> progress)

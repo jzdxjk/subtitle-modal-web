@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using Emby.SubtitleAssistant.Automation;
 using MediaBrowser.Model.Configuration;
 using MediaBrowser.Model.Entities;
@@ -46,6 +47,19 @@ public sealed class StreamCollectorTests
         var failure = Assert.Single(failures);
         Assert.Equal(StreamCollector.MediaSourceStreamsStage, failure.Stage);
         Assert.IsType<ArgumentOutOfRangeException>(failure.Error);
+    }
+
+    [Fact]
+    public void StreamLookupFailureFailsClosedForSubtitleCompletion()
+    {
+        var failed = false;
+        var streams = StreamCollector.Collect(
+            () => Array.Empty<MediaStream>(),
+            _ => throw new IOException("media streams unavailable"),
+            66659L,
+            (_, __) => failed = true);
+
+        Assert.True(CompletionPolicy.SkipForStreams(new LibraryOptions(),streams,failed));
     }
 
     [Fact]

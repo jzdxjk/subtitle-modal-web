@@ -13,8 +13,8 @@ define(["baseView"], function (BaseView) {
         return ApiClient.ajax(options);
     }
 
-    var PROVIDER_LABELS = { Local: "本地字幕", Thunder: "迅雷字幕", Pool: "海南鸡字幕" };
-    var PROVIDER_DEFAULT_ORDER = ["Pool", "Local", "Thunder"];
+    var PROVIDER_LABELS = { Local: "本地字幕", Thunder: "迅雷字幕" };
+    var PROVIDER_DEFAULT_ORDER = ["Local", "Thunder"];
     function providerLabel(key) { return PROVIDER_LABELS[key] || key; }
 
     function View(view) {

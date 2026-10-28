@@ -53,10 +53,10 @@ namespace Emby.SubtitleAssistant.Providers
             }
             catch (FormatException ex) { throw new InvalidDataException("Invalid subtitle download identifier.", ex); }
         }
-        public static IEnumerable<RemoteSubtitleInfo> Complete(IEnumerable<SubtitleCandidate> candidates, SubtitleSearchRequest request, string provider, int maxResults, string durationSource)
+        public static IEnumerable<RemoteSubtitleInfo> Complete(IEnumerable<SubtitleCandidate> candidates, SubtitleSearchRequest request, string provider, int maxResults, string durationSource, bool chickenRiceFirst = false)
         {
             var runtime = request.RuntimeTicks > 0 ? request.RuntimeTicks.Value / (double)TimeSpan.TicksPerSecond : (double?)null;
-            var ordered = SubtitleRanking.Order(candidates, runtime).AsEnumerable();
+            var ordered = SubtitleRanking.Order(candidates, runtime, chickenRiceFirst).AsEnumerable();
             if (!SearchExecutionContext.IsAutomation) ordered = ordered.Take(Math.Max(1, maxResults));
             return ordered.Select(x => new RemoteSubtitleInfo
             {
@@ -109,7 +109,6 @@ namespace Emby.SubtitleAssistant.Providers
         [DataMember] public string Language { get; set; }
         [DataMember] public string Name { get; set; }
         [DataMember] public string MediaPath { get; set; }
-        [DataMember] public string PoolId { get; set; }
         [DataMember] public string[] AlternateUrls { get; set; }
         [DataMember] public string[] AlternatePaths { get; set; }
         [DataMember] public bool IsForced { get; set; }

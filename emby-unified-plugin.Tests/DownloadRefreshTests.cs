@@ -7,6 +7,23 @@ namespace Emby.SubtitleAssistant.Tests;
 
 public sealed class DownloadRefreshTests
 {
+    [Theory]
+    [InlineData("abc-123-4k")]
+    [InlineData("abc-123-无码破解")]
+    [InlineData("abc-123-4k-无码破解")]
+    public void NativeFilenameWithLanguageTagRefreshesAfterSubtitleWrite(string originalStem)
+    {
+        using var fixture = new DirectoryFixture();
+        var refreshed = 0;
+        var filename = originalStem + ".zh-CN.srt";
+        using (var stream = DownloadWriteObserver.Track(new MemoryStream(new byte[3]), new[] { fixture.Path }, originalStem, () => refreshed++))
+        {
+            File.WriteAllText(System.IO.Path.Combine(fixture.Path, filename), "new subtitle");
+            Assert.Equal(0, refreshed);
+        }
+        Assert.Equal(1, refreshed);
+    }
+
     [Fact] public void OnlyRefreshesAfterNativeStreamClosesAndMatchingFileWasWritten()
     {
         using var fixture = new DirectoryFixture();

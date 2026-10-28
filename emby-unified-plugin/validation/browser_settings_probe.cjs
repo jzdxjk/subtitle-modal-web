@@ -57,7 +57,7 @@ async function openSettings() {
 async function select(tab) {
     await page.locator(`[data-tab="${tab}"]`).click();
     ensure(await page.locator(`[data-panel="${tab}"]`).isVisible(), 'Selected settings panel is hidden');
-    for (const other of ['local', 'thunder', 'pool', 'cloud', 'proxy'].filter(value => value !== tab))
+    for (const other of ['local', 'thunder', 'cloud', 'proxy'].filter(value => value !== tab))
         ensure(!await page.locator(`[data-panel="${other}"]`).isVisible(), 'Inactive settings panel is visible');
 }
 
@@ -216,16 +216,17 @@ async function restore() {
     ensure(await page.evaluate(async () => (await ApiClient.getCurrentUser()).Policy.IsAdministrator), 'Browser is not using an administrator');
     check('Real Emby browser login completed with the isolated administrator');
 
-    stage = 'five-tabs';
+    stage = 'four-tabs';
     await openSettings();
-    ensure(await page.locator('[data-tab]').count() === 5, 'Five settings tabs are not present');
-    for (const tab of ['local', 'thunder', 'pool', 'cloud', 'proxy']) await select(tab);
-    check('All five real settings tabs switch with only their matching panel visible');
-    report.initialDefaultsWereFive = ['LocalMaxResults', 'ThunderMaxResults', 'PoolMaxResults'].every(key => original[key] === 5);
-    ensure(report.initialDefaultsWereFive, 'Initial display limits are not the expected defaults');
-    for (const key of ['LocalMaxResults', 'ThunderMaxResults', 'PoolMaxResults'])
-        ensure(await page.locator(`[data-field="${key}"]`).inputValue() === '5', 'A default display limit differs from five');
-    check('All three source display limits default to five in the actual page');
+    ensure(await page.locator('[data-tab]').count() === 4, 'Four settings tabs are not present');
+    for (const tab of ['local', 'thunder', 'cloud', 'proxy']) await select(tab);
+    check('All four real settings tabs switch with only their matching panel visible');
+    report.defaultLimitsMatch = original.LocalMaxResults === 5 && original.ThunderMaxResults === 10;
+    ensure(report.defaultLimitsMatch, 'Initial display limits are not the expected defaults');
+    ensure(await page.locator('[data-field="LocalMaxResults"]').inputValue() === '5', 'Local default display limit differs from five');
+    ensure(await page.locator('[data-field="ThunderMaxResults"]').inputValue() === '10', 'Thunder default display limit differs from ten');
+    ensure(await page.locator('[data-field="ThunderMaxResults"]').getAttribute('max') === '10', 'Thunder maximum input limit is not ten');
+    check('Local defaults to five results and Thunder defaults to a maximum of ten');
     for (const field of ['SimplifiedChineseLanguage', 'TraditionalChineseLanguage', 'UpdateManifestUrl'])
         ensure(await page.locator(`[data-field="${field}"]`).count() === 0, 'A fixed or hidden settings field is still visible');
     ensure(await page.locator('[data-proxy-test-url]').count() === 0, 'The custom proxy test URL field is still visible');
@@ -239,14 +240,13 @@ async function restore() {
     await save();
     ensure(await page.locator('[data-unsaved]').isHidden(), 'Unsaved indicator survived a successful save');
     let settings = await call('/SubtitleAssistant/settings');
-    ensure(settings.LocalMaxResults === 7 && settings.ThunderMaxResults === 5 && settings.PoolMaxResults === 5, 'Saving one tab changed another tab');
-    await select('thunder'); await page.locator('[data-field="ThunderMaxResults"]').fill('6');
-    await select('pool'); await page.locator('[data-field="PoolMaxResults"]').fill('8');
+    ensure(settings.LocalMaxResults === 7 && settings.ThunderMaxResults === 10 && !Object.hasOwn(settings, 'PoolMaxResults'), 'Saving one tab changed another tab or retained the retired setting');
+    await select('thunder'); await page.locator('[data-field="ThunderMaxResults"]').fill('8');
     await save();
     settings = await call('/SubtitleAssistant/settings');
-    ensure(settings.LocalMaxResults === 7 && settings.ThunderMaxResults === 6 && settings.PoolMaxResults === 8, 'Cross-tab edits were lost');
-    ensure(settings.PoolUrl === original.PoolUrl && settings.AutoDownloadOnNewMedia === original.AutoDownloadOnNewMedia, 'Unrelated settings changed');
-    check('Local-only save and cross-tab save preserve the other source settings');
+    ensure(settings.LocalMaxResults === 7 && settings.ThunderMaxResults === 8, 'Cross-tab edits were lost');
+    ensure(settings.AutoDownloadOnNewMedia === original.AutoDownloadOnNewMedia, 'Unrelated settings changed');
+    check('Local and Thunder saves preserve the other source settings');
 
     stage = 'secret-placeholders';
     const token = crypto.randomBytes(24).toString('hex'), password = crypto.randomBytes(24).toString('hex');
@@ -269,24 +269,24 @@ async function restore() {
     stage = 'source-order';
     await select('proxy');
     let order = await orderKeys();
-    ensure(JSON.stringify(order) === JSON.stringify(['Pool', 'Local', 'Thunder']), 'Default source order is not Pool, Local, Thunder');
-    check('Global settings renders three source rows in the default Pool, Local, Thunder order');
-    await mouseDragOrder(0, 2);
+    ensure(JSON.stringify(order) === JSON.stringify(['Local', 'Thunder']), 'Default source order is not Local, Thunder');
+    check('Global settings renders the two source rows in Local, Thunder order');
+    await mouseDragOrder(0, 1);
     order = await orderKeys();
-    ensure(JSON.stringify(order) === JSON.stringify(['Local', 'Thunder', 'Pool']), 'Mouse drag did not move the first source to the end');
+    ensure(JSON.stringify(order) === JSON.stringify(['Thunder', 'Local']), 'Mouse drag did not move the first source to the end');
     ensure(await page.locator('[data-unsaved]').isVisible(), 'Reordering did not mark settings as unsaved');
     await save('重启 Emby 后生效');
     settings = await call('/SubtitleAssistant/settings');
-    ensure(JSON.stringify(settings.ProviderDisplayOrder) === JSON.stringify(['Local', 'Thunder', 'Pool']), 'Saved source order was not persisted');
+    ensure(JSON.stringify(settings.ProviderDisplayOrder) === JSON.stringify(['Thunder', 'Local']), 'Saved source order was not persisted');
     ensure((await page.locator('[data-status]').textContent()).includes('重启 Emby'), 'Order save did not warn that Emby must restart');
     check('Mouse drag reorders sources, marks the form dirty, persists ProviderDisplayOrder and warns about the restart');
-    await touchDragOrder(2, 0);
+    await touchDragOrder(1, 0);
     report.touchOrderEvents = await page.evaluate(() => window.__saOrderEvents || []);
     order = await orderKeys();
-    ensure(JSON.stringify(order) === JSON.stringify(['Pool', 'Local', 'Thunder']), 'Touch drag did not restore the default source order');
+    ensure(JSON.stringify(order) === JSON.stringify(['Local', 'Thunder']), 'Touch drag did not restore the default source order');
     await save('重启 Emby 后生效');
     settings = await call('/SubtitleAssistant/settings');
-    ensure(JSON.stringify(settings.ProviderDisplayOrder) === JSON.stringify(['Pool', 'Local', 'Thunder']), 'Touch reorder was not persisted');
+    ensure(JSON.stringify(settings.ProviderDisplayOrder) === JSON.stringify(['Local', 'Thunder']), 'Touch reorder was not persisted');
     check('Touch drag reorders sources and persists the restored default order');
 
     stage = 'save-button';
@@ -333,14 +333,14 @@ async function restore() {
     ensure(mobileButton && mobileForm && mobileButton.width >= mobileForm.width - 2, 'Mobile save button is not full width');
     ensure(await page.locator('.sa-content').evaluate(node => node.scrollWidth <= node.clientWidth + 1), 'Settings content overflows horizontally on mobile');
     const mobileRows = await orderKeys();
-    ensure(JSON.stringify(mobileRows) === JSON.stringify(['Pool', 'Local', 'Thunder']), 'Mobile source order control lost its rows');
+    ensure(JSON.stringify(mobileRows) === JSON.stringify(['Local', 'Thunder']), 'Mobile source order control lost its rows');
     check('Mobile viewport keeps the save button full width, all source rows and no horizontal overflow');
     await page.setViewportSize({ width: 1440, height: 1100 });
 
     stage = 'restore'; await restore();
     await page.reload({ waitUntil: 'domcontentloaded' }); await waitForSettings();
     stage = 'screenshots';
-    for (const tab of ['local', 'thunder', 'pool', 'cloud', 'proxy']) {
+    for (const tab of ['local', 'thunder', 'cloud', 'proxy']) {
         await select(tab);
         const name = `${caseInfo[0]}-${tab}.png`;
         await page.locator('#SubtitleAssistantConfigurationPage .sa-content').screenshot({ path: output + '/' + name,

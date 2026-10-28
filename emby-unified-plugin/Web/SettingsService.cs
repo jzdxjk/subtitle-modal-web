@@ -32,7 +32,6 @@ public sealed class SettingsService : IService, IRequiresRequest
         new Dictionary<NetworkPurpose,string>
         {
             [NetworkPurpose.Thunder] = "https://www.google.com/generate_204",
-            [NetworkPurpose.Pool] = "https://www.google.com/generate_204",
             [NetworkPurpose.Cloud] = "https://www.google.com/generate_204",
             [NetworkPurpose.Updates] = PluginConfiguration.OfficialUpdateManifestUrl
         };

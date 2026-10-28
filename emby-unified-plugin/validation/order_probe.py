@@ -45,9 +45,9 @@ def prepare(case):
     root = ROOT / case.version / "media"
     subtitle_root = root / "subtitles"
     subtitle_root.mkdir(mode=0o700, exist_ok=True)
-    shutil.copyfile(root / "pool/ABP-192.fixture.srt", subtitle_root / "SSIS-157.fixture.srt")
+    shutil.copyfile(root / "subtitle-fixtures/ABP-192.fixture.srt", subtitle_root / "SSIS-157.fixture.srt")
     configured = client.request("POST", "/SubtitleAssistant/settings", {
-        "LocalPaths": "/media/subtitles", "LocalMaxResults": 5, "ThunderMaxResults": 5,
+        "LocalPaths": "/media/subtitles", "LocalMaxResults": 5, "ThunderMaxResults": 10,
         "ThunderTimeoutSeconds": 20, "AutoDownloadOnNewMedia": False,
         "Proxy": {"Enabled": False, "ClearPassword": True, "Username": ""},
     })
@@ -58,7 +58,7 @@ def prepare(case):
     client.request("POST", "/Library/Refresh", {})
     item = find_movie(client, path)
     media_source = next(source for source in item["MediaSources"] if source["Path"] == path)
-    set_plugin_order(client, ["Pool", "Local", "Thunder"])
+    set_plugin_order(client, ["Local", "Thunder"])
     stop(case)
     start(case)
     client = bootstrap(case)
@@ -85,10 +85,10 @@ def probe(case, candidate):
             "ProviderSequence": first_positions(results),
         })
 
-    record("plugin-local_library-local", ["Local", "Thunder", "Pool"], ["本地字幕", "迅雷字幕"])
-    record("plugin-local_library-thunder", ["Local", "Thunder", "Pool"], ["迅雷字幕", "本地字幕"])
-    record("plugin-thunder_library-thunder", ["Thunder", "Local", "Pool"], ["迅雷字幕", "本地字幕"])
-    record("plugin-thunder_library-local", ["Thunder", "Local", "Pool"], ["本地字幕", "迅雷字幕"])
+    record("plugin-local_library-local", ["Local", "Thunder"], ["本地字幕", "迅雷字幕"])
+    record("plugin-local_library-thunder", ["Local", "Thunder"], ["迅雷字幕", "本地字幕"])
+    record("plugin-thunder_library-thunder", ["Thunder", "Local"], ["迅雷字幕", "本地字幕"])
+    record("plugin-thunder_library-local", ["Thunder", "Local"], ["本地字幕", "迅雷字幕"])
 
     stop(case)
     start(case)

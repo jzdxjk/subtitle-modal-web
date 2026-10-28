@@ -53,7 +53,7 @@ def probe(case, candidate, source_sha, upgrade_sha):
     configured["UpdateManifestUrl"] = BASE + "/updates/update.json"
     configured["Proxy"] = {"Enabled": True, "Address": "http://172.17.0.1:19101",
                            "Username": credentials["Username"], "Password": credentials["Password"],
-                           "Thunder": True, "Pool": False, "Cloud": False, "Updates": True,
+                           "Thunder": True, "Cloud": False, "Updates": True,
                            "BypassLocal": False, "BypassHosts": ""}
     client.request("POST", "/Plugins/" + PLUGIN_ID + "/Configuration", configured)
     if client.last_status not in (200, 204):

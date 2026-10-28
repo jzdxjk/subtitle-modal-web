@@ -53,8 +53,11 @@ internal sealed class SubtitleCompletionService
     {
         if (!Eligible(item) || !Active.TryAdd(item.Id,0)) return false;
         var stage = "library-options";
+        IDisposable pathLock = null;
         try
         {
+            stage = "media-path-lock";
+            pathLock = await MediaPathLock.AcquireAsync(item.Path,ct).ConfigureAwait(false);
             var options = _library.GetLibraryOptions(item);
             stage = "provider-registration";
             var all = Registrations(item);
@@ -101,19 +104,32 @@ internal sealed class SubtitleCompletionService
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
         catch (SubtitleCompletionException) { throw; }
         catch (Exception error) { throw new SubtitleCompletionException(stage, "Subtitle completion failed before finishing.", error); }
-        finally { Active.TryRemove(item.Id,out _); }
+        finally
+        {
+            pathLock?.Dispose();
+            Active.TryRemove(item.Id,out _);
+        }
     }
 
     private bool Skip(BaseItem item, LibraryOptions options)
     {
+        var fileDecision = SubtitleFilePolicy.Check(item.Path,error =>
+            _logger.ErrorException("Subtitle completion media directory lookup failed; itemId={0}, path={1}",error,item.Id,item.Path));
+        if (fileDecision != SubtitleFileDecision.None) return true;
+
+        var streamLookupFailed = false;
         var streams = StreamCollector.Collect(
             () => item.MediaStreams,
             internalId => _mediaSources.GetMediaStreams(internalId),
             item.InternalId,
-            (stage, error) => _logger.ErrorException(
-                "Subtitle completion stream lookup failed; stage={0}, itemId={1}, internalId={2}, path={3}",
-                error, stage, item.Id, item.InternalId, item.Path));
-        return CompletionPolicy.SkipForStreams(options, streams);
+            (stage, error) =>
+            {
+                streamLookupFailed = true;
+                _logger.ErrorException(
+                    "Subtitle completion stream lookup failed; stage={0}, itemId={1}, internalId={2}, path={3}",
+                    error, stage, item.Id, item.InternalId, item.Path);
+            });
+        return CompletionPolicy.SkipForStreams(options, streams, streamLookupFailed);
     }
 
     private static string TargetLanguage(string[] languages)
@@ -132,5 +148,5 @@ internal sealed class SubtitleCompletionService
     }
 
     internal bool IsOwnProvider(BaseItem item, string key) => Registrations(item).Any(p =>
-        (p.Name == ProviderNames.Local || p.Name == ProviderNames.Thunder || p.Name == ProviderNames.Pool) && CompletionPolicy.SameKey(key,p));
+        (p.Name == ProviderNames.Local || p.Name == ProviderNames.Thunder) && CompletionPolicy.SameKey(key,p));
 }

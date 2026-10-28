@@ -19,12 +19,18 @@ namespace Emby.SubtitleAssistant.Core
         public string Language { get; set; }
         public string DownloadUrl { get; set; }
         public string ContentHash { get; set; }
+        public bool IsChickenRice { get; set; }
     }
     public static class SubtitleRanking
     {
-        public static IReadOnlyList<SubtitleCandidate> Order(IEnumerable<SubtitleCandidate> candidates, double? runtime)
-            => candidates.OrderBy(x => runtime > 0 ? x.DurationSeconds > 0 ? Math.Abs(x.DurationSeconds.Value - runtime.Value) : double.MaxValue : 0)
+        public static IReadOnlyList<SubtitleCandidate> Order(IEnumerable<SubtitleCandidate> candidates, double? runtime, bool chickenRiceFirst = false)
+        {
+            IOrderedEnumerable<SubtitleCandidate> ordered = chickenRiceFirst
+                ? candidates.OrderByDescending(x => x.IsChickenRice)
+                : candidates.OrderBy(_ => 0);
+            return ordered.ThenBy(x => runtime > 0 ? x.DurationSeconds > 0 ? Math.Abs(x.DurationSeconds.Value - runtime.Value) : double.MaxValue : 0)
                 .ThenByDescending(x => x.SizeBytes.HasValue).ThenByDescending(x => x.SizeBytes ?? 0).ThenBy(x => x.StableOrder).ToArray();
+        }
     }
     public static class SearchExecutionContext
     {

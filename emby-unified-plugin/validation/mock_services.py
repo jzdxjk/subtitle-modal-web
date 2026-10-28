@@ -3,7 +3,6 @@
 
 import argparse
 import base64
-import hashlib
 import http.client
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import ipaddress
@@ -17,7 +16,7 @@ import socketserver
 import struct
 import threading
 import time
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import urlsplit
 import uuid
 
 from emby_validation import CASES, ROOT, ensure_root, write_private
@@ -67,34 +66,6 @@ def make_http_server(host, port, state):
                 if self.command == "GET" and url.path == "/__test/events":
                     with state.lock:
                         return self.reply(200, list(state.events))
-                pool = re.fullmatch(r"/pool/(manual|fallback)/api/v1/subtitles/(search|([0-9a-f-]+)/download)", url.path)
-                if self.command == "GET" and pool:
-                    scenario, operation, identifier = pool.groups()
-                    if operation == "search":
-                        query = parse_qs(url.query)
-                        codes = query.get("codes", query.get("code", []))
-                        if not codes:
-                            return self.reply(400, {"error": "invalid_code"})
-                        code = codes[0].upper()
-                        compact = re.fullmatch(r"([A-Z]{2,8})(\d{3,8})", code)
-                        if compact:
-                            code = compact[1] + "-" + compact[2]
-                        items = []
-                        for index in range(1, 7):
-                            data = subtitle_bytes(index)
-                            identifier = "00000000-0000-4000-8000-" + str(index).zfill(12)
-                            items.append({
-                                "id": identifier, "code": code, "canonical_code": code.lower(),
-                                "language": "zh", "format": "srt", "duration_seconds": 11,
-                                "size_bytes": len(data), "sha256": hashlib.sha256(data).hexdigest(),
-                                "uploaded_at": 1000 + index,
-                                "download_url": "/api/v1/subtitles/" + identifier + "/download",
-                            })
-                        return self.reply(200, {"code": code, "items": items})
-                    index = int(identifier.rsplit("-", 1)[1])
-                    if index not in range(1, 7) or (scenario == "fallback" and index < 6):
-                        return self.reply(404, {"error": "fixture_candidate_unavailable"})
-                    return self.reply(200, subtitle_bytes(index), "application/x-subrip; charset=utf-8")
                 cloud = re.fullmatch(r"/cloud/([^/]+)/api/plugin/jobs(?:/([0-9a-f-]+)/refresh-result)?", url.path)
                 if cloud and cloud[1] in CASES:
                     version, identifier = cloud.groups()

@@ -23,7 +23,7 @@ def set_library_sources(client, enabled, order=None, languages=None):
     names = [item["Name"] for item in providers]
     options.update({
         "DisabledSubtitleFetchers": [name for name in names if name not in enabled],
-        "SubtitleFetcherOrder": order or ["海南鸡字幕", "本地字幕", "迅雷字幕"],
+        "SubtitleFetcherOrder": order or ["本地字幕", "迅雷字幕"],
         "SubtitleDownloadLanguages": ["zh-CN"] if languages is None else languages,
         "RequirePerfectSubtitleMatch": False,
         "SaveSubtitlesWithMedia": True,
@@ -75,15 +75,20 @@ def manual(case, candidate, stem="ABP-192-CD2-1080p"):
     root = ROOT / case.version / "media"
     subtitle_root = root / "subtitles"
     subtitle_root.mkdir(mode=0o700, exist_ok=True)
-    code = "SSIS-157" if stem == "SSIS-157-c-无码破解" else "ABP-192"
+    if stem.startswith("SSIS-157"):
+        code = "SSIS-157"
+    elif stem.startswith("abc-123"):
+        code = "ABC-123"
+    else:
+        code = "ABP-192"
     subtitle = subtitle_root / (code + ".fixture.srt")
-    shutil.copyfile(root / "pool/ABP-192.fixture.srt", subtitle)
+    shutil.copyfile(root / "subtitle-fixtures/ABP-192.fixture.srt", subtitle)
     configured = client.request("POST", "/SubtitleAssistant/settings", {
         "LocalPaths": "/media/subtitles", "LocalMaxResults": 5,
-        "PoolUrl": "http://172.17.0.1:19100/pool/manual", "PoolMaxResults": 5,
+        "ThunderMaxResults": 10,
         "AutoDownloadOnNewMedia": False,
         "Proxy": {"Enabled": True, "Address": "http://172.17.0.1:19101", "Thunder": True,
-                  "Pool": False, "Cloud": False, "Updates": False, "BypassLocal": False},
+                  "Cloud": False, "Updates": False, "BypassLocal": False},
     })
     if not configured.get("Ok"):
         raise RuntimeError("could not configure local fixture paths")
@@ -119,11 +124,12 @@ def manual(case, candidate, stem="ABP-192-CD2-1080p"):
         "VideoStem": video.stem, "RunTimeTicks": item.get("RunTimeTicks"),
         "SavedSubtitleNames": [path.name for path in saved],
         "CompleteStemPreserved": len(saved) == 1 and saved[0].name.startswith(video.stem + "."),
+        "NativeLanguageSuffixPreserved": len(saved) == 1 and saved[0].name == video.stem + ".zh-CN.srt",
         "OriginalBytesPreserved": content_equal,
         "ExternalStreamsVisibleWithoutFullRescan": bool(external),
         "ExternalSubtitleLanguages": [stream.get("Language") for stream in external],
     }
-    report["Passed"] = report["CompleteStemPreserved"] and content_equal and bool(external)
+    report["Passed"] = report["CompleteStemPreserved"] and report["NativeLanguageSuffixPreserved"] and content_equal and bool(external)
     write_private(ROOT / "reports" / (candidate + "-manual-" + code.lower() + "-" + case.version + ".json"), report)
     return report
 
@@ -132,7 +138,10 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("version", choices=list(CASES))
     parser.add_argument("--candidate", default="candidate-01")
-    parser.add_argument("--stem", choices=["ABP-192-CD2-1080p", "SSIS-157-c-无码破解"], default="ABP-192-CD2-1080p")
+    parser.add_argument("--stem", choices=[
+        "ABP-192-CD2-1080p", "SSIS-157-c-无码破解",
+        "abc-123-4k", "abc-123-无码破解", "abc-123-4k-无码破解",
+    ], default="ABP-192-CD2-1080p")
     args = parser.parse_args()
     if not re.fullmatch(r"candidate-[0-9]+", args.candidate):
         raise ValueError("candidate label is outside the owned fixture namespace")

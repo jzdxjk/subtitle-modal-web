@@ -14,6 +14,76 @@ namespace Emby.SubtitleAssistant.Tests;
 public class MigrationTests
 {
     [Fact]
+    public void VersionOneUpgradeRemovesOnlyPoolAndProjectsOrdersWithoutResettingUserConfiguration()
+    {
+        using var files = new Fixture();
+        var current = new PluginConfiguration
+        {
+            MigrationVersion = 1, ThunderMaxResults = 5, LocalPaths = "/kept",
+            ProviderDisplayOrder = new[] { "Pool", "Thunder", "Local" }
+        };
+        var options = new LibraryOptions
+        {
+            SubtitleFetcherOrder = new[] { "Other A", "海南鸡字幕池", ProviderNames.Thunder, ProviderNames.Local, "Other B" },
+            DisabledSubtitleFetchers = new[] { "Pool", ProviderNames.Local, "Other disabled" },
+            PreferredMetadataLanguage = "fr", SubtitleDownloadLanguages = new[] { "zh-CN" }, SaveSubtitlesWithMedia = false
+        };
+        var library = new MigrationLibrary("library-a", options, value => options = value);
+        PluginConfiguration saved = null;
+
+        Assert.True(MigrationRunner.Execute(files.ConfigPath, current, Json(), new[] { library }, value => saved = value));
+
+        Assert.Equal(2, saved.MigrationVersion);
+        Assert.Equal(10, saved.ThunderMaxResults);
+        Assert.Equal("/kept", saved.LocalPaths);
+        Assert.Equal(new[] { "Thunder", "Local" }, saved.ProviderDisplayOrder);
+        Assert.Equal(new[] { "Other A", ProviderNames.Thunder, ProviderNames.Local, "Other B" }, options.SubtitleFetcherOrder);
+        Assert.Equal(new[] { ProviderNames.Local, "Other disabled" }, options.DisabledSubtitleFetchers);
+        Assert.Equal("fr", options.PreferredMetadataLanguage);
+        Assert.Equal(new[] { "zh-CN" }, options.SubtitleDownloadLanguages);
+        Assert.False(options.SaveSubtitlesWithMedia);
+    }
+
+    [Fact]
+    public void VersionOneUpgradeClampsLegacyThunderLimitAboveNewMaximum()
+    {
+        using var files = new Fixture();
+        var current = new PluginConfiguration { MigrationVersion = 1, ThunderMaxResults = 25 };
+        var options = new LibraryOptions { SubtitleFetcherOrder = new[] { "Pool", ProviderNames.Local, ProviderNames.Thunder } };
+        var library = new MigrationLibrary("library-a", options, value => options = value);
+        PluginConfiguration saved = null;
+
+        Assert.True(MigrationRunner.Execute(files.ConfigPath, current, Json(), new[] { library }, value =>
+        {
+            value.Validate();
+            saved = value;
+        }));
+
+        Assert.Equal(10, saved.ThunderMaxResults);
+        Assert.Equal(new[] { ProviderNames.Local, ProviderNames.Thunder }, options.SubtitleFetcherOrder);
+    }
+
+    [Fact]
+    public void VersionZeroImportClampsLegacyThunderLimitBeforeConfigurationValidation()
+    {
+        using var files = new Fixture();
+        files.Write("ThunderSubtitle.json", "{\"EnableAutoDownloadOnNewMedia\":false}");
+        var current = new PluginConfiguration { ThunderMaxResults = 25 };
+        var options = new LibraryOptions { SubtitleFetcherOrder = new[] { "Pool", ProviderNames.Local, ProviderNames.Thunder } };
+        var library = new MigrationLibrary("library-a", options, value => options = value);
+        PluginConfiguration saved = null;
+
+        Assert.True(MigrationRunner.Execute(files.ConfigPath, current, Json(), new[] { library }, value =>
+        {
+            value.Validate();
+            saved = value;
+        }));
+
+        Assert.Equal(10, saved.ThunderMaxResults);
+        Assert.Equal(new[] { ProviderNames.Local, ProviderNames.Thunder }, options.SubtitleFetcherOrder);
+    }
+
+    [Fact]
     public void ImportsOnlySpecifiedLegacySettingsAndKeepsOtherNewSettings()
     {
         using var files = new Fixture();
@@ -26,8 +96,6 @@ public class MigrationTests
         PluginConfiguration saved = null;
         Assert.True(MigrationRunner.Execute(files.ConfigPath, original, Json(), Array.Empty<MigrationLibrary>(), c => saved = c));
         Assert.Equal("/subtitles;/more", saved.LocalPaths);
-        Assert.Equal(PluginConfiguration.OfficialPoolUrl, saved.PoolUrl);
-        Assert.Equal(22, saved.PoolTimeoutSeconds);
         Assert.True(saved.AutoDownloadOnNewMedia);
         Assert.Equal(ChineseSubtitleLanguage.Simplified, saved.SimplifiedChineseLanguage);
         Assert.Equal(ChineseSubtitleLanguage.Traditional, saved.TraditionalChineseLanguage);
@@ -35,9 +103,9 @@ public class MigrationTests
         Assert.Equal("synthetic-test-token", saved.CloudApiToken);
         Assert.Equal("/media=/nas", saved.CloudPathMappings);
         Assert.Equal(7, saved.LocalMaxResults);
-        Assert.Equal(5, saved.ThunderMaxResults);
+        Assert.Equal(10, saved.ThunderMaxResults);
         Assert.Equal("keep-user", saved.Proxy.Username);
-        Assert.Equal(1, saved.MigrationVersion);
+        Assert.Equal(2, saved.MigrationVersion);
         Assert.Equal("", original.LocalPaths);
         Assert.Equal(0, original.MigrationVersion);
         Assert.True(File.Exists(Path.Combine(files.Directory, "MeiamSub.LocalPool.json")));
@@ -57,7 +125,7 @@ public class MigrationTests
 
     [Theory]
     [InlineData("{not-json")]
-    [InlineData("{\"RequestTimeoutSeconds\":0}")]
+    [InlineData("{\"EnableAutoDownloadOnNewMedia\":\"invalid\"}")]
     public void MalformedOrInvalidLegacySettingsDoNotPartiallyWrite(string pool)
     {
         using var files = new Fixture();
@@ -98,8 +166,11 @@ public class MigrationTests
         var current = new PluginConfiguration { MigrationVersion = 1, LocalPaths = "/user-edited-after-import" };
         var options = new LibraryOptions { SubtitleFetcherOrder = new[] { "ThunderSubtitle" }, DisabledSubtitleFetchers = new[] { "ThunderSubtitle" } };
         var library = new MigrationLibrary("a", options, value => options = value);
-        Assert.True(MigrationRunner.Execute(files.ConfigPath, current, Json(), new[] { library }, _ => throw new InvalidOperationException("Already imported config must not be rewritten")));
+        PluginConfiguration saved = null;
+        Assert.True(MigrationRunner.Execute(files.ConfigPath, current, Json(), new[] { library }, value => saved = value));
         Assert.Equal("/user-edited-after-import", current.LocalPaths);
+        Assert.Equal(2, saved.MigrationVersion);
+        Assert.Equal("/user-edited-after-import", saved.LocalPaths);
         Assert.Equal(new[] { ProviderNames.Thunder }, options.SubtitleFetcherOrder);
         Assert.Equal(new[] { ProviderNames.Thunder }, options.DisabledSubtitleFetchers);
         Assert.False(File.Exists(Path.Combine(files.Directory, "subtitle-assistant-migration.pending")));
@@ -115,7 +186,7 @@ public class MigrationTests
             PreferredMetadataLanguage = "fr", SubtitleDownloadLanguages = new[] { "zh-CN" }, SaveSubtitlesWithMedia = false
         };
         var migrated = ProviderKeyMigration.Apply(source, Json());
-        Assert.Equal(new[] { "External A", "External B", ProviderNames.Thunder, ProviderNames.Local, ProviderNames.Pool, "External C" }, migrated.SubtitleFetcherOrder);
+        Assert.Equal(new[] { "External A", "External B", ProviderNames.Thunder, ProviderNames.Local, "External C" }, migrated.SubtitleFetcherOrder);
         Assert.Equal(new[] { "External disabled" }, migrated.DisabledSubtitleFetchers);
         Assert.Equal("fr", migrated.PreferredMetadataLanguage);
         Assert.Equal(source.SubtitleDownloadLanguages, migrated.SubtitleDownloadLanguages);
@@ -124,7 +195,7 @@ public class MigrationTests
     }
 
     [Fact]
-    public void AllThreeDisabledSourcesRemainDisabledWithoutExtraThunderInterference()
+    public void RetiredPoolIsRemovedAndOtherDisabledSourcesRemainWithoutExtraThunderInterference()
     {
         var source = new LibraryOptions
         {
@@ -132,7 +203,7 @@ public class MigrationTests
             DisabledSubtitleFetchers = new[] { "MeiamSub.LocalPool", "ThunderSubtitle", "海南鸡字幕池", "MeiamSub.Thunder", "Unknown" }
         };
         var migrated = ProviderKeyMigration.Apply(source, Json());
-        Assert.Equal(new[] { ProviderNames.Local, ProviderNames.Thunder, ProviderNames.Pool, "Unknown" }, migrated.DisabledSubtitleFetchers);
+        Assert.Equal(new[] { ProviderNames.Local, ProviderNames.Thunder, "Unknown" }, migrated.DisabledSubtitleFetchers);
         var twice = ProviderKeyMigration.Apply(migrated, Json());
         Assert.Equal(migrated.SubtitleFetcherOrder, twice.SubtitleFetcherOrder);
         Assert.Equal(migrated.DisabledSubtitleFetchers, twice.DisabledSubtitleFetchers);
@@ -236,7 +307,7 @@ public class MigrationTests
         Assert.Throws<MigrationException>(() => MigrationRunner.Execute(files.ConfigPath, new PluginConfiguration(), Json(), new[] { Target() }, value => saved = value));
         Assert.Null(saved);
         MigrationRunner.Execute(files.ConfigPath, new PluginConfiguration(), Json(), new[] { Target() }, value => saved = value);
-        Assert.Equal(1, saved.MigrationVersion);
+        Assert.Equal(2, saved.MigrationVersion);
         Assert.Equal("/legacy", saved.LocalPaths);
         Assert.Equal(new[] { ProviderNames.Thunder }, options.SubtitleFetcherOrder);
         Assert.Equal(new[] { ProviderNames.Thunder }, options.DisabledSubtitleFetchers);
@@ -255,7 +326,7 @@ public class MigrationTests
         {
             live = value;
             File.WriteAllText(files.ConfigPath, "partly-written-new-config");
-            if (value.MigrationVersion == 1) throw new IOException("synthetic-secret");
+            if (value.MigrationVersion == 2) throw new IOException("synthetic-secret");
         }));
         Assert.Equal(0, live.MigrationVersion);
         Assert.Equal(new[] { "ThunderSubtitle" }, options.SubtitleFetcherOrder);
@@ -264,7 +335,7 @@ public class MigrationTests
     }
 
     [Fact]
-    public void BrandNewInstallDisablesTheThreeManagedSourcesAndKeepsUnrelatedLibrariesIntact()
+    public void BrandNewInstallDisablesTheTwoManagedSourcesAndKeepsUnrelatedLibrariesIntact()
     {
         using var files = new Fixture();
         var libraryWrites = 0;
@@ -272,14 +343,13 @@ public class MigrationTests
         var library = new MigrationLibrary("a", options, value => { options = value; libraryWrites++; });
         PluginConfiguration saved = null;
         MigrationRunner.Execute(files.ConfigPath, new PluginConfiguration(), Json(), new[] { library }, value => saved = value);
-        Assert.Equal(1, saved.MigrationVersion);
+        Assert.Equal(2, saved.MigrationVersion);
         Assert.False(saved.AutoDownloadOnNewMedia);
         Assert.Equal(5, saved.LocalMaxResults);
-        Assert.Equal(5, saved.ThunderMaxResults);
-        Assert.Equal(5, saved.PoolMaxResults);
+        Assert.Equal(10, saved.ThunderMaxResults);
         Assert.Equal(1, libraryWrites);
         Assert.Equal(new[] { "Other" }, options.SubtitleFetcherOrder);
-        Assert.Equal(new[] { ProviderNames.Local, ProviderNames.Thunder, ProviderNames.Pool }, options.DisabledSubtitleFetchers);
+        Assert.Equal(new[] { ProviderNames.Local, ProviderNames.Thunder }, options.DisabledSubtitleFetchers);
     }
 
     [Fact]
@@ -289,7 +359,7 @@ public class MigrationTests
         var options = new LibraryOptions { DisabledSubtitleFetchers = new[] { "External" } };
         MigrationRunner.Execute(files.ConfigPath, new PluginConfiguration(), Json(),
             new[] { new MigrationLibrary("a", options, value => options = value) }, _ => { });
-        Assert.Equal(new[] { "External", ProviderNames.Local, ProviderNames.Thunder, ProviderNames.Pool }, options.DisabledSubtitleFetchers);
+        Assert.Equal(new[] { "External", ProviderNames.Local, ProviderNames.Thunder }, options.DisabledSubtitleFetchers);
     }
 
     [Fact]
@@ -317,12 +387,12 @@ public class MigrationTests
     }
 
     [Fact]
-    public void CompletedV1InstallIsNeverTouched()
+    public void CompletedV2InstallIsNeverTouched()
     {
         using var files = new Fixture();
         var options = new LibraryOptions { SubtitleFetcherOrder = new[] { "Other" } };
         var writes = 0;
-        Assert.False(MigrationRunner.Execute(files.ConfigPath, new PluginConfiguration { MigrationVersion = 1 }, Json(),
+        Assert.False(MigrationRunner.Execute(files.ConfigPath, new PluginConfiguration { MigrationVersion = 2 }, Json(),
             new[] { new MigrationLibrary("a", options, value => { options = value; writes++; }) }, _ => throw new InvalidOperationException("no config write")));
         Assert.Equal(0, writes);
         Assert.Empty(options.DisabledSubtitleFetchers);

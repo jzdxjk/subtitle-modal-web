@@ -20,7 +20,7 @@ public sealed class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages, IHas
     public static PluginConfiguration CurrentConfiguration => TestConfiguration.Value ?? Instance?.Configuration ?? Defaults;
     public override string Name => "字幕助手";
     public override Guid Id => PluginId;
-    public override string Description => "本地字幕、迅雷字幕、海南鸡字幕与字幕云，一个插件统一管理。";
+    public override string Description => "本地字幕、迅雷字幕与字幕云，一个插件统一管理。";
     public ImageFormat ThumbImageFormat => ImageFormat.Jpg;
     public Stream GetThumbImage() => GetType().Assembly.GetManifestResourceStream($"{GetType().Namespace}.Thumb.jpg");
 
@@ -59,27 +59,25 @@ public static class ProviderNames
 {
     public const string Local = "本地字幕";
     public const string Thunder = "迅雷字幕";
-    public const string Pool = "海南鸡字幕";
 }
 
 public static class ProviderKeys
 {
     public const string Local = "Local";
     public const string Thunder = "Thunder";
-    public const string Pool = "Pool";
 }
 
 public static class ProviderOrder
 {
-    public static string[] Default => new[] { ProviderKeys.Pool, ProviderKeys.Local, ProviderKeys.Thunder };
+    public static string[] Default => new[] { ProviderKeys.Local, ProviderKeys.Thunder };
 
     public static bool IsValid(System.Collections.Generic.IReadOnlyList<string> order)
     {
-        if (order == null || order.Count != 3) return false;
+        if (order == null || order.Count != 2) return false;
         var seen = new System.Collections.Generic.HashSet<string>(System.StringComparer.Ordinal);
         foreach (var key in order)
         {
-            if (key != ProviderKeys.Local && key != ProviderKeys.Thunder && key != ProviderKeys.Pool) return false;
+            if (key != ProviderKeys.Local && key != ProviderKeys.Thunder) return false;
             if (!seen.Add(key)) return false;
         }
         return true;

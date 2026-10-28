@@ -35,7 +35,7 @@ All NAS files live under the new task-marked directory:
   reports/               sanitized runtime reports
   VERSION/config/        independent stock Emby configuration
   VERSION/media/videos/  generated 12-second black video, about 1.5 KiB
-  VERSION/media/pool/    independent Chinese SRT fixture
+  VERSION/media/subtitle-fixtures/ independent Chinese SRT fixture
   VERSION/session.json   generated validation credentials, mode 0600
 ```
 

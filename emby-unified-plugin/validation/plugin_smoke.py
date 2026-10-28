@@ -17,7 +17,7 @@ from emby_validation import (
 
 
 PLUGIN_ID = "76cd4168-e0b3-4aac-8a52-5cb638121744"
-PROVIDERS = ["本地字幕", "迅雷字幕", "海南鸡字幕"]
+PROVIDERS = ["本地字幕", "迅雷字幕"]
 TASK_KEYS = ["SubtitleAssistantMissingSubtitles", "SubtitleAssistantUpdate"]
 
 
@@ -58,15 +58,25 @@ def probe(case, candidate):
     settings = client.request("GET", "/SubtitleAssistant/settings")
     page = client.request("GET", "/web/ConfigurationPage?name=subtitleassistant")
     script = client.request("GET", "/web/ConfigurationPage?name=subtitleassistantjs")
-    if not isinstance(page, str) or len(re.findall(r'role="tab"', page)) != 5:
-        raise RuntimeError("native configuration page did not expose five tabs")
+    if settings.get("Version") != "1.0.0.8":
+        raise RuntimeError("combined plugin did not load version 1.0.0.8")
+    if not isinstance(page, str) or len(re.findall(r'role="tab"', page)) != 4:
+        raise RuntimeError("native configuration page did not expose four tabs")
+    if "海南鸡字幕已上传至迅雷字幕库" not in page or "搜索命中时优先展示海南鸡字幕" not in page:
+        raise RuntimeError("Thunder settings page is missing the ChickenRice priority note")
     if not isinstance(script, str) or "SubtitleAssistant" not in script:
         raise RuntimeError("native configuration controller resource did not load")
     available = client.request("GET", "/Libraries/AvailableOptions")
     providers = available.get("SubtitleFetchers", [])
     names = [item.get("Name") for item in providers]
     if any(names.count(name) != 1 for name in PROVIDERS):
-        raise RuntimeError("native library options do not register the three subtitle providers once")
+        raise RuntimeError("native library options do not register the two subtitle providers once")
+    if "海南鸡字幕" in names:
+        raise RuntimeError("retired ChickenRice pool source is still registered by the combined plugin")
+    if any(key in settings for key in ["PoolUrl", "PoolMaxResults", "PoolTimeoutSeconds"]):
+        raise RuntimeError("retired public-pool configuration is still exposed")
+    if not 1 <= int(settings.get("ThunderMaxResults", 0)) <= 10:
+        raise RuntimeError("Thunder display limit is outside the 1..10 range")
     tasks = client.request("GET", "/ScheduledTasks")
     selected_tasks = [item for item in tasks if item.get("Key") in TASK_KEYS]
     if len(selected_tasks) != 2:
@@ -82,18 +92,21 @@ def probe(case, candidate):
         "ServerVersion": case.version,
         "Candidate": candidate,
         "PluginVersion": found[0].get("Version"),
+        "SettingsVersion": settings.get("Version"),
         "PluginId": PLUGIN_ID,
         "ServiceUser": "0:0",
         "DllSha256": hashlib.sha256((ROOT / case.version / "config/plugins/Emby.SubtitleAssistant.dll").read_bytes()).hexdigest(),
         "AdminSettingsApi": True,
         "UnauthenticatedSettingsDenied": True,
-        "ConfigurationTabs": 5,
+        "ConfigurationTabs": 4,
+        "ChickenRicePriorityNote": True,
+        "RetiredPoolSourceAbsent": "海南鸡字幕" not in names,
         "ControllerLoaded": True,
         "Providers": [{key: item[key] for key in ["Id", "Name", "DisplayName"] if key in item}
                       for item in providers if item.get("Name") in PROVIDERS],
         "Tasks": [{key: item[key] for key in ["Id", "Key", "Name", "Triggers"] if key in item}
                   for item in selected_tasks],
-        "DisplayLimits": {key: settings[key] for key in ["LocalMaxResults", "ThunderMaxResults", "PoolMaxResults"]},
+        "DisplayLimits": {key: settings[key] for key in ["LocalMaxResults", "ThunderMaxResults"]},
     }
     write_private(ROOT / "reports" / (candidate + "-smoke-" + case.version + ".json"), report)
     return report

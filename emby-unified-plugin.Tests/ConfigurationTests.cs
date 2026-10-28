@@ -5,16 +5,20 @@ namespace Emby.SubtitleAssistant.Tests;
 
 public sealed class ConfigurationTests
 {
-    [Fact] public void EachSourceDefaultsToFiveResults()
+    [Fact] public void SourcesDefaultToFiveLocalAndTenThunderResults()
     {
         var config = new PluginConfiguration();
         Assert.Equal(5, config.LocalMaxResults);
-        Assert.Equal(5, config.ThunderMaxResults);
-        Assert.Equal(5, config.PoolMaxResults);
+        Assert.Equal(10, config.ThunderMaxResults);
         Assert.Equal(15, config.ThunderTimeoutSeconds);
-        Assert.Equal(PluginConfiguration.OfficialPoolUrl, config.PoolUrl);
         Assert.False(config.AutoDownloadOnNewMedia);
         config.Validate();
+    }
+
+    [Fact] public void ThunderDisplayLimitCannotExceedTen()
+    {
+        var config = new PluginConfiguration { ThunderMaxResults = 11 };
+        Assert.Throws<ArgumentException>(() => config.Validate());
     }
 
     [Theory]
@@ -38,7 +42,6 @@ public sealed class ConfigurationTests
         var proxy = new PluginConfiguration().Proxy;
         Assert.False(proxy.Enabled);
         Assert.True(proxy.Thunder);
-        Assert.True(proxy.Pool);
         Assert.True(proxy.Updates);
         Assert.False(proxy.Cloud);
         Assert.True(proxy.BypassLocal);

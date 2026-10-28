@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """Exercise the completion pipeline with the local provider.
 
-The pool address is fixed in code (see Web/SettingsModels.cs), so the older
-pool-substitution probes can no longer reach an owned fixture. This probe drives
+This probe drives
 the exact changed path instead: AutoDownloadOnNewMedia -> AfterDelayAsync and
 the scheduled MissingSubtitles task -> SubtitleCompletionService.ProcessAsync,
 which runs Skip()/StreamCollector before searching and downloading. A local SRT
@@ -49,9 +48,9 @@ def prepare(case, candidate, scenario, code):
     root = ROOT / case.version / "media"
     subtitles = root / "subtitles"
     subtitles.mkdir(mode=0o700, exist_ok=True)
-    shutil.copyfile(root / "pool" / "ABP-192.fixture.srt", subtitles / (code + ".fixture.srt"))
+    shutil.copyfile(root / "subtitle-fixtures" / "ABP-192.fixture.srt", subtitles / (code + ".fixture.srt"))
     configured = client.request("POST", "/SubtitleAssistant/settings", {
-        "LocalPaths": "/media/subtitles", "LocalMaxResults": 5, "ThunderMaxResults": 5,
+        "LocalPaths": "/media/subtitles", "LocalMaxResults": 5, "ThunderMaxResults": 10,
         "AutoDownloadOnNewMedia": scenario == "new",
         "Proxy": {"Enabled": False, "ClearPassword": True, "Username": ""},
     })
@@ -63,21 +62,28 @@ def prepare(case, candidate, scenario, code):
     started = time.monotonic()
     video, path = copy_video(case, scenario + "-" + candidate + "-" + uuid.uuid4().hex[:8], code=code,
                              stem=code + "-CD2-1080p")
+    preexisting = None
+    if scenario == "existing":
+        preexisting = video.with_name(video.stem + ".jpn.srt")
+        shutil.copyfile(root / "subtitle-fixtures" / "ABP-192.fixture.srt",preexisting)
     client.request("POST", "/Library/Refresh", {})
     find_movie(client, path)
-    if list(video.parent.glob(video.stem + ".*.srt")):
+    initial_sidecars = list(video.parent.glob(video.stem + ".*.srt"))
+    if preexisting is None and initial_sidecars:
         raise RuntimeError("fixture already has a subtitle before automation starts")
-    return client, video, path, sources, started
+    if preexisting is not None and initial_sidecars != [preexisting]:
+        raise RuntimeError("existing-subtitle fixture contains unexpected sidecars")
+    return client, video, path, sources, started, preexisting
 
 
-def observe(client, video, path, timeout=95):
+def observe(client, video, path, timeout=95, any_language=False):
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         saved = list(video.parent.glob(video.stem + ".*.srt"))
         item = next(movie for movie in movies(client) if movie.get("Path") == path)
         streams = [stream for stream in item.get("MediaStreams", [])
                    if stream.get("Type") == "Subtitle" and stream.get("IsExternal")
-                   and (stream.get("Language") or "").lower().startswith("zh")]
+                   and (any_language or (stream.get("Language") or "").lower().startswith("zh"))]
         if saved and streams:
             return saved, streams
         time.sleep(1)
@@ -86,13 +92,13 @@ def observe(client, video, path, timeout=95):
 
 def probe(case, candidate, scenario):
     code = "MEYD-040" if scenario == "backfill" else "IPX-697"
-    client, video, path, sources, started = prepare(case, candidate, scenario, code)
+    client, video, path, sources, started, preexisting = prepare(case, candidate, scenario, code)
     report = {"ServerVersion": case.version, "Candidate": candidate, "Scenario": scenario,
               "Provider": "本地字幕", "VideoStem": video.stem, "NativeLibrarySources": sources}
     try:
-        if scenario == "backfill":
+        if scenario in {"backfill","existing"}:
             report["NativeTaskStatus"] = run_task(client)
-        saved, streams = observe(client, video, path)
+        saved, streams = observe(client, video, path,any_language=scenario == "existing")
         expected = (ROOT / case.version / "media" / "subtitles" / (code + ".fixture.srt")).read_bytes()
         report.update({
             "SavedSubtitleNames": [file.name for file in saved],
@@ -104,18 +110,24 @@ def probe(case, candidate, scenario):
         })
         if scenario == "new":
             report["SixtySecondDelayObserved"] = report["SecondsSinceFixtureCreated"] >= 55
-        else:
+        elif scenario == "backfill":
             run_task(client)
             report["ExistingChineseSubtitleSkipsDownload"] = len(
                 list(video.parent.glob(video.stem + ".*.srt"))) == len(saved)
+        else:
+            report["ExistingAnyLanguageSubtitleSkipsDownload"] = preexisting is not None and \
+                preexisting.exists() and preexisting.read_bytes() == expected and saved == [preexisting]
         report["Passed"] = all(report[key] for key in [
             "CompleteStemPreserved", "OriginalBytesPreserved", "ExternalSubtitleStreamsVisible",
         ])
         if scenario == "new":
             report["Passed"] = report["Passed"] and report["SixtySecondDelayObserved"]
-        else:
+        elif scenario == "backfill":
             report["Passed"] = report["Passed"] and report["NativeTaskStatus"] == "Completed" \
                 and report["ExistingChineseSubtitleSkipsDownload"]
+        else:
+            report["Passed"] = report["Passed"] and report["NativeTaskStatus"] == "Completed" \
+                and report["ExistingAnyLanguageSubtitleSkipsDownload"]
     finally:
         client.request("POST", "/SubtitleAssistant/settings", {
             "AutoDownloadOnNewMedia": False, "Proxy": {"Enabled": False, "ClearPassword": True, "Username": ""},
@@ -128,7 +140,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("version", choices=list(CASES))
     parser.add_argument("--candidate", default="candidate-10")
-    parser.add_argument("--scenario", choices=["backfill", "new"], default="new")
+    parser.add_argument("--scenario", choices=["backfill", "new", "existing"], default="new")
     args = parser.parse_args()
     if not re.fullmatch(r"candidate-[0-9]+", args.candidate):
         raise ValueError("candidate label is outside the owned fixture namespace")

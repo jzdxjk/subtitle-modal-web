@@ -21,7 +21,7 @@ public sealed class MigrationEntryPoint : IServerEntryPoint
     public void Run()
     {
         var plugin = Plugin.Instance;
-        if (plugin == null || (plugin.Configuration.MigrationVersion >= 1 && !File.Exists(Path.Combine(Path.GetDirectoryName(plugin.ConfigurationFilePath), MigrationRunner.PendingFilename)))) return;
+        if (plugin == null || (plugin.Configuration.MigrationVersion >= MigrationRunner.CurrentMigrationVersion && !File.Exists(Path.Combine(Path.GetDirectoryName(plugin.ConfigurationFilePath), MigrationRunner.PendingFilename)))) return;
         try
         {
             var targets = new List<MigrationLibrary>();

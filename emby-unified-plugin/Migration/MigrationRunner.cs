@@ -26,15 +26,22 @@ internal static class ProviderKeyMigration
     private static readonly IReadOnlyDictionary<string, string> OldNames = new Dictionary<string, string>(StringComparer.Ordinal)
     {
         ["MeiamSub.LocalPool"] = ProviderNames.Local,
-        ["ThunderSubtitle"] = ProviderNames.Thunder,
-        ["海南鸡字幕池"] = ProviderNames.Pool
+        ["ThunderSubtitle"] = ProviderNames.Thunder
     };
+    private static readonly HashSet<string> RetiredPoolNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    { "Pool", "海南鸡字幕", "海南鸡字幕池", "ChickenRicePool", "Emby.ChickenRicePool" };
     private const string ExtraThunder = "MeiamSub.Thunder";
+    private static bool IsRetiredPoolName(string key) => key != null && RetiredPoolNames.Contains(key);
+    public static string[] ProjectProviderOrder(IEnumerable<string> order)
+    {
+        var projected = (order ?? Array.Empty<string>()).Where(key => !IsRetiredPoolName(key)).ToArray();
+        return ProviderOrder.IsValid(projected) ? projected : ProviderOrder.Default;
+    }
     public static bool HasProviderKeys(LibraryOptions source)
     {
         if (source == null) return false;
         return (source.SubtitleFetcherOrder ?? Array.Empty<string>()).Concat(source.DisabledSubtitleFetchers ?? Array.Empty<string>())
-            .Any(key => key != null && (OldNames.ContainsKey(key) || OldNames.Values.Contains(key, StringComparer.Ordinal)));
+            .Any(key => key != null && (OldNames.ContainsKey(key) || OldNames.Values.Contains(key, StringComparer.Ordinal) || IsRetiredPoolName(key)));
     }
     public static LibraryOptions Apply(LibraryOptions source, IJsonSerializer json, IReadOnlyDictionary<string, string> explicitNames = null)
     {
@@ -52,6 +59,7 @@ internal static class ProviderKeyMigration
             {
                 var name = Resolve(key);
                 if (name == ExtraThunder) continue;
+                if (IsRetiredPoolName(name)) continue;
                 if (name != null && OldNames.TryGetValue(name, out var target))
                 { if (seenSources.Add(target)) rewritten.Add(target); continue; }
                 var previous = OldNames.FirstOrDefault(x => x.Value == name).Key;
@@ -73,7 +81,7 @@ internal static class ProviderKeyMigration
 
 internal static class DefaultDisablePolicy
 {
-    private static readonly string[] Own = { ProviderNames.Local, ProviderNames.Thunder, ProviderNames.Pool };
+    private static readonly string[] Own = { ProviderNames.Local, ProviderNames.Thunder };
     // Only a genuinely fresh install gets the sources turned off; upgrades keep whatever the operator chose.
     public static LibraryOptions Apply(LibraryOptions source, IJsonSerializer json)
     {
@@ -88,6 +96,7 @@ internal static class DefaultDisablePolicy
 
 internal static class MigrationRunner
 {
+    internal const int CurrentMigrationVersion = 2;
     internal const string PendingFilename = "subtitle-assistant-migration.pending";
     private static readonly object Gate = new object();
     internal static T Clone<T>(T value, IJsonSerializer json) => json.DeserializeFromString<T>(json.SerializeToString(value));
@@ -102,11 +111,17 @@ internal static class MigrationRunner
                 var configDirectory = Path.GetDirectoryName(configFile);
                 var pendingFile = Path.Combine(configDirectory, PendingFilename);
                 var alreadyImported = current.MigrationVersion >= 1;
-                if (alreadyImported && !File.Exists(pendingFile)) return false;
+                var migrationComplete = current.MigrationVersion >= CurrentMigrationVersion;
+                if (migrationComplete && !File.Exists(pendingFile)) return false;
                 var librariesToMigrate = (libraries ?? Array.Empty<MigrationLibrary>()).ToArray();
                 var freshInstall = !alreadyImported && !LegacySettingsImporter.HasLegacySettings(configDirectory) &&
                     !librariesToMigrate.Any(library => ProviderKeyMigration.HasProviderKeys(library.Options));
                 var imported = alreadyImported ? Clone(current, json) : LegacySettingsImporter.Merge(configDirectory, current, json);
+                if (!migrationComplete)
+                {
+                    imported.ProviderDisplayOrder = ProviderKeyMigration.ProjectProviderOrder(imported.ProviderDisplayOrder);
+                    LegacySettingsImporter.NormalizeThunderMaxResults(imported);
+                }
                 var originalConfig = Clone(current, json);
                 var prepared = librariesToMigrate.Select(library => new PreparedLibrary
                 {
@@ -131,9 +146,9 @@ internal static class MigrationRunner
                         attempted.Add(library); // A failing native save may already have written.
                         library.Target.Save(library.Migrated);
                     }
-                    if (!alreadyImported)
+                    if (!migrationComplete)
                     {
-                        imported.MigrationVersion = 1;
+                        imported.MigrationVersion = CurrentMigrationVersion;
                         configAttempted = true;
                         saveConfig(imported); // Settings and completion marker are one final write.
                     }

@@ -6,15 +6,10 @@ namespace Emby.SubtitleAssistant;
 public sealed class PluginConfiguration : BasePluginConfiguration
 {
     public const string OfficialUpdateManifestUrl = "https://github.com/jzdxjk/subtitle-modal-web/releases/download/emby-subtitle-assistant-update/update.json";
-    public const string OfficialPoolUrl = "https://chickenrice-subtitle-pool.jzdxjk.workers.dev";
-
     public string LocalPaths { get; set; } = "";
     public int LocalMaxResults { get; set; } = 5;
-    public int ThunderMaxResults { get; set; } = 5;
+    public int ThunderMaxResults { get; set; } = 10;
     public int ThunderTimeoutSeconds { get; set; } = 15;
-    public int PoolMaxResults { get; set; } = 5;
-    public string PoolUrl { get; set; } = OfficialPoolUrl;
-    public int PoolTimeoutSeconds { get; set; } = 15;
     public string CloudServiceUrl { get; set; } = "";
     public string CloudApiToken { get; set; } = "";
     public string CloudPathMappings { get; set; } = "";
@@ -22,7 +17,7 @@ public sealed class PluginConfiguration : BasePluginConfiguration
     public string SimplifiedChineseLanguage { get; set; } = ChineseSubtitleLanguage.Simplified;
     public string TraditionalChineseLanguage { get; set; } = ChineseSubtitleLanguage.Traditional;
     public int MigrationVersion { get; set; }
-    public string[] ProviderDisplayOrder { get; set; } = new[] { ProviderKeys.Pool, ProviderKeys.Local, ProviderKeys.Thunder };
+    public string[] ProviderDisplayOrder { get; set; } = ProviderOrder.Default;
     public string UpdateManifestUrl { get; set; } = OfficialUpdateManifestUrl;
     public ProxyConfiguration Proxy { get; set; } = new ProxyConfiguration();
     public void Validate()
@@ -30,13 +25,10 @@ public sealed class PluginConfiguration : BasePluginConfiguration
         // Missing or hand-edited values must not block host startup; runtime reads normalize them too.
         if (!ProviderOrder.IsValid(ProviderDisplayOrder))
             ProviderDisplayOrder = ProviderOrder.Default;
-        if (LocalMaxResults < 1 || ThunderMaxResults < 1 || PoolMaxResults < 1)
-            throw new ArgumentException("最大展示结果数必须为正整数。");
+        if (LocalMaxResults < 1 || ThunderMaxResults < 1 || ThunderMaxResults > 10)
+            throw new ArgumentException("本地最大展示数必须为正整数，迅雷最大展示数必须在1到10之间。");
         if (ThunderTimeoutSeconds < 1 || ThunderTimeoutSeconds > 120)
             throw new ArgumentException("迅雷请求超时必须在1到120秒之间。");
-        if (PoolTimeoutSeconds < 1 || PoolTimeoutSeconds > 120)
-            throw new ArgumentException("海南鸡请求超时必须在1到120秒之间。");
-        ValidateServiceUrl(PoolUrl, "海南鸡服务地址", false);
         ValidateServiceUrl(CloudServiceUrl, "字幕云服务地址", true);
         ValidateServiceUrl(UpdateManifestUrl, "插件更新清单地址", false);
         if (Proxy == null) throw new ArgumentException("缺少代理配置。");
@@ -67,7 +59,6 @@ public sealed class ProxyConfiguration
     public string Password { get; set; } = "";
     public string BypassHosts { get; set; } = "";
     public bool Thunder { get; set; } = true;
-    public bool Pool { get; set; } = true;
     public bool Cloud { get; set; }
     public bool Updates { get; set; } = true;
     public bool BypassLocal { get; set; } = true;

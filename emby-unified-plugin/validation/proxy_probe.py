@@ -48,19 +48,19 @@ def probe(case, candidate):
             save(client, {
                 "Enabled": True, "Address": scheme + "://172.17.0.1:" + str(port),
                 "Username": credentials["Username"], "Password": credentials["Password"],
-                "BypassLocal": False, "BypassHosts": "", "Thunder": True, "Pool": True,
+                "BypassLocal": False, "BypassHosts": "", "Thunder": True,
                 "Cloud": True, "Updates": True,
             })
             checks = {}
-            for purpose in ["Thunder", "Pool", "Cloud", "Updates"]:
+            for purpose in ["Thunder", "Cloud", "Updates"]:
                 before = proxy_events(transport)
                 result = test_request(client, purpose)
                 checks[purpose] = bool(result.get("Ok")) and result.get("Route") == "Proxy" \
                     and isinstance(result.get("LatencyMs"), int) and result["LatencyMs"] >= 0 \
                     and proxy_events(transport) > before
-            save(client, {"Pool": False})
+            save(client, {"Cloud": False})
             before = proxy_events(transport)
-            direct = test_request(client, "Pool")
+            direct = test_request(client, "Cloud")
             checks["DisabledModuleUsesDirectRoute"] = bool(direct.get("Ok")) and direct.get("Route") == "Direct" \
                 and isinstance(direct.get("LatencyMs"), int) and direct["LatencyMs"] >= 0 \
                 and proxy_events(transport) == before
@@ -69,12 +69,12 @@ def probe(case, candidate):
             checks["PartialSaveKeepsProxyPassword"] = bool(partial.get("Ok")) and partial.get("Route") == "Proxy" \
                 and proxy_events(transport) > before
             report["Transports"][transport] = checks
-        save(client, {"Address": "http://172.17.0.1:19103", "BypassLocal": False, "Pool": True})
+        save(client, {"Address": "http://172.17.0.1:19103", "BypassLocal": False, "Thunder": True})
         before = health_events()
         report["UnavailableProxyFailsWithoutDirectFallback"] = not test_request(client, "Thunder").get("Ok") \
             and health_events() == before
         save(client, {"BypassLocal": True})
-        bypass = test_request(client, "Pool")
+        bypass = test_request(client, "Thunder")
         report["BypassLocalWorksWithUnavailableProxy"] = bool(bypass.get("Ok")) and bypass.get("Route") == "Direct"
     finally:
         save(client, {"Enabled": False, "ClearPassword": True, "Username": "", "BypassLocal": True})
