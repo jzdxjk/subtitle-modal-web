@@ -1,0 +1,36 @@
+{
+  "ServerVersion": "4.10.2.0",
+  "Candidate": "candidate-10",
+  "Scenario": "NativeLocalManualDownload",
+  "NativeLibrarySources": {
+    "Enabled": [
+      "本地字幕"
+    ],
+    "Disabled": [
+      "Open Subtitles",
+      "海南鸡字幕",
+      "迅雷字幕"
+    ],
+    "Order": [
+      "海南鸡字幕",
+      "本地字幕",
+      "迅雷字幕"
+    ]
+  },
+  "NativeSearchResults": 1,
+  "NativeLocalResults": 1,
+  "NativeManualSearchIncludesOtherProviders": false,
+  "NativeProviderPrefix": "6ac3d2b35d44c4b5d62aa2aac677ad2e",
+  "VideoStem": "ABP-192-CD2-1080p",
+  "RunTimeTicks": 120000000,
+  "SavedSubtitleNames": [
+    "ABP-192-CD2-1080p.zh-CN.srt"
+  ],
+  "CompleteStemPreserved": true,
+  "OriginalBytesPreserved": true,
+  "ExternalStreamsVisibleWithoutFullRescan": true,
+  "ExternalSubtitleLanguages": [
+    "zh-CN"
+  ],
+  "Passed": true
+}
