@@ -1,0 +1,113 @@
+{
+  "ServerVersion": "4.9.5.0",
+  "Candidate": "candidate-09",
+  "ObservationsWithoutRestart": [
+    {
+      "Label": "plugin-local_library-local",
+      "ConfiguredOrder": [
+        "Local",
+        "Thunder",
+        "Pool"
+      ],
+      "LibraryOrder": [
+        "本地字幕",
+        "迅雷字幕"
+      ],
+      "AvailableFetcherOrder": [
+        "Open Subtitles",
+        "海南鸡字幕",
+        "本地字幕",
+        "迅雷字幕"
+      ],
+      "ResultCount": 6,
+      "ProviderSequence": [
+        "本地字幕",
+        "迅雷字幕"
+      ]
+    },
+    {
+      "Label": "plugin-local_library-thunder",
+      "ConfiguredOrder": [
+        "Local",
+        "Thunder",
+        "Pool"
+      ],
+      "LibraryOrder": [
+        "迅雷字幕",
+        "本地字幕"
+      ],
+      "AvailableFetcherOrder": [
+        "Open Subtitles",
+        "海南鸡字幕",
+        "本地字幕",
+        "迅雷字幕"
+      ],
+      "ResultCount": 6,
+      "ProviderSequence": [
+        "本地字幕",
+        "迅雷字幕"
+      ]
+    },
+    {
+      "Label": "plugin-thunder_library-thunder",
+      "ConfiguredOrder": [
+        "Thunder",
+        "Local",
+        "Pool"
+      ],
+      "LibraryOrder": [
+        "迅雷字幕",
+        "本地字幕"
+      ],
+      "AvailableFetcherOrder": [
+        "Open Subtitles",
+        "海南鸡字幕",
+        "本地字幕",
+        "迅雷字幕"
+      ],
+      "ResultCount": 6,
+      "ProviderSequence": [
+        "本地字幕",
+        "迅雷字幕"
+      ]
+    },
+    {
+      "Label": "plugin-thunder_library-local",
+      "ConfiguredOrder": [
+        "Thunder",
+        "Local",
+        "Pool"
+      ],
+      "LibraryOrder": [
+        "本地字幕",
+        "迅雷字幕"
+      ],
+      "AvailableFetcherOrder": [
+        "Open Subtitles",
+        "海南鸡字幕",
+        "本地字幕",
+        "迅雷字幕"
+      ],
+      "ResultCount": 6,
+      "ProviderSequence": [
+        "本地字幕",
+        "迅雷字幕"
+      ]
+    }
+  ],
+  "AvailableFetcherOrderAfterRestart": [
+    "Open Subtitles",
+    "迅雷字幕",
+    "本地字幕",
+    "海南鸡字幕"
+  ],
+  "ProviderSequenceAfterRestart": [
+    "迅雷字幕",
+    "本地字幕"
+  ],
+  "LibraryOrderControlsSearch": false,
+  "PluginOrderChangesFetchersLive": false,
+  "BothSourcesPresent": true,
+  "RestartUsesConfiguredThunderFirst": true,
+  "Passed": true
+}

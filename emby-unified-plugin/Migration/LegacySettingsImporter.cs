@@ -1,0 +1,66 @@
+using System;
+using System.IO;
+using System.Linq;
+using System.Xml;
+using System.Xml.Linq;
+using MediaBrowser.Model.Serialization;
+
+namespace Emby.SubtitleAssistant.Migration;
+
+internal static class LegacySettingsImporter
+{
+    private static readonly string[] LegacyFiles = { "MeiamSub.LocalPool.json", "ThunderSubtitle.json", "ChickenRicePool.json", "SubtitleCloudPlugin.xml" };
+    internal static void NormalizeThunderMaxResults(PluginConfiguration configuration)
+    {
+        if (configuration.ThunderMaxResults == 5 || configuration.ThunderMaxResults > 10) configuration.ThunderMaxResults = 10;
+    }
+
+    public static bool HasLegacySettings(string directory) =>
+        !string.IsNullOrEmpty(directory) && LegacyFiles.Any(name => File.Exists(Path.Combine(directory, name)));
+    public static PluginConfiguration Merge(string directory, PluginConfiguration current, IJsonSerializer json)
+    {
+        try
+        {
+            var local = Read<LocalSettings>(directory, "MeiamSub.LocalPool.json", json);
+            var thunder = Read<ThunderSettings>(directory, "ThunderSubtitle.json", json);
+            var legacyChickenRice = Read<LegacyChickenRiceSettings>(directory, "ChickenRicePool.json", json);
+            var cloudFile = Path.Combine(directory, "SubtitleCloudPlugin.xml");
+            XElement cloud = null;
+            if (File.Exists(cloudFile))
+            {
+                var settings = new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null, MaxCharactersInDocument = 1048576 };
+                using (var reader = XmlReader.Create(cloudFile, settings)) cloud = XDocument.Load(reader).Root;
+                if (cloud == null || cloud.Name.LocalName != "PluginConfiguration") throw new InvalidDataException();
+            }
+            var result = MigrationRunner.Clone(current, json);
+            if (local?.SubtitleLibraryPaths != null) result.LocalPaths = local.SubtitleLibraryPaths;
+            if (thunder?.EnableAutoDownloadOnNewMedia != null || legacyChickenRice?.EnableAutoDownloadOnNewMedia != null)
+                result.AutoDownloadOnNewMedia = thunder?.EnableAutoDownloadOnNewMedia == true || legacyChickenRice?.EnableAutoDownloadOnNewMedia == true;
+            if (cloud != null)
+            {
+                string Value(string name) => cloud.Elements().SingleOrDefault(x => x.Name.LocalName == name)?.Value;
+                result.CloudServiceUrl = Value("ServiceUrl") ?? result.CloudServiceUrl;
+                result.CloudApiToken = Value("ApiToken") ?? result.CloudApiToken;
+                result.CloudPathMappings = Value("PathMappings") ?? result.CloudPathMappings;
+            }
+            result.ProviderDisplayOrder = ProviderKeyMigration.ProjectProviderOrder(result.ProviderDisplayOrder);
+            NormalizeThunderMaxResults(result);
+            result.Validate();
+            return result;
+        }
+        catch { throw new MigrationException("旧字幕插件配置无法完整解析或校验，未导入任何配置。"); }
+    }
+    private static T Read<T>(string directory, string filename, IJsonSerializer json) where T : class
+    {
+        var path = Path.Combine(directory, filename);
+        if (!File.Exists(path)) return null;
+        if (new FileInfo(path).Length > 1048576) throw new InvalidDataException();
+        return json.DeserializeFromString<T>(File.ReadAllText(path)) ?? throw new InvalidDataException();
+    }
+    public sealed class LocalSettings { public string SubtitleLibraryPaths { get; set; } }
+    public sealed class ThunderSettings { public bool? EnableAutoDownloadOnNewMedia { get; set; } }
+    public sealed class LegacyChickenRiceSettings
+    {
+        public bool? EnableAutoDownloadOnNewMedia { get; set; }
+    }
+}

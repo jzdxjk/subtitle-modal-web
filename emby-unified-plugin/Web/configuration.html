@@ -1,0 +1,228 @@
+<div id="SubtitleAssistantConfigurationPage" is="emby-scroller" class="view flex flex-direction-column scrollFrameY flex-grow" data-horizontal="false" data-forcescrollbar="true" data-centerfocus="true" data-bindheader="true" data-controller="__plugin/subtitleassistantjs" data-title="字幕助手">
+<style>
+#SubtitleAssistantConfigurationPage .sa-content{
+  --sa-text:hsla(var(--theme-text-color-hue,0),var(--theme-text-color-saturation,0%),var(--theme-text-color-lightness,0%),var(--theme-text-color-alpha,1));
+  --sa-muted:hsla(var(--theme-text-color-hue,0),var(--theme-text-color-saturation,0%),var(--theme-text-color-lightness,0%),var(--theme-secondary-text-color-alpha,.6));
+  --sa-line:var(--line-background,hsla(0,0%,50%,.28));
+  --sa-accent:hsl(var(--theme-primary-color-hue,116),var(--theme-primary-color-saturation,42%),var(--theme-primary-color-lightness,50%));
+  --sa-surface:hsl(var(--background-hue,0),var(--background-saturation,0%),calc(var(--background-lightness,100%) + 6%));
+  --sa-sunken:hsl(var(--background-hue,0),var(--background-saturation,0%),calc(var(--background-lightness,100%) - 4%));
+  max-width:1100px;margin:0 auto;width:100%;box-sizing:border-box;padding:4.5em 2em 1em;color:var(--sa-text);
+}
+#SubtitleAssistantConfigurationPage .sa-head{display:flex;flex-direction:column;gap:.35em;margin:0 0 1.5em}
+#SubtitleAssistantConfigurationPage .sa-head h1{margin:0;font-size:2em;font-weight:600;letter-spacing:0}
+#SubtitleAssistantConfigurationPage .sa-meta{margin:0;color:var(--sa-muted);font-size:.92em}
+#SubtitleAssistantConfigurationPage .sa-dot{margin:0 .5em}
+#SubtitleAssistantConfigurationPage .sa-alert{margin:.4em 0 0;padding:.7em .9em;border-radius:.4em;background:rgba(229,83,75,.12);color:#e5534b}
+#SubtitleAssistantConfigurationPage .sa-tabs-wrap{display:flex;justify-content:center;margin:0 0 1.9em}
+#SubtitleAssistantConfigurationPage .sa-tabs{
+  display:inline-flex;gap:.2em;padding:.3em;border-radius:2em;background:var(--sa-sunken);
+  max-width:100%;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;
+}
+#SubtitleAssistantConfigurationPage .sa-tabs::-webkit-scrollbar{display:none}
+#SubtitleAssistantConfigurationPage .sa-tabs.sa-tabs-scrollable{
+  mask-image:linear-gradient(to right,transparent 0,#000 1.1em,#000 calc(100% - 1.1em),transparent 100%);
+  -webkit-mask-image:linear-gradient(to right,transparent 0,#000 1.1em,#000 calc(100% - 1.1em),transparent 100%);
+}
+#SubtitleAssistantConfigurationPage .sa-tabs button{
+  border:0;background:transparent;color:var(--sa-muted);font:inherit;font-size:.95em;line-height:1.1;
+  padding:.72em 1.35em;border-radius:1.7em;cursor:pointer;white-space:nowrap;
+  transition:background-color .15s ease,color .15s ease,box-shadow .15s ease;
+}
+#SubtitleAssistantConfigurationPage .sa-tabs button:hover{color:var(--sa-text)}
+#SubtitleAssistantConfigurationPage .sa-tabs button[aria-selected="true"]{
+  background:var(--sa-surface);color:var(--sa-text);font-weight:600;box-shadow:0 .1em .35em rgba(0,0,0,.12);
+}
+#SubtitleAssistantConfigurationPage .sa-tabs button:focus-visible{outline:2px solid var(--sa-accent);outline-offset:2px}
+#SubtitleAssistantConfigurationPage h2{margin:.2em 0 .85em;font-size:1.6em;font-weight:600;letter-spacing:0}
+#SubtitleAssistantConfigurationPage h3{margin:0 0 .55em;font-size:1.05em;font-weight:600;letter-spacing:0}
+#SubtitleAssistantConfigurationPage .sa-group{padding:0 0 1.35em;margin:0 0 1.4em;border-bottom:1px solid var(--sa-line)}
+#SubtitleAssistantConfigurationPage .sa-group:last-of-type{border-bottom:0}
+#SubtitleAssistantConfigurationPage .sa-field{display:flex;flex-direction:column;gap:.42em;margin:0 0 1.1em}
+#SubtitleAssistantConfigurationPage .sa-field > label{font-size:.95em;font-weight:500}
+#SubtitleAssistantConfigurationPage .sa-field-narrow{max-width:17em}
+#SubtitleAssistantConfigurationPage .sa-hint{margin:.1em 0 0;color:var(--sa-muted);font-size:.86em;line-height:1.55}
+#SubtitleAssistantConfigurationPage input:not([type="checkbox"]),
+#SubtitleAssistantConfigurationPage textarea,
+#SubtitleAssistantConfigurationPage select{
+  display:block;width:100%;box-sizing:border-box;min-height:2.6em;padding:.62em .75em;font:inherit;font-size:.95em;
+  color:var(--sa-text);background:var(--sa-surface);border:1px solid var(--sa-line);border-radius:.4em;
+}
+#SubtitleAssistantConfigurationPage textarea{min-height:7em;resize:vertical}
+#SubtitleAssistantConfigurationPage input:not([type="checkbox"]):focus,
+#SubtitleAssistantConfigurationPage textarea:focus,
+#SubtitleAssistantConfigurationPage select:focus{
+  outline:none;border-color:var(--sa-accent);
+  box-shadow:0 0 0 .12em hsla(var(--theme-primary-color-hue,116),var(--theme-primary-color-saturation,42%),var(--theme-primary-color-lightness,50%),.2);
+}
+#SubtitleAssistantConfigurationPage .sa-check{
+  display:flex;align-items:flex-start;gap:.7em;margin:.35em 0 .55em;font-size:.98em;line-height:1.5;cursor:pointer;
+}
+#SubtitleAssistantConfigurationPage .sa-check input[type="checkbox"]{
+  width:1.25em;height:1.25em;margin:.12em 0 0;flex:0 0 auto;accent-color:var(--sa-accent);cursor:pointer;
+}
+#SubtitleAssistantConfigurationPage .sa-check span{flex:1 1 auto}
+#SubtitleAssistantConfigurationPage .sa-sublist{margin:.4em 0 .9em}
+#SubtitleAssistantConfigurationPage .sa-btn,
+#SubtitleAssistantConfigurationPage .sa-secondary{
+  font:inherit;font-size:.95em;border-radius:.45em;padding:.62em 1.1em;cursor:pointer;
+  border:1px solid var(--sa-line);background:var(--sa-surface);color:var(--sa-text);
+}
+#SubtitleAssistantConfigurationPage .sa-secondary{background:transparent}
+#SubtitleAssistantConfigurationPage .sa-btn:focus-visible,
+#SubtitleAssistantConfigurationPage .sa-secondary:focus-visible{outline:2px solid var(--sa-accent);outline-offset:2px}
+#SubtitleAssistantConfigurationPage .sa-submit{margin:1.4em 0 0;display:flex;flex-direction:column;gap:.55em}
+#SubtitleAssistantConfigurationPage .sa-submit-meta{display:flex;flex-wrap:wrap;align-items:center;gap:.7em;margin:0}
+#SubtitleAssistantConfigurationPage .sa-order{border:1px solid var(--sa-line);border-radius:.4em;overflow:hidden;background:var(--sa-surface)}
+#SubtitleAssistantConfigurationPage .sa-order-row{display:flex;align-items:center;gap:.7em;padding:.62em .8em;border-bottom:1px solid var(--sa-line);cursor:grab;user-select:none;-webkit-user-select:none;touch-action:none}
+#SubtitleAssistantConfigurationPage .sa-order-row:last-child{border-bottom:0}
+#SubtitleAssistantConfigurationPage .sa-order-row.sa-dragging{opacity:.45}
+#SubtitleAssistantConfigurationPage .sa-order-row.sa-drop-target{box-shadow:inset 0 2px 0 var(--sa-accent)}
+#SubtitleAssistantConfigurationPage .sa-order-row:focus-visible{outline:2px solid var(--sa-accent);outline-offset:-2px}
+#SubtitleAssistantConfigurationPage .sa-order-handle{color:var(--sa-muted);font-size:1.05em;line-height:1;letter-spacing:-.12em}
+#SubtitleAssistantConfigurationPage .sa-order-name{flex:1 1 auto;font-size:.95em}
+#SubtitleAssistantConfigurationPage .sa-test{margin-top:1em;padding-top:1em;border-top:1px solid var(--sa-line)}
+#SubtitleAssistantConfigurationPage .sa-test-controls{display:flex;flex-wrap:wrap;align-items:center;gap:.7em}
+#SubtitleAssistantConfigurationPage .sa-test-controls select{width:auto;min-width:11em;flex:0 1 17em}
+#SubtitleAssistantConfigurationPage .sa-test-result{font-size:.9em;color:var(--sa-muted);overflow-wrap:anywhere}
+#SubtitleAssistantConfigurationPage .sa-test-ok{color:var(--sa-accent);font-weight:600}
+#SubtitleAssistantConfigurationPage .sa-test-fail{color:#e5534b;font-weight:600}
+#SubtitleAssistantConfigurationPage .sa-unsaved{font-size:.85em;color:var(--sa-accent);font-weight:600}
+#SubtitleAssistantConfigurationPage [data-status]{color:var(--sa-muted);font-size:.88em}
+#SubtitleAssistantConfigurationPage table{width:100%;border-collapse:collapse;margin:.3em 0 1.2em;font-size:.88em}
+#SubtitleAssistantConfigurationPage th,#SubtitleAssistantConfigurationPage td{
+  padding:.55em .5em;border-bottom:1px solid var(--sa-line);text-align:left;vertical-align:top;overflow-wrap:anywhere;
+}
+#SubtitleAssistantConfigurationPage th{font-weight:600;color:var(--sa-muted)}
+#SubtitleAssistantConfigurationPage [hidden]{display:none!important}
+@media (max-width:720px){
+  #SubtitleAssistantConfigurationPage .sa-content{padding:3.5em 1.1em .5em}
+  #SubtitleAssistantConfigurationPage .sa-head h1{font-size:1.7em}
+  #SubtitleAssistantConfigurationPage h2{font-size:1.4em}
+  #SubtitleAssistantConfigurationPage [data-status]{flex-basis:100%}
+}
+</style>
+<div class="scrollSlider"><main class="sa-content">
+    <header class="sa-head">
+        <p class="sa-meta">版本 <span data-version>—</span><span class="sa-dot">·</span>设置与云字幕操作仅限 Emby 管理员</p>
+        <p data-admin-warning hidden role="alert" class="sa-alert">请使用 Emby 管理员账户打开此页面。</p>
+    </header>
+    <form data-settings-form hidden>
+        <div class="sa-tabs-wrap">
+            <div class="sa-tabs" role="tablist" aria-label="字幕助手设置">
+                <button type="button" role="tab" id="sa-tab-local" aria-controls="sa-panel-local" aria-selected="true" data-tab="local">本地字幕</button>
+                <button type="button" role="tab" id="sa-tab-thunder" aria-controls="sa-panel-thunder" aria-selected="false" tabindex="-1" data-tab="thunder">迅雷字幕</button>
+                <button type="button" role="tab" id="sa-tab-cloud" aria-controls="sa-panel-cloud" aria-selected="false" tabindex="-1" data-tab="cloud">字幕云</button>
+                <button type="button" role="tab" id="sa-tab-proxy" aria-controls="sa-panel-proxy" aria-selected="false" tabindex="-1" data-tab="proxy">全局设置</button>
+            </div>
+        </div>
+        <section id="sa-panel-local" role="tabpanel" aria-labelledby="sa-tab-local" data-panel="local">
+            <h2>本地字幕</h2>
+            <div class="sa-field">
+                <label for="sa-local-paths">字幕库目录</label>
+                <textarea id="sa-local-paths" data-field="LocalPaths" spellcheck="false" placeholder="每行一个 Emby 服务器可读的路径"></textarea>
+                <p class="sa-hint">每行一个目录。展示数量不限制自动补全查找候选。</p>
+            </div>
+            <div class="sa-field sa-field-narrow">
+                <label for="sa-local-max">最多展示结果数</label>
+                <input id="sa-local-max" type="number" min="1" step="1" required data-field="LocalMaxResults" value="5">
+                <p class="sa-hint">完成搜索、匹配、去重与排序后，最多展示 N 条；不影响自动补全可用的候选。</p>
+            </div>
+        </section>
+        <section id="sa-panel-thunder" role="tabpanel" aria-labelledby="sa-tab-thunder" data-panel="thunder" hidden>
+            <h2>迅雷字幕</h2>
+            <div class="sa-field sa-field-narrow">
+                <label for="sa-thunder-timeout">请求超时（秒）</label>
+                <input id="sa-thunder-timeout" type="number" min="1" max="120" step="1" data-field="ThunderTimeoutSeconds" required>
+            </div>
+            <div class="sa-field sa-field-narrow">
+                <label for="sa-thunder-max">最多展示结果数</label>
+                <input id="sa-thunder-max" type="number" min="1" max="10" step="1" required data-field="ThunderMaxResults" value="10">
+                <p class="sa-hint">完成搜索、匹配、去重与排序后，最多展示 N 条；不影响自动补全可用的候选。</p>
+            </div>
+            <p class="sa-hint">海南鸡字幕已上传至迅雷字幕库；搜索命中时优先展示海南鸡字幕。</p>
+        </section>
+        <section id="sa-panel-cloud" role="tabpanel" aria-labelledby="sa-tab-cloud" data-panel="cloud" hidden>
+            <h2>字幕云</h2>
+            <div class="sa-field">
+                <label for="sa-cloud-url">字幕云服务地址</label>
+                <input id="sa-cloud-url" type="url" data-field="CloudServiceUrl" spellcheck="false" placeholder="http://服务器:端口">
+            </div>
+            <div class="sa-field">
+                <label for="sa-cloud-token">API Token</label>
+                <input id="sa-cloud-token" type="password" data-field="CloudApiToken" data-secret="HasCloudApiToken" autocomplete="new-password" placeholder="留空保留现有值">
+                <label class="sa-check"><input type="checkbox" data-clear="ClearCloudApiToken"><span>清除已保存的 API Token</span></label>
+            </div>
+            <div class="sa-field">
+                <label for="sa-cloud-mappings">路径映射</label>
+                <textarea id="sa-cloud-mappings" data-field="CloudPathMappings" spellcheck="false" placeholder="/emby/media=/media"></textarea>
+                <p class="sa-hint">每行 Emby路径=字幕云路径。字幕云服务独立运行，可在影片或单集菜单中选择“生成云字幕”。</p>
+            </div>
+            <button type="button" class="sa-btn" data-refresh-jobs>刷新任务</button>
+            <p data-jobs-status role="status" class="sa-hint"></p>
+            <h3>执行中任务</h3><table><thead><tr><th>媒体</th><th>状态</th><th>阶段</th><th>进度</th><th>消息</th></tr></thead><tbody data-jobs="active"></tbody></table>
+            <h3>最近完成</h3><table><thead><tr><th>媒体</th><th>状态</th><th>阶段</th><th>进度</th><th>消息</th></tr></thead><tbody data-jobs="done"></tbody></table>
+            <h3>最近失败</h3><table><thead><tr><th>媒体</th><th>状态</th><th>阶段</th><th>进度</th><th>消息</th></tr></thead><tbody data-jobs="failed"></tbody></table>
+        </section>
+        <section id="sa-panel-proxy" role="tabpanel" aria-labelledby="sa-tab-proxy" data-panel="proxy" hidden>
+            <h2>全局设置</h2>
+            <div class="sa-group">
+                <h3>搜索结果来源顺序</h3>
+                <p class="sa-hint">拖拽调整本地与迅雷字幕在手动搜索结果里的先后，排在上面的先显示。只影响来源之间的先后，不改变每个来源内部的排序；自动补全仍按各媒体库原生顺序。保存后需重启 Emby 才会改变搜索结果里的来源顺序。</p>
+                <div class="sa-order" data-provider-order role="list" aria-label="搜索结果来源顺序"></div>
+            </div>
+            <div class="sa-group">
+                <h3>新入库自动补全</h3>
+                <label class="sa-check"><input type="checkbox" data-field="AutoDownloadOnNewMedia"><span>新入库媒体延迟 60 秒自动补全缺失的中文字幕</span></label>
+                <p class="sa-hint">新入库和历史补全均按媒体库中本地、迅雷下载器的开关与顺序参与。已有中文字幕时跳过；没有结果时结束。历史补全和自动更新时间可在 Emby 计划任务中设置。</p>
+            </div>
+            <div class="sa-group">
+                <h3>网络代理</h3>
+                <label class="sa-check"><input type="checkbox" data-field="Proxy.Enabled"><span>启用本插件代理</span></label>
+                <div class="sa-field">
+                    <label for="sa-proxy-address">代理地址</label>
+                    <input id="sa-proxy-address" type="text" data-field="Proxy.Address" spellcheck="false" placeholder="http://主机:端口 或 socks5://主机:端口">
+                </div>
+                <div class="sa-field">
+                    <label for="sa-proxy-username">认证用户名（可选）</label>
+                    <input id="sa-proxy-username" type="text" data-field="Proxy.Username" autocomplete="off">
+                </div>
+                <div class="sa-field">
+                    <label for="sa-proxy-password">认证密码（可选）</label>
+                    <input id="sa-proxy-password" type="password" data-field="Proxy.Password" data-secret="Proxy.HasPassword" autocomplete="new-password" placeholder="留空保留现有值">
+                    <label class="sa-check"><input type="checkbox" data-clear="Proxy.ClearPassword"><span>清除已保存的代理密码</span></label>
+                </div>
+                <div class="sa-sublist">
+                    <label class="sa-check"><input type="checkbox" data-field="Proxy.Thunder"><span>迅雷字幕搜索与下载走代理</span></label>
+                    <label class="sa-check"><input type="checkbox" data-field="Proxy.Cloud"><span>字幕云服务请求走代理</span></label>
+                    <label class="sa-check"><input type="checkbox" data-field="Proxy.Updates"><span>插件更新请求走代理</span></label>
+                    <label class="sa-check"><input type="checkbox" data-field="Proxy.BypassLocal"><span>局域网与本机地址直连</span></label>
+                </div>
+                <div class="sa-field">
+                    <label for="sa-proxy-bypass">额外直连主机</label>
+                    <textarea id="sa-proxy-bypass" data-field="Proxy.BypassHosts" spellcheck="false" placeholder="nas.local&#10;*.example.com"></textarea>
+                    <p class="sa-hint">逗号或换行分隔。仅影响本插件；代理失败不会自动改用直连，本地文件读取不经过网络代理。</p>
+                </div>
+                <div class="sa-test">
+                    <div class="sa-test-controls">
+                        <select data-proxy-purpose aria-label="测试流量用途">
+                            <option value="Thunder">迅雷字幕</option>
+                            <option value="Cloud">字幕云</option>
+                            <option value="Updates">插件更新</option>
+                        </select>
+                        <button type="button" class="sa-btn" data-proxy-test>测试</button>
+                        <span class="sa-test-result" data-proxy-result role="status" aria-live="polite"></span>
+                    </div>
+                    <p class="sa-hint">按当前已保存的代理设置测试一次真实请求，并显示实际延迟与路由。</p>
+                </div>
+            </div>
+        </section>
+        <div class="sa-submit">
+            <button is="emby-button" type="submit" class="raised button-submit block"><span>保存</span></button>
+            <p class="sa-submit-meta">
+                <span class="sa-unsaved" data-unsaved hidden>未保存</span>
+                <span data-status role="status" aria-live="polite"></span>
+            </p>
+        </div>
+    </form>
+</main></div></div>

@@ -1,0 +1,75 @@
+using MediaBrowser.Model.Plugins;
+using System;
+
+namespace Emby.SubtitleAssistant;
+
+public sealed class PluginConfiguration : BasePluginConfiguration
+{
+    public const string OfficialUpdateManifestUrl = "https://github.com/jzdxjk/subtitle-modal-web/releases/download/emby-subtitle-assistant-update/update.json";
+    public string LocalPaths { get; set; } = "";
+    public int LocalMaxResults { get; set; } = 5;
+    public int ThunderMaxResults { get; set; } = 10;
+    public int ThunderTimeoutSeconds { get; set; } = 15;
+    public string CloudServiceUrl { get; set; } = "";
+    public string CloudApiToken { get; set; } = "";
+    public string CloudPathMappings { get; set; } = "";
+    public bool AutoDownloadOnNewMedia { get; set; }
+    public string SimplifiedChineseLanguage { get; set; } = ChineseSubtitleLanguage.Simplified;
+    public string TraditionalChineseLanguage { get; set; } = ChineseSubtitleLanguage.Traditional;
+    public int MigrationVersion { get; set; }
+    public string[] ProviderDisplayOrder { get; set; } = ProviderOrder.Default;
+    public string UpdateManifestUrl { get; set; } = OfficialUpdateManifestUrl;
+    public ProxyConfiguration Proxy { get; set; } = new ProxyConfiguration();
+    public void Validate()
+    {
+        // Missing or hand-edited values must not block host startup; runtime reads normalize them too.
+        if (!ProviderOrder.IsValid(ProviderDisplayOrder))
+            ProviderDisplayOrder = ProviderOrder.Default;
+        if (LocalMaxResults < 1 || ThunderMaxResults < 1 || ThunderMaxResults > 10)
+            throw new ArgumentException("本地最大展示数必须为正整数，迅雷最大展示数必须在1到10之间。");
+        if (ThunderTimeoutSeconds < 1 || ThunderTimeoutSeconds > 120)
+            throw new ArgumentException("迅雷请求超时必须在1到120秒之间。");
+        ValidateServiceUrl(CloudServiceUrl, "字幕云服务地址", true);
+        ValidateServiceUrl(UpdateManifestUrl, "插件更新清单地址", false);
+        if (Proxy == null) throw new ArgumentException("缺少代理配置。");
+        if (Proxy.Enabled) Proxy.ValidateAddress();
+    }
+
+    private static void ValidateServiceUrl(string value, string label, bool allowEmpty)
+    {
+        if (allowEmpty && string.IsNullOrWhiteSpace(value)) return;
+        if (!Uri.TryCreate(value, UriKind.Absolute, out var uri) ||
+            (uri.Scheme != "http" && uri.Scheme != "https") ||
+            !string.IsNullOrEmpty(uri.UserInfo) || !string.IsNullOrEmpty(uri.Fragment))
+            throw new ArgumentException(label + "必须是无内嵌凭据的HTTP或HTTPS地址。");
+    }
+}
+
+public static class ChineseSubtitleLanguage
+{
+    public const string Simplified = "zh-CN";
+    public const string Traditional = "zh-TW";
+}
+
+public sealed class ProxyConfiguration
+{
+    public bool Enabled { get; set; }
+    public string Address { get; set; } = "";
+    public string Username { get; set; } = "";
+    public string Password { get; set; } = "";
+    public string BypassHosts { get; set; } = "";
+    public bool Thunder { get; set; } = true;
+    public bool Cloud { get; set; }
+    public bool Updates { get; set; } = true;
+    public bool BypassLocal { get; set; } = true;
+
+    internal Uri ValidateAddress()
+    {
+        if (!Uri.TryCreate(Address, UriKind.Absolute, out var uri) ||
+            (uri.Scheme != "http" && uri.Scheme != "socks5") ||
+            string.IsNullOrWhiteSpace(uri.Host) || !string.IsNullOrEmpty(uri.UserInfo) ||
+            uri.AbsolutePath != "/" || !string.IsNullOrEmpty(uri.Query) || !string.IsNullOrEmpty(uri.Fragment))
+            throw new ArgumentException("代理地址必须为http://主机:端口或socks5://主机:端口，认证信息请填写单独字段。");
+        return uri;
+    }
+}

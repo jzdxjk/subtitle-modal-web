@@ -1,0 +1,15 @@
+name = "chickenrice-subtitle-pool"
+main = "src/index.js"
+compatibility_date = "2026-10-20"
+workers_dev = true
+preview_urls = false
+
+[[d1_databases]]
+binding = "DB"
+database_name = "chickenrice-pool"
+database_id = "88448f9b-d093-4230-90a2-fabc6ed52400"
+migrations_dir = "migrations"
+
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "chickenrice-subtitles"
