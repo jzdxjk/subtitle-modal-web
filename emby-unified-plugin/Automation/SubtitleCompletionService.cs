@@ -52,9 +52,11 @@ internal sealed class SubtitleCompletionService
     internal async Task<bool> ProcessAsync(BaseItem item, CancellationToken ct)
     {
         if (!Eligible(item) || !Active.TryAdd(item.Id,0)) return false;
+        var stage = "library-options";
         try
         {
             var options = _library.GetLibraryOptions(item);
+            stage = "provider-registration";
             var all = Registrations(item);
             var enabled = CompletionPolicy.EnabledProviders(options,all);
             if (enabled.Count == 0) return false;
@@ -62,7 +64,9 @@ internal sealed class SubtitleCompletionService
             if (languages.Length > 0 && !languages.Any(CompletionPolicy.IsChinese)) return false;
             if (options.SubtitleDownloadMaxAgeDays > 0 && item.DateCreated > DateTime.MinValue &&
                 DateTime.UtcNow - item.DateCreated.ToUniversalTime() > TimeSpan.FromDays(options.SubtitleDownloadMaxAgeDays)) return false;
+            stage = "stream-check";
             if (Skip(item,options)) return false;
+            stage = "target-language";
             var language = TargetLanguage(languages);
             using (SearchExecutionContext.BeginAutomation())
             {
@@ -71,6 +75,7 @@ internal sealed class SubtitleCompletionService
                     // Re-read toggles for every source so a configuration change cannot start a newly disabled source.
                     var current = _library.GetLibraryOptions(item);
                     if (!CompletionPolicy.EnabledProviders(current,all).Any(p => p.Name == source.Name)) return Array.Empty<RemoteSubtitleInfo>();
+                    stage = "search:" + source.Name;
                     var request = CompletionPolicy.SearchRequest(item.Path,item.Name,item.RunTimeTicks,
                         item is Episode ? VideoContentType.Episode : VideoContentType.Movie,language,current,source,all);
                     try { return await _subtitles.SearchSubtitles(request,token).ConfigureAwait(false); }
@@ -81,6 +86,7 @@ internal sealed class SubtitleCompletionService
                     var current = _library.GetLibraryOptions(item);
                     if (Skip(item,current)) return true;
                     if (current.RequirePerfectSubtitleMatch && candidate.IsHashMatch != true) return false;
+                    stage = "download";
                     try
                     {
                         var saved = await _subtitles.DownloadSubtitles(item,candidate.Id,current,token).ConfigureAwait(false);
@@ -93,12 +99,23 @@ internal sealed class SubtitleCompletionService
                 },ct).ConfigureAwait(false);
             }
         }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+        catch (SubtitleCompletionException) { throw; }
+        catch (Exception error) { throw new SubtitleCompletionException(stage, "Subtitle completion failed before finishing.", error); }
         finally { Active.TryRemove(item.Id,out _); }
     }
 
-    private bool Skip(BaseItem item, LibraryOptions options) => CompletionPolicy.SkipForStreams(options,
-        ((System.Collections.Generic.IEnumerable<MediaStream>)item.MediaStreams ?? Array.Empty<MediaStream>())
-            .Concat((System.Collections.Generic.IEnumerable<MediaStream>)_mediaSources.GetMediaStreams(item.InternalId) ?? Array.Empty<MediaStream>()));
+    private bool Skip(BaseItem item, LibraryOptions options)
+    {
+        var streams = StreamCollector.Collect(
+            () => item.MediaStreams,
+            internalId => _mediaSources.GetMediaStreams(internalId),
+            item.InternalId,
+            (stage, error) => _logger.ErrorException(
+                "Subtitle completion stream lookup failed; stage={0}, itemId={1}, internalId={2}, path={3}",
+                error, stage, item.Id, item.InternalId, item.Path));
+        return CompletionPolicy.SkipForStreams(options, streams);
+    }
 
     private static string TargetLanguage(string[] languages)
     {

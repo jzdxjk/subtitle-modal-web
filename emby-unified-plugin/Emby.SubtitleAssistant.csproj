@@ -3,9 +3,9 @@
     <TargetFramework>netstandard2.1</TargetFramework>
     <AssemblyName>Emby.SubtitleAssistant</AssemblyName>
     <RootNamespace>Emby.SubtitleAssistant</RootNamespace>
-    <Version>1.0.0.3</Version>
-    <AssemblyVersion>1.0.0.3</AssemblyVersion>
-    <FileVersion>1.0.0.3</FileVersion>
+    <Version>1.0.0.4</Version>
+    <AssemblyVersion>1.0.0.4</AssemblyVersion>
+    <FileVersion>1.0.0.4</FileVersion>
     <LangVersion>latest</LangVersion>
     <Nullable>disable</Nullable>
     <GenerateDependencyFile>false</GenerateDependencyFile>

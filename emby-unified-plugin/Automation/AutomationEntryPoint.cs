@@ -47,14 +47,31 @@ public sealed class AutomationEntryPoint : IServerEntryPoint, IDisposable
 
     private async Task AfterDelayAsync(Guid id, CancellationToken ct)
     {
+        var stage = "delay";
+        BaseItem item = null;
         try
         {
             await Task.Delay(TimeSpan.FromSeconds(60),ct).ConfigureAwait(false);
             if (Plugin.CurrentConfiguration.AutoDownloadOnNewMedia)
-                await _completion.ProcessAsync(_library.GetItemById(id),ct).ConfigureAwait(false);
+            {
+                stage = "load-item";
+                item = _library.GetItemById(id);
+                if (item == null)
+                {
+                    _logger.Warn("Subtitle completion skipped; item {0} no longer exists",id);
+                    return;
+                }
+                stage = "process";
+                await _completion.ProcessAsync(item,ct).ConfigureAwait(false);
+            }
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
-        catch (Exception error) { _logger.Warn("Subtitle completion failed ({0})",error.GetType().Name); }
+        catch (Exception error)
+        {
+            var failedStage = (error as SubtitleCompletionException)?.Stage ?? stage;
+            _logger.ErrorException("Subtitle completion failed; stage={0}, itemId={1}, path={2}",
+                error, failedStage, item?.Id ?? id, item?.Path ?? "(unknown)");
+        }
         finally { _queued.TryRemove(id,out _); }
     }
 

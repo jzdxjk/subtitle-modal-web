@@ -46,7 +46,12 @@ public sealed class MissingSubtitleTask : IScheduledTask
                 cancellationToken.ThrowIfCancellationRequested();
                 try { if (await _completion.ProcessAsync(item,cancellationToken).ConfigureAwait(false)) downloaded++; }
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
-                catch (Exception error) { _logger.Warn("Subtitle completion task item failed ({0})",error.GetType().Name); }
+                catch (Exception error)
+                {
+                    var stage = (error as SubtitleCompletionException)?.Stage ?? "process";
+                    _logger.ErrorException("Subtitle completion task item failed; stage={0}, itemId={1}, path={2}",
+                        error, stage, item.Id, item.Path);
+                }
                 offset++; progress?.Report(total > 0 ? Math.Min(99,offset * 100d / total) : 0);
             }
             if (items.Length < 100) break;
