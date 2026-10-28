@@ -30,6 +30,12 @@ internal static class ProviderKeyMigration
         ["海南鸡字幕池"] = ProviderNames.Pool
     };
     private const string ExtraThunder = "MeiamSub.Thunder";
+    public static bool HasProviderKeys(LibraryOptions source)
+    {
+        if (source == null) return false;
+        return (source.SubtitleFetcherOrder ?? Array.Empty<string>()).Concat(source.DisabledSubtitleFetchers ?? Array.Empty<string>())
+            .Any(key => key != null && (OldNames.ContainsKey(key) || OldNames.Values.Contains(key, StringComparer.Ordinal)));
+    }
     public static LibraryOptions Apply(LibraryOptions source, IJsonSerializer json, IReadOnlyDictionary<string, string> explicitNames = null)
     {
         var result = MigrationRunner.Clone(source, json);
@@ -65,6 +71,21 @@ internal static class ProviderKeyMigration
     }
 }
 
+internal static class DefaultDisablePolicy
+{
+    private static readonly string[] Own = { ProviderNames.Local, ProviderNames.Thunder, ProviderNames.Pool };
+    // Only a genuinely fresh install gets the sources turned off; upgrades keep whatever the operator chose.
+    public static LibraryOptions Apply(LibraryOptions source, IJsonSerializer json)
+    {
+        var result = MigrationRunner.Clone(source, json);
+        var disabled = new List<string>(result.DisabledSubtitleFetchers ?? Array.Empty<string>());
+        foreach (var name in Own)
+            if (!disabled.Any(value => string.Equals(value, name, StringComparison.OrdinalIgnoreCase))) disabled.Add(name);
+        result.DisabledSubtitleFetchers = disabled.ToArray();
+        return result;
+    }
+}
+
 internal static class MigrationRunner
 {
     internal const string PendingFilename = "subtitle-assistant-migration.pending";
@@ -82,11 +103,15 @@ internal static class MigrationRunner
                 var pendingFile = Path.Combine(configDirectory, PendingFilename);
                 var alreadyImported = current.MigrationVersion >= 1;
                 if (alreadyImported && !File.Exists(pendingFile)) return false;
+                var librariesToMigrate = (libraries ?? Array.Empty<MigrationLibrary>()).ToArray();
+                var freshInstall = !alreadyImported && !LegacySettingsImporter.HasLegacySettings(configDirectory) &&
+                    !librariesToMigrate.Any(library => ProviderKeyMigration.HasProviderKeys(library.Options));
                 var imported = alreadyImported ? Clone(current, json) : LegacySettingsImporter.Merge(configDirectory, current, json);
                 var originalConfig = Clone(current, json);
-                var prepared = (libraries ?? Array.Empty<MigrationLibrary>()).Select(library => new PreparedLibrary
+                var prepared = librariesToMigrate.Select(library => new PreparedLibrary
                 {
-                    Target = library, Original = Clone(library.Options, json), Migrated = ProviderKeyMigration.Apply(library.Options, json, explicitNames)
+                    Target = library, Original = Clone(library.Options, json),
+                    Migrated = Migrate(library.Options, json, explicitNames, freshInstall)
                 }).Where(x => !Same(x.Original.SubtitleFetcherOrder, x.Migrated.SubtitleFetcherOrder)
                     || !Same(x.Original.DisabledSubtitleFetchers, x.Migrated.DisabledSubtitleFetchers)).ToArray();
                 var configBytes = File.Exists(configFile) ? File.ReadAllBytes(configFile) : null;
@@ -139,6 +164,11 @@ internal static class MigrationRunner
             catch (MigrationException) { throw; }
             catch { throw new MigrationException("字幕助手迁移准备失败，未导入新配置；请检查旧配置格式与服务器文件权限。"); }
         }
+    }
+    private static LibraryOptions Migrate(LibraryOptions source, IJsonSerializer json, IReadOnlyDictionary<string, string> explicitNames, bool freshInstall)
+    {
+        var migrated = ProviderKeyMigration.Apply(source, json, explicitNames);
+        return freshInstall ? DefaultDisablePolicy.Apply(migrated, json) : migrated;
     }
     private static bool Same(string[] left, string[] right) => left == null ? right == null : right != null && left.SequenceEqual(right, StringComparer.Ordinal);
     private sealed class PreparedLibrary { public MigrationLibrary Target; public LibraryOptions Original; public LibraryOptions Migrated; }

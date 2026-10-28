@@ -2,6 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
+using MediaBrowser.Controller.Subtitles;
+using MediaBrowser.Model.Providers;
 namespace Emby.SubtitleAssistant.Core
 {
     public sealed class SubtitleCandidate
@@ -82,5 +85,124 @@ namespace Emby.SubtitleAssistant.Core
         private void RemoveExpired() { foreach (var row in _entries.Where(x => x.Value.Expires <= _clock()).ToArray()) Remove(row.Key, row.Value); }
         private void Remove(string key, Entry entry) { _entries.Remove(key); _total -= entry.Bytes.LongLength; }
         private sealed class Entry { public byte[] Bytes; public DateTimeOffset Expires; public long Accessed; }
+    }
+
+    // Collapses concurrent and near-term identical source searches across host searches and scheduled tasks.
+    // The shared work is detached from any single caller so one cancelled caller cannot cancel the others.
+    public sealed class ProviderSearchCache
+    {
+        internal static ProviderSearchCache Shared = new ProviderSearchCache();
+        private readonly object _gate = new object();
+        private readonly Dictionary<string, Entry> _entries = new Dictionary<string, Entry>(StringComparer.Ordinal);
+        private readonly int _capacity;
+        private readonly TimeSpan _ttl;
+        private readonly Func<DateTimeOffset> _clock;
+        private long _access;
+
+        public ProviderSearchCache(int capacity = 256, TimeSpan? ttl = null, Func<DateTimeOffset> clock = null)
+        {
+            _capacity = Math.Max(1, capacity);
+            _ttl = ttl ?? TimeSpan.FromSeconds(60);
+            _clock = clock ?? (() => DateTimeOffset.UtcNow);
+        }
+
+        public static string Key(string provider, SubtitleSearchRequest request, string configuration)
+        {
+            var identifier = MediaIdentifier.TryParse(request?.MediaPath);
+            var codes = identifier == null ? "" : string.Join(",", identifier.QueryVariants.OrderBy(x => x, StringComparer.Ordinal));
+            return string.Join("|", new[]
+            {
+                provider ?? "",
+                (request?.MediaPath ?? "").Replace('\\', '/'),
+                codes,
+                request?.Language ?? "",
+                request?.IsPerfectMatch == true ? "perfect" : "",
+                request?.IsForced == true ? "forced" : "",
+                request?.IsHearingImpaired == true ? "hi" : "",
+                SearchExecutionContext.IsAutomation ? "automation" : "display",
+                configuration ?? ""
+            });
+        }
+
+        public async Task<RemoteSubtitleInfo[]> GetOrCreateAsync(string key,
+            Func<CancellationToken,Task<IEnumerable<RemoteSubtitleInfo>>> factory, CancellationToken cancellationToken)
+        {
+            if (string.IsNullOrEmpty(key)) throw new ArgumentException("A cache key is required.", nameof(key));
+            if (factory == null) throw new ArgumentNullException(nameof(factory));
+            Task<RemoteSubtitleInfo[]> shared;
+            lock (_gate)
+            {
+                RemoveExpired();
+                if (_entries.TryGetValue(key, out var existing))
+                {
+                    existing.Accessed = ++_access;
+                    shared = existing.Task;
+                }
+                else
+                {
+                    EnsureCapacity();
+                    var entry = new Entry { Accessed = ++_access };
+                    _entries[key] = entry;
+                    entry.Task = PopulateAsync(key, entry, factory);
+                    shared = entry.Task;
+                }
+            }
+            return await ObserveAsync(shared, cancellationToken).ConfigureAwait(false);
+        }
+
+        private async Task<RemoteSubtitleInfo[]> PopulateAsync(string key, Entry entry,
+            Func<CancellationToken,Task<IEnumerable<RemoteSubtitleInfo>>> factory)
+        {
+            await Task.Yield();
+            try
+            {
+                var results = await factory(CancellationToken.None).ConfigureAwait(false);
+                var array = (results ?? Array.Empty<RemoteSubtitleInfo>()).Where(x => x != null).ToArray();
+                lock (_gate)
+                {
+                    if (_entries.TryGetValue(key, out var current) && ReferenceEquals(current, entry)) entry.Expires = _clock() + _ttl;
+                }
+                return array;
+            }
+            catch
+            {
+                lock (_gate) { if (_entries.TryGetValue(key, out var current) && ReferenceEquals(current, entry)) _entries.Remove(key); }
+                throw;
+            }
+        }
+
+        private static async Task<T> ObserveAsync<T>(Task<T> task, CancellationToken cancellationToken)
+        {
+            if (!cancellationToken.CanBeCanceled) return await task.ConfigureAwait(false);
+            if (task.IsCompleted) return await task.ConfigureAwait(false);
+            var cancelled = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            using (cancellationToken.Register(state => ((TaskCompletionSource<bool>)state).TrySetResult(true), cancelled))
+            {
+                var first = await Task.WhenAny(task, cancelled.Task).ConfigureAwait(false);
+                if (first != task) throw new OperationCanceledException(cancellationToken);
+            }
+            return await task.ConfigureAwait(false);
+        }
+
+        private void RemoveExpired()
+        {
+            var now = _clock();
+            foreach (var pair in _entries.Where(x => x.Value.Expires <= now).ToArray()) _entries.Remove(pair.Key);
+        }
+
+        private void EnsureCapacity()
+        {
+            if (_entries.Count < _capacity) return;
+            var remove = _entries.Where(x => x.Value.Task != null && x.Value.Task.IsCompleted)
+                .OrderBy(x => x.Value.Accessed).Select(x => x.Key).Take(Math.Max(1, _entries.Count - _capacity + 1)).ToArray();
+            foreach (var key in remove) _entries.Remove(key);
+        }
+
+        private sealed class Entry
+        {
+            public Task<RemoteSubtitleInfo[]> Task;
+            public DateTimeOffset Expires = DateTimeOffset.MaxValue;
+            public long Accessed;
+        }
     }
 }

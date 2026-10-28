@@ -1,4 +1,4 @@
-# 字幕助手运行验收（2026-10-28，v1.0.0.4）
+# 字幕助手运行验收（2026-10-28，v1.0.0.4 / v1.0.0.6 补丁）
 
 本记录只覆盖 `1.0.0.4` 改动的入库自动下载/补全修复。设置页、搜索排序、手动下载等未改动路径沿用
 `ACCEPTANCE-2026-10-27.md` 中 `1.0.0.3`（candidate-09）的完整五版本验收结论。
@@ -72,3 +72,54 @@
 
 - 运行报告：`emby-unified-plugin/validation/reports/candidate-10-*.json`（本目录，18 份）
 - NAS 原始目录：`/volume1/docker/emby-subtitle-assistant-validation-20261027/`（reports、incoming/candidate-10.dll）
+
+## v1.0.0.6 补丁验收（新入库回归修复）
+
+本段只覆盖 `1.0.0.5 → 1.0.0.6` 的回归修复与部署核对；设置页、搜索排序、历史补全来源调整等行为沿用
+本记录前文 `1.0.0.4` 及 `ACCEPTANCE-2026-10-27.md` 的结论。**没有重新执行五版本容器验收**，仅做单机运行加载核对。
+
+### 问题
+
+生产日志出现真实回归（`wanz-161` 所在新入库路径）：
+
+```text
+System.ArgumentOutOfRangeException:
+The UTC time represented when the offset is applied must be between year 0 and 10,000.
+at System.DateTimeOffset.op_Implicit(DateTime dateTime)
+at SubtitleCompletionService.ProcessAsync(...)
+```
+
+根因：`BaseItem.DateCreated` 实际为 `DateTimeOffset`。原代码 `item.DateCreated > DateTime.MinValue` 与
+`DateTime.UtcNow - item.DateCreated.ToUniversalTime()` 会在 UTC+8 下把 `DateTime.MinValue` 隐式转成
+`DateTimeOffset`，偏移换算导致溢出，整个新入库自动补全中断。
+
+### 修复
+
+- 新增 `CompletionPolicy.IsTooOld(LibraryOptions, DateTimeOffset)`，全程使用 `DateTimeOffset` 比较，
+  并对 `DateTimeOffset.MinValue` 做显式守卫。
+- `SubtitleCompletionService` 的最大入库天数检查改用该函数。
+- 新增回归测试 `AutomationTests.MaxAgeCheckHandlesDateTimeOffsetWithoutOverflowing`（覆盖当前时间、
+  `DateTimeOffset.MinValue`、31 天前、以及未设置上限四种情况）。
+- 版本号提升到 `1.0.0.6`（`Version`/`AssemblyVersion`/`FileVersion`）。
+
+### 产物与哈希
+
+- 文件：`emby-unified-plugin/bin/Release/netstandard2.1/Emby.SubtitleAssistant.dll`
+- 归档：`emby-unified-plugin/validation/artifacts/release-1.0.0.6/Emby.SubtitleAssistant.dll`
+- 大小：`253952` 字节
+- SHA256：`CCA48EDCC1477B969217829C138D1F97C499CB2376155E57C84B5667693DD006`
+- 归档件、`bin` 产物与 NAS 线上文件三者哈希一致。DLL 内嵌 `SourceRevisionId=490ef094aefbc88093361c7a29a90a69da06386c`，
+  用 `dotnet build -c Release -p:SourceRevisionId=490ef094aefbc88093361c7a29a90a69da06386c` 可逐字节复现该哈希。
+
+### 本地单元测试
+
+- `dotnet test emby-unified-plugin.Tests -c Release`：182 通过、0 失败、0 跳过
+  （较 `1.0.0.4` 的 172 项增加 10 项：CompletionScope/新装默认关闭/ProviderSearchCache/DateTimeOffset 回归）。
+
+### 生产部署核对（2026-10-28）
+
+- 1.0.0.5 备份：`/volume1/docker/emby/backups/subtitle-assistant-1.0.0.5-20261028-1345/Emby.SubtitleAssistant.dll`
+- 线上文件：`/volume1/docker/emby/config/plugins/Emby.SubtitleAssistant.dll`，SHA256 与上表一致。
+- `docker restart emby` 后日志确认：`Loading Emby.SubtitleAssistant, Version=1.0.0.6`。
+- `/System/Info/Public` 返回 `Version=4.10.2.0`、服务名 `橘子的Emby`，服务正常。
+- 重启后日志 `ArgumentOutOfRangeException` 计数为 0；未触发全库历史补全（避免批量下载）。

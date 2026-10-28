@@ -62,7 +62,7 @@ public sealed class AutomationEntryPoint : IServerEntryPoint, IDisposable
                     return;
                 }
                 stage = "process";
-                await _completion.ProcessAsync(item,ct).ConfigureAwait(false);
+                await _completion.ProcessAsync(item,CompletionScope.NewMedia,ct).ConfigureAwait(false);
             }
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { }

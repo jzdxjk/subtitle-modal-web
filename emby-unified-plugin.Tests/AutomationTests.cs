@@ -35,6 +35,21 @@ public sealed class AutomationTests
         Assert.Empty(CompletionPolicy.EnabledProviders(null, Registered));
     }
 
+    [Fact] public void HistoricalScopeNeverIncludesPoolWhileNewMediaObeysThePoolSwitch()
+    {
+        var options = new LibraryOptions { SubtitleFetcherOrder = new[] { "id-pool", "id-local", "id-thunder" } };
+        Assert.Equal(new[] { ProviderNames.Local, ProviderNames.Thunder },
+            CompletionPolicy.EnabledProviders(options, Registered, CompletionScope.Historical).Select(p => p.Name));
+        Assert.Equal(new[] { ProviderNames.Pool, ProviderNames.Local, ProviderNames.Thunder },
+            CompletionPolicy.EnabledProviders(options, Registered, CompletionScope.NewMedia).Select(p => p.Name));
+
+        options.DisabledSubtitleFetchers = new[] { ProviderNames.Pool };
+        Assert.Equal(new[] { ProviderNames.Local, ProviderNames.Thunder },
+            CompletionPolicy.EnabledProviders(options, Registered, CompletionScope.NewMedia).Select(p => p.Name));
+        Assert.Equal(new[] { ProviderNames.Local, ProviderNames.Thunder },
+            CompletionPolicy.EnabledProviders(options, Registered, CompletionScope.Historical).Select(p => p.Name));
+    }
+
     [Fact] public async Task FailedFirstFiveCandidatesDoNotApplyDisplayLimitToCompletion()
     {
         var attempts = new List<string>();
@@ -93,6 +108,15 @@ public sealed class AutomationTests
         Assert.False(options.ReplaceAllMetadata);
         Assert.False(options.ReplaceAllImages);
         Assert.True(options.IsAutomated);
+    }
+
+    [Fact] public void MaxAgeCheckHandlesDateTimeOffsetWithoutOverflowing()
+    {
+        var options = new LibraryOptions { SubtitleDownloadMaxAgeDays = 30 };
+        Assert.False(CompletionPolicy.IsTooOld(options, DateTimeOffset.Now));
+        Assert.False(CompletionPolicy.IsTooOld(options, DateTimeOffset.MinValue));
+        Assert.True(CompletionPolicy.IsTooOld(options, DateTimeOffset.UtcNow.AddDays(-31)));
+        Assert.False(CompletionPolicy.IsTooOld(new LibraryOptions(), DateTimeOffset.UtcNow.AddDays(-31)));
     }
 
     [Fact] public void ChineseSubtitleAndLibrarySkipPreferencesAreRespected()

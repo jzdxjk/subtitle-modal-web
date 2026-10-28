@@ -4,6 +4,10 @@ const MAX_BATCH_FILES = 20;
 const MAX_BATCH_FILE_BYTES = 8 * 1024 * 1024;
 const MAX_BATCH_REQUEST_BYTES = MAX_BATCH_FILE_BYTES + 64 * 1024;
 const MAX_SEARCH_RESULTS = 200;
+const SEARCH_CACHE_VERSION = "v1";
+const SEARCH_CACHE_POSITIVE_TTL_SECONDS = 60;
+const SEARCH_CACHE_NEGATIVE_TTL_SECONDS = 120;
+const MAX_ALIASES_PER_QUERY = 19;
 const ALLOWED_FORMATS = new Set(["srt", "ass", "ssa"]);
 const KANA_RATIO_LIMIT = 0.20;
 const PUBLIC_UPLOADS_PER_IP_HOUR = 60;
@@ -11,12 +15,15 @@ const PUBLIC_NEW_UPLOADS_PER_DAY = 1000;
 const CODE_RE = /^(?:FC2(?:-?PPV)?-?\d{5,8}|(?:\d+)?[A-Za-z]{2,8}-\d{3,8}|[A-Za-z]{2,8}\d{3,8})(?:-CD\d+)?$/i;
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     try {
       const url = new URL(request.url);
       if (request.method === "GET" && url.pathname === "/health") {
         await env.DB.prepare("SELECT 1 AS ok").first();
         return json({ ok: true, version: "v1", service: "chickenrice-subtitle-pool" });
+      }
+      if (request.method === "GET" && url.pathname === "/api/v1/stats") {
+        return await getStats(env);
       }
       if (request.method === "POST" && url.pathname === "/api/v1/subtitles") {
         return await uploadSubtitle(request, env);
@@ -25,7 +32,7 @@ export default {
         return await uploadSubtitleBatch(request, env);
       }
       if (request.method === "GET" && url.pathname === "/api/v1/subtitles/search") {
-        return await searchSubtitles(url, env);
+        return await searchSubtitles(url, env, ctx);
       }
       const downloadMatch = url.pathname.match(/^\/api\/v1\/subtitles\/([0-9a-f-]+)\/download$/i);
       if (request.method === "GET" && downloadMatch) {
@@ -322,7 +329,7 @@ async function storePreparedSubtitle(artifact, uploadMode, env) {
   };
 }
 
-async function searchSubtitles(url, env) {
+async function searchSubtitles(url, env, ctx) {
   const matchWork = url.searchParams.get("match") === "work";
   const inputs = matchWork && url.searchParams.has("codes")
     ? url.searchParams.getAll("codes")
@@ -348,34 +355,139 @@ async function searchSubtitles(url, env) {
   const limit = Number.isFinite(requestedLimit)
     ? Math.max(1, Math.min(MAX_SEARCH_RESULTS, Math.floor(requestedLimit)))
     : MAX_SEARCH_RESULTS;
-  const aliases = [...new Set(codes.flatMap((code) => matchWork ? code.storageKeys : [code.canonical]))];
-  const predicate = matchWork
-    ? `EXISTS (
-         SELECT 1 FROM json_each(?) AS aliases
-         WHERE canonical_code = aliases.value OR (
-           canonical_code GLOB (aliases.value || '-cd[0-9]*')
-           AND substr(canonical_code, length(aliases.value) + 4) NOT GLOB '*[^0-9]*'
-         )
-       )`
-    : "canonical_code = ?";
-  const rows = await env.DB.prepare(
-    `SELECT * FROM subtitle_items
-     WHERE (${predicate}) AND status = 'active'
-     ORDER BY
-       CASE WHEN duration_seconds IS NULL THEN 1 ELSE 0 END,
-       CASE WHEN ? IS NULL THEN 0 ELSE ABS(duration_seconds - ?) END,
-       size_bytes DESC,
-       uploaded_at DESC${matchWork ? "" : " LIMIT ?"}`
-  ).bind(
-    matchWork ? JSON.stringify(aliases) : aliases[0],
-    duration,
-    duration,
-    ...(matchWork ? [] : [limit]),
-  ).all();
-  return json({
+  const aliases = [...new Set(codes.flatMap((code) => matchWork ? code.storageKeys : [code.canonical]))].sort();
+  const cache = poolSearchCache(env);
+  const cacheKey = cache ? poolSearchCacheKey(url, matchWork, aliases, duration, limit) : null;
+  if (cache && cacheKey) {
+    const cached = await cache.match(cacheKey);
+    if (cached) {
+      const expires = Number(cached.headers.get("x-pool-cache-expires") || 0);
+      if (!expires || expires > Date.now()) {
+        const headers = new Headers(cached.headers);
+        headers.set("X-Pool-Cache", "HIT");
+        return new Response(await cached.text(), { status: cached.status, headers });
+      }
+      try {
+        await cache.delete(cacheKey);
+      } catch {
+      }
+    }
+  }
+  const runSearchQuery = async (queryAliases) => {
+    const predicateParams = [];
+    let predicate;
+    if (matchWork) {
+      // Index-friendly: one equality per alias plus a bounded range for "-cdN" parts.
+      // Replaces the correlated json_each() EXISTS() that forced a full table scan.
+      predicate = queryAliases.map(() =>
+        "(canonical_code = ? OR (canonical_code >= ? AND canonical_code < ? AND canonical_code GLOB (? || '-cd[0-9]*') " +
+        "AND substr(canonical_code, length(?) + 4) NOT GLOB '*[^0-9]*'))").join(" OR ");
+      for (const alias of queryAliases) {
+        predicateParams.push(alias, `${alias}-cd`, `${alias}-ce`, alias, alias);
+      }
+    } else {
+      predicate = "canonical_code = ?";
+      predicateParams.push(queryAliases[0]);
+    }
+    const result = await env.DB.prepare(
+      `SELECT * FROM subtitle_items
+       WHERE (${predicate}) AND status = 'active'
+       ORDER BY
+         CASE WHEN duration_seconds IS NULL THEN 1 ELSE 0 END,
+         CASE WHEN ? IS NULL THEN 0 ELSE ABS(duration_seconds - ?) END,
+         size_bytes DESC,
+         uploaded_at DESC${matchWork ? "" : " LIMIT ?"}`
+    ).bind(
+      ...predicateParams,
+      duration,
+      duration,
+      ...(matchWork ? [] : [limit]),
+    ).all();
+    return result.results || [];
+  };
+  let rows;
+  if (matchWork && aliases.length > MAX_ALIASES_PER_QUERY) {
+    const merged = [];
+    for (let start = 0; start < aliases.length; start += MAX_ALIASES_PER_QUERY) {
+      merged.push(...await runSearchQuery(aliases.slice(start, start + MAX_ALIASES_PER_QUERY)));
+    }
+    merged.sort((a, b) => compareSearchRows(a, b, duration));
+    rows = merged;
+  } else {
+    rows = await runSearchQuery(aliases);
+  }
+  const items = rows.map((row) => toPublicItem(row, false));
+  const ttl = items.length === 0 ? SEARCH_CACHE_NEGATIVE_TTL_SECONDS : SEARCH_CACHE_POSITIVE_TTL_SECONDS;
+  const response = json({
     code: codes[0].display,
-    items: (rows.results || []).map((row) => toPublicItem(row, false)),
-  }, 200, { "Cache-Control": "public, max-age=30, stale-while-revalidate=60" });
+    items,
+  }, 200, {
+    "Cache-Control": `public, max-age=${ttl}`,
+    "X-Pool-Cache": cache ? "MISS" : "BYPASS",
+    "X-Pool-Cache-Expires": String(Date.now() + ttl * 1000),
+  });
+  if (cache && cacheKey) {
+    const put = cache.put(cacheKey, response.clone()).catch(() => {
+    });
+    if (ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(put);
+    else await put;
+  }
+  return response;
+}
+
+function poolSearchCache(env) {
+  if (env && env.SEARCH_CACHE) return env.SEARCH_CACHE;
+  try {
+    return typeof caches !== "undefined" && caches.default ? caches.default : null;
+  } catch {
+    return null;
+  }
+}
+
+function poolSearchCacheKey(requestUrl, matchWork, aliases, duration, limit) {
+  const key = new URL(requestUrl);
+  key.pathname = "/__pool_cache/search/" + SEARCH_CACHE_VERSION;
+  key.search = "";
+  key.searchParams.set("match", matchWork ? "work" : "code");
+  for (const alias of aliases) key.searchParams.append("code", alias);
+  if (duration !== null) key.searchParams.set("duration", String(duration));
+  if (!matchWork) key.searchParams.set("limit", String(limit));
+  return new Request(key.toString(), { method: "GET" });
+}
+
+async function getStats(env) {
+  let row = await env.DB.prepare(
+    "SELECT subtitle_count FROM pool_stats WHERE id = 1"
+  ).first();
+  if (!row) {
+    const counted = await env.DB.prepare(
+      "SELECT COUNT(*) AS n FROM subtitle_items WHERE status = 'active'"
+    ).first();
+    const now = Date.now();
+    row = { subtitle_count: Number(counted?.n || 0) };
+    try {
+      await env.DB.prepare(
+        "INSERT OR REPLACE INTO pool_stats (id, subtitle_count, updated_at) VALUES (1, ?, ?)"
+      ).bind(row.subtitle_count, now).run();
+    } catch {
+    }
+  }
+  return json({
+    subtitle_count: Math.max(0, Number(row.subtitle_count) || 0),
+    queried_at: new Date().toISOString(),
+  });
+}
+
+function compareSearchRows(a, b, duration) {
+  const aMissing = a.duration_seconds == null ? 1 : 0;
+  const bMissing = b.duration_seconds == null ? 1 : 0;
+  if (aMissing !== bMissing) return aMissing - bMissing;
+  if (duration != null) {
+    const distance = Math.abs(a.duration_seconds - duration) - Math.abs(b.duration_seconds - duration);
+    if (distance !== 0) return distance;
+  }
+  if (a.size_bytes !== b.size_bytes) return b.size_bytes - a.size_bytes;
+  return b.uploaded_at - a.uploaded_at;
 }
 
 async function downloadSubtitle(id, env) {
@@ -420,7 +532,7 @@ async function removeSubtitle(request, id, env) {
     return json({ ok: true, id, removed: true });
   }
   await env.DB.prepare(
-    "UPDATE subtitle_items SET status = 'removed', removed_at = ? WHERE id = ?"
+    "UPDATE subtitle_items SET status = 'removed', removed_at = ? WHERE id = ? AND status = 'active' AND removed_at IS NULL"
   ).bind(Date.now(), id).run();
   await env.BUCKET.delete(row.r2_key);
   return json({ ok: true, id, removed: true });

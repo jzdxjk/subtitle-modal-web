@@ -18,11 +18,18 @@ namespace Emby.SubtitleAssistant.Providers
         public string Name => ProviderNames.Local;
         public int Order => ProviderOrder.Resolve(ProviderKeys.Local);
         public IEnumerable<VideoContentType> SupportedMediaTypes => new[] { VideoContentType.Movie, VideoContentType.Episode };
-        public Task<IEnumerable<RemoteSubtitleInfo>> Search(SubtitleSearchRequest request, CancellationToken ct)
+        public async Task<IEnumerable<RemoteSubtitleInfo>> Search(SubtitleSearchRequest request, CancellationToken ct)
         {
             ct.ThrowIfCancellationRequested();
             var identifier = MediaIdentifier.TryParse(request?.MediaPath);
-            if (identifier == null) return Task.FromResult<IEnumerable<RemoteSubtitleInfo>>(Array.Empty<RemoteSubtitleInfo>());
+            if (identifier == null) return Array.Empty<RemoteSubtitleInfo>();
+            var config = Plugin.CurrentConfiguration;
+            var key = ProviderSearchCache.Key(Name, request, "paths=" + (config.LocalPaths ?? "") + ";max=" + config.LocalMaxResults);
+            return await ProviderSearchCache.Shared.GetOrCreateAsync(key,
+                token => Task.FromResult(SearchCore(request, identifier, config, token)), ct).ConfigureAwait(false);
+        }
+        private IEnumerable<RemoteSubtitleInfo> SearchCore(SubtitleSearchRequest request, MediaIdentifier identifier, PluginConfiguration config, CancellationToken ct)
+        {
             var candidates = new List<SubtitleCandidate>();
             var index = 0;
             foreach (var path in Files(Roots()).OrderBy(x => x, StringComparer.Ordinal))
@@ -45,7 +52,7 @@ namespace Emby.SubtitleAssistant.Providers
                 catch (IOException) { _logger?.Warn("Local subtitle file could not be read."); }
                 catch (UnauthorizedAccessException) { _logger?.Warn("Local subtitle file access was denied."); }
             }
-            return Task.FromResult(ProviderSupport.Complete(ProviderSupport.Deduplicate(candidates), request, Name, Plugin.CurrentConfiguration.LocalMaxResults, "字幕轴"));
+            return ProviderSupport.Complete(ProviderSupport.Deduplicate(candidates), request, Name, config.LocalMaxResults, "字幕轴");
         }
         public Task<SubtitleResponse> GetSubtitles(string id, CancellationToken ct)
         {

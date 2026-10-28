@@ -20,12 +20,23 @@ public sealed class ProviderRegistration
     public ProviderRegistration(string name, string id) { Name = name; Id = id; }
 }
 
+public enum CompletionScope
+{
+    // Historical backfill never touches the shared pool; only local files and Thunder.
+    Historical,
+    // Newly added media may use the pool when the library keeps that source enabled.
+    NewMedia
+}
+
 public static class CompletionPolicy
 {
-    public static IReadOnlyList<ProviderRegistration> EnabledProviders(LibraryOptions options, IEnumerable<ProviderRegistration> registered)
+    public static IReadOnlyList<ProviderRegistration> EnabledProviders(LibraryOptions options, IEnumerable<ProviderRegistration> registered,
+        CompletionScope scope = CompletionScope.NewMedia)
     {
         if (options == null) return Array.Empty<ProviderRegistration>();
-        var own = new[] { ProviderNames.Local, ProviderNames.Thunder, ProviderNames.Pool };
+        var own = scope == CompletionScope.Historical
+            ? new[] { ProviderNames.Local, ProviderNames.Thunder }
+            : new[] { ProviderNames.Local, ProviderNames.Thunder, ProviderNames.Pool };
         var disabled = new HashSet<string>(options.DisabledSubtitleFetchers ?? Array.Empty<string>(), StringComparer.OrdinalIgnoreCase);
         var order = options.SubtitleFetcherOrder ?? Array.Empty<string>();
         return (registered ?? Array.Empty<ProviderRegistration>())
@@ -73,6 +84,15 @@ public static class CompletionPolicy
         return items.Any(s => s.Type == MediaStreamType.Subtitle && IsChinese(s.Language)) ||
             (options.SkipSubtitlesIfEmbeddedSubtitlesPresent && items.Any(s => s.Type == MediaStreamType.Subtitle && !s.IsExternal)) ||
             (options.SkipSubtitlesIfAudioTrackMatches && items.Any(s => s.Type == MediaStreamType.Audio && IsChinese(s.Language)));
+    }
+
+    // DateCreated is a DateTimeOffset; comparing it to DateTime.MinValue would convert that
+    // local-time constant to DateTimeOffset and overflow on UTC+ offsets.
+    public static bool IsTooOld(LibraryOptions options, DateTimeOffset created)
+    {
+        if (options == null || options.SubtitleDownloadMaxAgeDays <= 0) return false;
+        if (created <= DateTimeOffset.MinValue) return false;
+        return DateTimeOffset.UtcNow - created.ToUniversalTime() > TimeSpan.FromDays(options.SubtitleDownloadMaxAgeDays);
     }
 }
 

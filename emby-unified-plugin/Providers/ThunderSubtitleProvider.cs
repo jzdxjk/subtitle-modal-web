@@ -30,9 +30,33 @@ namespace Emby.SubtitleAssistant.Providers
             ct.ThrowIfCancellationRequested();
             var identifier = MediaIdentifier.TryParse(request?.MediaPath);
             if (identifier == null) return Array.Empty<RemoteSubtitleInfo>();
+            var config = Plugin.CurrentConfiguration;
+            var key = ProviderSearchCache.Key(Name, request, Fingerprint(config));
+            try
+            {
+                return await ProviderSearchCache.Shared.GetOrCreateAsync(key,
+                    token => SearchCore(request, identifier, config, token), ct).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+            catch (Exception ex)
+            {
+                _logger?.Warn("Thunder subtitle search failed ({0}).", ex.GetType().Name);
+                return Array.Empty<RemoteSubtitleInfo>();
+            }
+        }
+
+        private static string Fingerprint(PluginConfiguration config) =>
+            "max=" + config.ThunderMaxResults + ";timeout=" + config.ThunderTimeoutSeconds +
+            ";proxy=" + (config.Proxy != null && config.Proxy.Enabled ? config.Proxy.Address : "");
+
+        private async Task<IEnumerable<RemoteSubtitleInfo>> SearchCore(SubtitleSearchRequest request, MediaIdentifier identifier,
+            PluginConfiguration config, CancellationToken ct)
+        {
             // WhenAll preserves input order, so API response races do not choose duplicate metadata.
             var responses = await Task.WhenAll(identifier.QueryVariants.Select(x => Query(x, ct))).ConfigureAwait(false);
-            var rows = responses.SelectMany(x => x).Where(x => x != null && ProviderSupport.HttpUrl(x.Url)
+            // A cached empty result must mean the source answered; a total transport failure is retried next time.
+            if (responses.Length != 0 && responses.All(x => x.Failed)) throw new IOException("Thunder subtitle search failed.");
+            var rows = responses.SelectMany(x => x.Items ?? Array.Empty<ThunderItem>()).Where(x => x != null && ProviderSupport.HttpUrl(x.Url)
                 && identifier.Matches(!string.IsNullOrWhiteSpace(x.Code) ? x.Code : (x.Name ?? "") + " " + (x.ExtraName ?? x.ExtraNameSnake ?? "")))
                 .ToArray();
             var formats = rows.GroupBy(x => x.Url, StringComparer.Ordinal).Select(x => x.First()).ToArray();
@@ -60,7 +84,7 @@ namespace Emby.SubtitleAssistant.Providers
                     candidates.Add(Candidate(row, request, document, language, candidates.Count));
                 }
             }
-            return ProviderSupport.Complete(ProviderSupport.Deduplicate(candidates), request, Name, Plugin.CurrentConfiguration.ThunderMaxResults, "迅雷API");
+            return ProviderSupport.Complete(ProviderSupport.Deduplicate(candidates), request, Name, config.ThunderMaxResults, "迅雷API");
         }
 
         private SubtitleCandidate Candidate(ThunderItem row, SubtitleSearchRequest request, SubtitleDocument document, string language, int index)
@@ -76,16 +100,16 @@ namespace Emby.SubtitleAssistant.Providers
                 ContentHash = document?.ContentHash, DownloadUrl = row.Url, StableOrder = index };
         }
 
-        private async Task<IReadOnlyList<ThunderItem>> Query(string code, CancellationToken ct)
+        private async Task<QueryOutcome> Query(string code, CancellationToken ct)
         {
             try
             {
                 var bytes = await _http.GetBytesAsync("https://api-shoulei-ssl.xunlei.com/oracle/subtitle?name=" + Uri.EscapeDataString(code), NetworkPurpose.Thunder, ct, Plugin.CurrentConfiguration.ThunderTimeoutSeconds).ConfigureAwait(false);
                 var response = ProviderSupport.Json<ThunderResponse>(bytes);
-                return response.Code == 0 ? (IReadOnlyList<ThunderItem>)(response.Data ?? new List<ThunderItem>()) : Array.Empty<ThunderItem>();
+                return new QueryOutcome { Items = response.Code == 0 ? (IReadOnlyList<ThunderItem>)(response.Data ?? new List<ThunderItem>()) : Array.Empty<ThunderItem>() };
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
-            catch (Exception ex) { _logger?.Warn("Thunder alias search failed ({0}).", ex.GetType().Name); return Array.Empty<ThunderItem>(); }
+            catch (Exception ex) { _logger?.Warn("Thunder alias search failed ({0}).", ex.GetType().Name); return new QueryOutcome { Failed = true, Items = Array.Empty<ThunderItem>() }; }
         }
 
         private async Task<IReadOnlyList<SubtitleDocument>> Probe(string url, string format, string name, CancellationToken ct)
@@ -140,6 +164,7 @@ namespace Emby.SubtitleAssistant.Providers
 
         private sealed class CachedDocuments { public DateTimeOffset Expires; public CachedDocument[] Items; }
         private sealed class CachedDocument { public string Name; public string Format; public string Language; public double? DurationSeconds; public string ContentHash; }
+        private sealed class QueryOutcome { public IReadOnlyList<ThunderItem> Items; public bool Failed; }
         [DataContract] private sealed class ThunderResponse
         { [DataMember(Name = "code")] public int Code { get; set; } [DataMember(Name = "data")] public List<ThunderItem> Data { get; set; } }
         [DataContract] private sealed class ThunderItem

@@ -12,12 +12,15 @@ using System.Threading.Tasks;
 using Emby.SubtitleAssistant.Core;
 using Emby.SubtitleAssistant.Providers;
 using MediaBrowser.Controller.Subtitles;
+using MediaBrowser.Model.Providers;
 using Xunit;
 
 namespace Emby.SubtitleAssistant.Tests;
 
 public class ProviderSearchTests
 {
+    public ProviderSearchTests() { ProviderSearchCache.Shared = new ProviderSearchCache(); }
+
     [Theory]
     [InlineData("SSIS-157-LTX【2021-08-19】（小宵虎南）出差和一直蔑视的中年性骚扰上司共处一室…直到早晨的绝伦性交HCUP新入社员.mp4", "SSIS-157")]
     [InlineData("SSIS-157-c-无码破解.mp4", "SSIS-157")]
@@ -121,6 +124,102 @@ public class ProviderSearchTests
         Assert.DoesNotContain("limit=", url);
         using (SearchExecutionContext.BeginAutomation())
             Assert.Equal(2, (await provider.Search(Request("MIUM-00123.mp4"), CancellationToken.None)).Count());
+    }
+
+    [Fact]
+    public async Task PoolSearchDeduplicatesBackToBackIdenticalRequests()
+    {
+        var config = new PluginConfiguration { PoolUrl = "https://pool.test" };
+        using var scope = Plugin.OverrideConfigurationForTests(config);
+        var handler = new FixtureHandler(_ => JsonSerializer.Serialize(new { items = new[] {
+            new { id = "one", code = "SSIS-157", format = "srt", duration_seconds = 100, size_bytes = 1000, sha256 = "hash" }
+        } }));
+        using var http = new PluginHttpClient(() => config, _ => handler);
+        var provider = new PoolSubtitleProvider(http);
+        var first = (await provider.Search(Request("SSIS-157.mp4"), CancellationToken.None)).ToArray();
+        var second = (await provider.Search(Request("SSIS-157.mp4"), CancellationToken.None)).ToArray();
+        Assert.Single(first);
+        Assert.Equal(first[0].Id, Assert.Single(second).Id);
+        Assert.Single(handler.Calls);
+    }
+
+    [Fact]
+    public async Task ProviderSearchCacheCoalescesConcurrentCallsAndCachesEmptyResults()
+    {
+        var cache = new ProviderSearchCache();
+        var started = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var calls = 0;
+        Func<CancellationToken, Task<IEnumerable<RemoteSubtitleInfo>>> factory = async _ =>
+        {
+            Interlocked.Increment(ref calls);
+            started.TrySetResult(true);
+            await release.Task;
+            return Array.Empty<RemoteSubtitleInfo>();
+        };
+        var first = cache.GetOrCreateAsync("k", factory, CancellationToken.None);
+        await started.Task;
+        var second = cache.GetOrCreateAsync("k", factory, CancellationToken.None);
+        release.SetResult(true);
+        Assert.Empty(await first);
+        Assert.Empty(await second);
+        Assert.Equal(1, calls);
+        Assert.Empty(await cache.GetOrCreateAsync("k", factory, CancellationToken.None));
+        Assert.Equal(1, calls);
+    }
+
+    [Fact]
+    public async Task ProviderSearchCacheExpiresAndNeverCachesFailures()
+    {
+        var now = new DateTimeOffset(2026,10,28,0,0,0,TimeSpan.Zero);
+        var cache = new ProviderSearchCache(16, TimeSpan.FromSeconds(60), () => now);
+        var calls = 0;
+        Func<CancellationToken, Task<IEnumerable<RemoteSubtitleInfo>>> empty = _ =>
+        {
+            calls++;
+            return Task.FromResult<IEnumerable<RemoteSubtitleInfo>>(Array.Empty<RemoteSubtitleInfo>());
+        };
+        await cache.GetOrCreateAsync("k", empty, CancellationToken.None);
+        await cache.GetOrCreateAsync("k", empty, CancellationToken.None);
+        Assert.Equal(1, calls);
+        now = now.AddSeconds(61);
+        await cache.GetOrCreateAsync("k", empty, CancellationToken.None);
+        Assert.Equal(2, calls);
+
+        var failures = 0;
+        Func<CancellationToken, Task<IEnumerable<RemoteSubtitleInfo>>> fail = _ =>
+        {
+            failures++;
+            throw new IOException("synthetic failure");
+        };
+        await Assert.ThrowsAsync<IOException>(() => cache.GetOrCreateAsync("f", fail, CancellationToken.None));
+        await Assert.ThrowsAsync<IOException>(() => cache.GetOrCreateAsync("f", fail, CancellationToken.None));
+        Assert.Equal(2, failures);
+    }
+
+    [Fact]
+    public async Task ProviderSearchCacheCancellationDoesNotCancelSharedWork()
+    {
+        var cache = new ProviderSearchCache();
+        var started = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var calls = 0;
+        Func<CancellationToken, Task<IEnumerable<RemoteSubtitleInfo>>> factory = async _ =>
+        {
+            Interlocked.Increment(ref calls);
+            started.TrySetResult(true);
+            await release.Task;
+            return new[] { new RemoteSubtitleInfo { Id = "1" } };
+        };
+        using var cancel = new CancellationTokenSource();
+        var cancelled = cache.GetOrCreateAsync("k", factory, cancel.Token);
+        await started.Task;
+        var survivor = cache.GetOrCreateAsync("k", factory, CancellationToken.None);
+        cancel.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => cancelled);
+        release.SetResult(true);
+        Assert.Single(await survivor);
+        Assert.Equal(1, calls);
     }
 
     [Fact]

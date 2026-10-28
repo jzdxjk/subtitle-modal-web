@@ -9,6 +9,9 @@ namespace Emby.SubtitleAssistant.Migration;
 
 internal static class LegacySettingsImporter
 {
+    private static readonly string[] LegacyFiles = { "MeiamSub.LocalPool.json", "ThunderSubtitle.json", "ChickenRicePool.json", "SubtitleCloudPlugin.xml" };
+    public static bool HasLegacySettings(string directory) =>
+        !string.IsNullOrEmpty(directory) && LegacyFiles.Any(name => File.Exists(Path.Combine(directory, name)));
     public static PluginConfiguration Merge(string directory, PluginConfiguration current, IJsonSerializer json)
     {
         try

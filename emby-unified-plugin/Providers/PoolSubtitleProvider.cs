@@ -29,25 +29,33 @@ namespace Emby.SubtitleAssistant.Providers
             var config = Plugin.CurrentConfiguration;
             var baseUrl = (config.PoolUrl ?? "").TrimEnd('/');
             if (identifier == null || !ProviderSupport.HttpUrl(baseUrl)) return Array.Empty<RemoteSubtitleInfo>();
+            var key = ProviderSearchCache.Key(Name, request, "url=" + baseUrl + ";max=" + config.PoolMaxResults +
+                ";timeout=" + config.PoolTimeoutSeconds + ";proxy=" + (config.Proxy != null && config.Proxy.Enabled ? config.Proxy.Address : ""));
             try
             {
-                var url = baseUrl + "/api/v1/subtitles/search?match=work&" + string.Join("&", identifier.QueryVariants.Select(x => "codes=" + Uri.EscapeDataString(x)));
-                var response = ProviderSupport.Json<PoolResponse>(await _http.GetBytesAsync(url, NetworkPurpose.Pool, ct, config.PoolTimeoutSeconds).ConfigureAwait(false));
-                var candidates = new List<SubtitleCandidate>();
-                foreach (var item in response.Items ?? new List<PoolItem>())
-                {
-                    if (string.IsNullOrWhiteSpace(item.Id) || !identifier.Matches(item.Code)) continue;
-                    var format = (item.Format ?? "").ToLowerInvariant().TrimStart('.');
-                    if (!SubtitleContent.IsSupported(format)) continue;
-                    var language = SubtitleContent.NormalizeLanguage(item.Language);
-                    if (!SubtitleContent.AcceptLanguage(request.Language, language)) continue;
-                    var payload = new DownloadPayload { PoolId = item.Id, Format = format, Language = request.Language, ContentHash = string.IsNullOrWhiteSpace(item.Sha256) ? null : item.Sha256.ToLowerInvariant(), Name = item.Code + "." + format, MediaPath = request.MediaPath };
-                    candidates.Add(new SubtitleCandidate { Id = ProviderSupport.Encode(payload), Name = payload.Name, Format = format, Language = language, DurationSeconds = item.DurationSeconds > 0 ? item.DurationSeconds : null, SizeBytes = item.SizeBytes >= 0 ? item.SizeBytes : null, ContentHash = payload.ContentHash, DownloadUrl = baseUrl + "/" + item.Id, StableOrder = candidates.Count });
-                }
-                return ProviderSupport.Complete(ProviderSupport.Deduplicate(candidates), request, Name, config.PoolMaxResults, "字幕轴");
+                return await ProviderSearchCache.Shared.GetOrCreateAsync(key,
+                    token => SearchCore(request, identifier, config, baseUrl, token), ct).ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
             catch (Exception ex) { _logger?.Warn("Pool subtitle search failed ({0}).", ex.GetType().Name); return Array.Empty<RemoteSubtitleInfo>(); }
+        }
+        private async Task<IEnumerable<RemoteSubtitleInfo>> SearchCore(SubtitleSearchRequest request, MediaIdentifier identifier,
+            PluginConfiguration config, string baseUrl, CancellationToken ct)
+        {
+            var url = baseUrl + "/api/v1/subtitles/search?match=work&" + string.Join("&", identifier.QueryVariants.Select(x => "codes=" + Uri.EscapeDataString(x)));
+            var response = ProviderSupport.Json<PoolResponse>(await _http.GetBytesAsync(url, NetworkPurpose.Pool, ct, config.PoolTimeoutSeconds).ConfigureAwait(false));
+            var candidates = new List<SubtitleCandidate>();
+            foreach (var item in response.Items ?? new List<PoolItem>())
+            {
+                if (string.IsNullOrWhiteSpace(item.Id) || !identifier.Matches(item.Code)) continue;
+                var format = (item.Format ?? "").ToLowerInvariant().TrimStart('.');
+                if (!SubtitleContent.IsSupported(format)) continue;
+                var language = SubtitleContent.NormalizeLanguage(item.Language);
+                if (!SubtitleContent.AcceptLanguage(request.Language, language)) continue;
+                var payload = new DownloadPayload { PoolId = item.Id, Format = format, Language = request.Language, ContentHash = string.IsNullOrWhiteSpace(item.Sha256) ? null : item.Sha256.ToLowerInvariant(), Name = item.Code + "." + format, MediaPath = request.MediaPath };
+                candidates.Add(new SubtitleCandidate { Id = ProviderSupport.Encode(payload), Name = payload.Name, Format = format, Language = language, DurationSeconds = item.DurationSeconds > 0 ? item.DurationSeconds : null, SizeBytes = item.SizeBytes >= 0 ? item.SizeBytes : null, ContentHash = payload.ContentHash, DownloadUrl = baseUrl + "/" + item.Id, StableOrder = candidates.Count });
+            }
+            return ProviderSupport.Complete(ProviderSupport.Deduplicate(candidates), request, Name, config.PoolMaxResults, "字幕轴");
         }
         public async Task<SubtitleResponse> GetSubtitles(string id, CancellationToken ct)
         {

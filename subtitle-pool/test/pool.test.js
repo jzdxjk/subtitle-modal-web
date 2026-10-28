@@ -8,6 +8,7 @@ import worker from "../src/index.js";
 const migration = [
   readFileSync(new URL("../migrations/0001_init.sql", import.meta.url), "utf8"),
   readFileSync(new URL("../migrations/0002_public_upload_limits.sql", import.meta.url), "utf8"),
+  readFileSync(new URL("../migrations/0003_pool_stats.sql", import.meta.url), "utf8"),
 ].join("\n");
 
 class Stmt {
@@ -62,6 +63,34 @@ class FakeR2 {
 
   async delete(key) {
     this.objects.delete(key);
+  }
+}
+
+class FakeCache {
+  constructor() {
+    this.entries = new Map();
+  }
+
+  key(request) {
+    return typeof request === "string" ? request : request.url;
+  }
+
+  async match(request) {
+    const entry = this.entries.get(this.key(request));
+    if (!entry) return null;
+    return new Response(entry.body, { status: entry.status, headers: entry.headers });
+  }
+
+  async put(request, response) {
+    this.entries.set(this.key(request), {
+      status: response.status,
+      headers: [...response.headers],
+      body: await response.text(),
+    });
+  }
+
+  async delete(request) {
+    this.entries.delete(this.key(request));
   }
 }
 
@@ -605,4 +634,133 @@ test("admin deletion leaves a tombstone that blocks re-upload", async () => {
 
   const again = await upload(targetEnv);
   assert.equal(again.status, 410);
+});
+
+test("stats tracks active subtitles through upload, duplicate, batch and delete", async () => {
+  const targetEnv = env();
+  const stats = async () => worker.fetch(new Request(
+    "https://pool.test/api/v1/stats",
+  ), targetEnv);
+
+  const initial = await stats();
+  assert.equal(initial.status, 200);
+  const initialBody = await initial.json();
+  assert.equal(initialBody.subtitle_count, 0);
+  assert.equal(typeof initialBody.queried_at, "string");
+  assert.ok(initialBody.queried_at.length > 0);
+
+  const first = await upload(targetEnv, { text: subtitle(10, "统计测试第一条") });
+  assert.equal(first.status, 201);
+  assert.equal((await (await stats()).json()).subtitle_count, 1);
+
+  const duplicate = await upload(targetEnv, { text: subtitle(10, "统计测试第一条") });
+  assert.equal(duplicate.status, 200);
+  assert.equal((await (await stats()).json()).subtitle_count, 1);
+
+  const batch = await uploadBatch(targetEnv, [
+    { code: "STAT-002", text: subtitle(11, "统计测试第二条") },
+    { code: "STAT-003", text: subtitle(12, "统计测试第三条") },
+  ]);
+  assert.equal(batch.status, 200);
+  assert.equal((await (await stats()).json()).subtitle_count, 3);
+
+  const item = await first.json();
+  const removed = await worker.fetch(new Request(
+    `https://pool.test/api/v1/admin/subtitles/${item.id}`,
+    { method: "DELETE", headers: { Authorization: "Bearer admin-secret" } },
+  ), targetEnv);
+  assert.equal(removed.status, 200);
+  assert.equal((await (await stats()).json()).subtitle_count, 2);
+
+  const removedAgain = await worker.fetch(new Request(
+    `https://pool.test/api/v1/admin/subtitles/${item.id}`,
+    { method: "DELETE", headers: { Authorization: "Bearer admin-secret" } },
+  ), targetEnv);
+  assert.equal(removedAgain.status, 200);
+  assert.equal((await (await stats()).json()).subtitle_count, 2);
+});
+
+test("search cache collapses identical work searches and exposes cache headers", async () => {
+  const targetEnv = env();
+  targetEnv.SEARCH_CACHE = new FakeCache();
+  insertSubtitle(targetEnv, { code: "cache-001", duration: 100, size: 1000 });
+
+  const first = await worker.fetch(new Request(
+    "https://pool.test/api/v1/subtitles/search?match=work&codes=cache-001&duration=100",
+  ), targetEnv);
+  assert.equal(first.status, 200);
+  assert.equal(first.headers.get("x-pool-cache"), "MISS");
+  const firstBody = await first.json();
+  assert.equal(firstBody.items.length, 1);
+
+  insertSubtitle(targetEnv, { code: "cache-001", duration: 100, size: 1000 });
+  const second = await worker.fetch(new Request(
+    "https://pool.test/api/v1/subtitles/search?match=work&codes=cache-001&duration=100",
+  ), targetEnv);
+  assert.equal(second.status, 200);
+  assert.equal(second.headers.get("x-pool-cache"), "HIT");
+  assert.equal((await second.json()).items.length, 1);
+});
+
+test("search cache key ignores alias order but separates duration and limit", async () => {
+  const targetEnv = env();
+  targetEnv.SEARCH_CACHE = new FakeCache();
+  const first = await worker.fetch(new Request(
+    "https://pool.test/api/v1/subtitles/search?match=work&codes=AA-001&codes=BB-002&duration=100",
+  ), targetEnv);
+  assert.equal(first.headers.get("x-pool-cache"), "MISS");
+  const reordered = await worker.fetch(new Request(
+    "https://pool.test/api/v1/subtitles/search?match=work&codes=BB-002&codes=AA-001&duration=100",
+  ), targetEnv);
+  assert.equal(reordered.headers.get("x-pool-cache"), "HIT");
+  const otherDuration = await worker.fetch(new Request(
+    "https://pool.test/api/v1/subtitles/search?match=work&codes=AA-001&codes=BB-002&duration=200",
+  ), targetEnv);
+  assert.equal(otherDuration.headers.get("x-pool-cache"), "MISS");
+
+  const codeFirst = await worker.fetch(new Request(
+    "https://pool.test/api/v1/subtitles/search?code=AA-001&limit=1",
+  ), targetEnv);
+  assert.equal(codeFirst.headers.get("x-pool-cache"), "MISS");
+  const codeOtherLimit = await worker.fetch(new Request(
+    "https://pool.test/api/v1/subtitles/search?code=AA-001&limit=2",
+  ), targetEnv);
+  assert.equal(codeOtherLimit.headers.get("x-pool-cache"), "MISS");
+});
+
+test("search negative cache stores empty results and expires past its deadline", async () => {
+  const targetEnv = env();
+  targetEnv.SEARCH_CACHE = new FakeCache();
+  const emptyUrl = "https://pool.test/api/v1/subtitles/search?match=work&codes=ZZZ-999&duration=100";
+  const first = await worker.fetch(new Request(emptyUrl), targetEnv);
+  assert.equal(first.headers.get("x-pool-cache"), "MISS");
+  assert.deepEqual((await first.json()).items, []);
+  const second = await worker.fetch(new Request(emptyUrl), targetEnv);
+  assert.equal(second.headers.get("x-pool-cache"), "HIT");
+  assert.deepEqual((await second.json()).items, []);
+
+  for (const entry of targetEnv.SEARCH_CACHE.entries.values()) {
+    entry.headers = entry.headers.map(([key, value]) =>
+      key.toLowerCase() === "x-pool-cache-expires" ? [key, "1"] : [key, value]);
+  }
+  const expired = await worker.fetch(new Request(emptyUrl), targetEnv);
+  assert.equal(expired.headers.get("x-pool-cache"), "MISS");
+});
+
+test("search failures are never cached and cacheless runtimes report bypass", async () => {
+  const failing = env();
+  failing.SEARCH_CACHE = new FakeCache();
+  failing.DB = { prepare() { throw new Error("database unavailable"); } };
+  const failed = await worker.fetch(new Request(
+    "https://pool.test/api/v1/subtitles/search?match=work&codes=FAIL-001&duration=100",
+  ), failing);
+  assert.equal(failed.status, 500);
+  assert.equal(failing.SEARCH_CACHE.entries.size, 0);
+
+  const bypass = env();
+  const response = await worker.fetch(new Request(
+    "https://pool.test/api/v1/subtitles/search?match=work&codes=BYPASS-001&duration=100",
+  ), bypass);
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("x-pool-cache"), "BYPASS");
 });

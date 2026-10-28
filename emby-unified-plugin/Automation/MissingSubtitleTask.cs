@@ -26,7 +26,7 @@ public sealed class MissingSubtitleTask : IScheduledTask
     public string Name => "字幕助手：补全缺失中文字幕";
     public string Key => "SubtitleAssistantMissingSubtitles";
     public string Category => "字幕助手";
-    public string Description => "仅使用媒体库启用的本地、迅雷、海南鸡来源，按库内顺序补全缺少中文字幕的影片。";
+    public string Description => "历史补全仅使用媒体库启用的本地、迅雷来源，按库内顺序补全缺少中文字幕的影片；海南鸡字幕仅参与新入库自动补全。";
     public IEnumerable<TaskTriggerInfo> GetDefaultTriggers() => Array.Empty<TaskTriggerInfo>();
 
     public async Task Execute(CancellationToken cancellationToken, IProgress<double> progress)
@@ -44,7 +44,7 @@ public sealed class MissingSubtitleTask : IScheduledTask
             foreach (var item in items)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                try { if (await _completion.ProcessAsync(item,cancellationToken).ConfigureAwait(false)) downloaded++; }
+                try { if (await _completion.ProcessAsync(item,CompletionScope.Historical,cancellationToken).ConfigureAwait(false)) downloaded++; }
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
                 catch (Exception error)
                 {

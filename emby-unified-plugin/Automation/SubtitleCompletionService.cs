@@ -36,11 +36,11 @@ internal sealed class SubtitleCompletionService
         _files = files; _logger = logs.GetLogger(nameof(SubtitleCompletionService));
     }
 
-    internal bool HasEnabledSource(BaseItem item)
+    internal bool HasEnabledSource(BaseItem item, CompletionScope scope = CompletionScope.NewMedia)
     {
         if (!Eligible(item)) return false;
         var options = _library.GetLibraryOptions(item);
-        return CompletionPolicy.EnabledProviders(options, Registrations(item)).Count != 0;
+        return CompletionPolicy.EnabledProviders(options, Registrations(item), scope).Count != 0;
     }
 
     internal static bool Eligible(BaseItem item) => (item is Movie || item is Episode) &&
@@ -49,7 +49,7 @@ internal sealed class SubtitleCompletionService
     private ProviderRegistration[] Registrations(BaseItem item) => (_subtitles.GetSupportedProviders(item) ?? Array.Empty<SubtitleProviderInfo>())
         .Select(p => new ProviderRegistration(p.Name,p.Id)).ToArray();
 
-    internal async Task<bool> ProcessAsync(BaseItem item, CancellationToken ct)
+    internal async Task<bool> ProcessAsync(BaseItem item, CompletionScope scope, CancellationToken ct)
     {
         if (!Eligible(item) || !Active.TryAdd(item.Id,0)) return false;
         var stage = "library-options";
@@ -58,12 +58,11 @@ internal sealed class SubtitleCompletionService
             var options = _library.GetLibraryOptions(item);
             stage = "provider-registration";
             var all = Registrations(item);
-            var enabled = CompletionPolicy.EnabledProviders(options,all);
+            var enabled = CompletionPolicy.EnabledProviders(options,all,scope);
             if (enabled.Count == 0) return false;
             var languages = options.SubtitleDownloadLanguages ?? Array.Empty<string>();
             if (languages.Length > 0 && !languages.Any(CompletionPolicy.IsChinese)) return false;
-            if (options.SubtitleDownloadMaxAgeDays > 0 && item.DateCreated > DateTime.MinValue &&
-                DateTime.UtcNow - item.DateCreated.ToUniversalTime() > TimeSpan.FromDays(options.SubtitleDownloadMaxAgeDays)) return false;
+            if (CompletionPolicy.IsTooOld(options, item.DateCreated)) return false;
             stage = "stream-check";
             if (Skip(item,options)) return false;
             stage = "target-language";
@@ -74,7 +73,7 @@ internal sealed class SubtitleCompletionService
                 {
                     // Re-read toggles for every source so a configuration change cannot start a newly disabled source.
                     var current = _library.GetLibraryOptions(item);
-                    if (!CompletionPolicy.EnabledProviders(current,all).Any(p => p.Name == source.Name)) return Array.Empty<RemoteSubtitleInfo>();
+                    if (!CompletionPolicy.EnabledProviders(current,all,scope).Any(p => p.Name == source.Name)) return Array.Empty<RemoteSubtitleInfo>();
                     stage = "search:" + source.Name;
                     var request = CompletionPolicy.SearchRequest(item.Path,item.Name,item.RunTimeTicks,
                         item is Episode ? VideoContentType.Episode : VideoContentType.Movie,language,current,source,all);

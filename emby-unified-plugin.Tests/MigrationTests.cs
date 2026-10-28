@@ -264,11 +264,12 @@ public class MigrationTests
     }
 
     [Fact]
-    public void BrandNewInstallMarksCompletionWithoutChangingDefaultsOrUnrelatedLibraries()
+    public void BrandNewInstallDisablesTheThreeManagedSourcesAndKeepsUnrelatedLibrariesIntact()
     {
         using var files = new Fixture();
         var libraryWrites = 0;
-        var library = new MigrationLibrary("a", new LibraryOptions { SubtitleFetcherOrder = new[] { "Other" } }, _ => libraryWrites++);
+        var options = new LibraryOptions { SubtitleFetcherOrder = new[] { "Other" } };
+        var library = new MigrationLibrary("a", options, value => { options = value; libraryWrites++; });
         PluginConfiguration saved = null;
         MigrationRunner.Execute(files.ConfigPath, new PluginConfiguration(), Json(), new[] { library }, value => saved = value);
         Assert.Equal(1, saved.MigrationVersion);
@@ -276,7 +277,55 @@ public class MigrationTests
         Assert.Equal(5, saved.LocalMaxResults);
         Assert.Equal(5, saved.ThunderMaxResults);
         Assert.Equal(5, saved.PoolMaxResults);
-        Assert.Equal(0, libraryWrites);
+        Assert.Equal(1, libraryWrites);
+        Assert.Equal(new[] { "Other" }, options.SubtitleFetcherOrder);
+        Assert.Equal(new[] { ProviderNames.Local, ProviderNames.Thunder, ProviderNames.Pool }, options.DisabledSubtitleFetchers);
+    }
+
+    [Fact]
+    public void FreshInstallAppendsManagedDisablesAfterUnknownEntries()
+    {
+        using var files = new Fixture();
+        var options = new LibraryOptions { DisabledSubtitleFetchers = new[] { "External" } };
+        MigrationRunner.Execute(files.ConfigPath, new PluginConfiguration(), Json(),
+            new[] { new MigrationLibrary("a", options, value => options = value) }, _ => { });
+        Assert.Equal(new[] { "External", ProviderNames.Local, ProviderNames.Thunder, ProviderNames.Pool }, options.DisabledSubtitleFetchers);
+    }
+
+    [Fact]
+    public void ExistingLegacyConfigurationMeansAnUpgradeAndKeepsLibrarySourcesUntouched()
+    {
+        using var files = new Fixture();
+        files.Write("MeiamSub.LocalPool.json", "{\"SubtitleLibraryPaths\":\"/old\"}");
+        var options = new LibraryOptions();
+        var writes = 0;
+        MigrationRunner.Execute(files.ConfigPath, new PluginConfiguration(), Json(),
+            new[] { new MigrationLibrary("a", options, value => { options = value; writes++; }) }, _ => { });
+        Assert.Equal(0, writes);
+        Assert.Empty(options.DisabledSubtitleFetchers);
+    }
+
+    [Fact]
+    public void ExistingProviderKeysMeanAnUpgradeAndDoNotDisableAnything()
+    {
+        using var files = new Fixture();
+        var options = new LibraryOptions { SubtitleFetcherOrder = new[] { "ThunderSubtitle" } };
+        MigrationRunner.Execute(files.ConfigPath, new PluginConfiguration(), Json(),
+            new[] { new MigrationLibrary("a", options, value => options = value) }, _ => { });
+        Assert.Equal(new[] { ProviderNames.Thunder }, options.SubtitleFetcherOrder);
+        Assert.Empty(options.DisabledSubtitleFetchers);
+    }
+
+    [Fact]
+    public void CompletedV1InstallIsNeverTouched()
+    {
+        using var files = new Fixture();
+        var options = new LibraryOptions { SubtitleFetcherOrder = new[] { "Other" } };
+        var writes = 0;
+        Assert.False(MigrationRunner.Execute(files.ConfigPath, new PluginConfiguration { MigrationVersion = 1 }, Json(),
+            new[] { new MigrationLibrary("a", options, value => { options = value; writes++; }) }, _ => throw new InvalidOperationException("no config write")));
+        Assert.Equal(0, writes);
+        Assert.Empty(options.DisabledSubtitleFetchers);
     }
 
     private static IJsonSerializer Json() => DispatchProxy.Create<IJsonSerializer, JsonProxy>();

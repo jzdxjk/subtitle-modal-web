@@ -87,3 +87,25 @@ URLs are retained; no database migration is required.
 
 Run the Worker regression tests locally with `npm test` (Node.js with
 `node:sqlite` support).
+
+## Pool statistics and search cache
+
+`GET /api/v1/stats` is public and returns the current active-subtitle count:
+
+```json
+{"subtitle_count": 1234, "queried_at": "2026-10-28T05:00:00.000Z"}
+```
+
+The count is maintained in the `pool_stats` table by the `0003_pool_stats.sql`
+migration triggers, so uploads and admin removals keep it in sync without an
+extra read. Apply that migration before deploying a Worker build that serves
+this route.
+
+`GET /api/v1/subtitles/search` uses an explicit Cloudflare cache
+(`caches.default`). Successful searches are cached for 60 seconds and empty
+results for 120 seconds; the `X-Pool-Cache` response header reports `HIT`,
+`MISS` or `BYPASS` (local runtimes without a cache binding). The cache key
+normalizes alias order and includes the match mode, duration and, for
+single-code searches, the result limit. Errors and malformed requests are never
+cached. The cache is per Cloudflare data center, so a first query in a new
+region still reads D1.
