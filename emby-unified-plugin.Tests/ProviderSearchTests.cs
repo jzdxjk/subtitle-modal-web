@@ -34,7 +34,7 @@ public class ProviderSearchTests
         Assert.Empty(await new ThunderSubtitleProvider(http).Search(Request(path), CancellationToken.None));
         var queries = handler.Calls.Select(x => Uri.UnescapeDataString(x.Query)).ToArray();
         Assert.Contains("?name=" + expected, queries);
-        Assert.Contains(queries, x => x == "?name=海南鸡字幕 " + expected);
+        Assert.Contains(queries, x => x == "?name=" + expected + ".海南鸡字幕");
     }
 
     [Fact]
@@ -62,7 +62,7 @@ public class ProviderSearchTests
         Assert.Contains(queries, x => x.Contains("FC2-PPV-1234567"));
         Assert.Contains(queries, x => x.Contains("FC2PPV-1234567"));
         Assert.Contains(queries, x => x.Contains("FC2-1234567"));
-        Assert.Contains(queries, x => x.Contains("海南鸡字幕 FC2-PPV-1234567"));
+        Assert.Contains(queries, x => x.Contains("FC2-PPV-1234567.海南鸡字幕"));
         Assert.Equal(6, handler.Calls.Count(x => x.Host == "files.test"));
         using (SearchExecutionContext.BeginAutomation())
             Assert.Equal(6, (await provider.Search(request, CancellationToken.None)).Count());

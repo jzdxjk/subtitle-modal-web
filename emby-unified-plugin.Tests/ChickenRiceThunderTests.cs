@@ -18,6 +18,27 @@ public sealed class ChickenRiceThunderTests
     public ChickenRiceThunderTests() => ProviderSearchCache.Shared = new ProviderSearchCache();
 
     [Fact]
+    public async Task UploadedSubtitleIsFoundWhenThunderRequiresCodeFirstTaggedQuery()
+    {
+        var config = new PluginConfiguration();
+        using var scope = Plugin.OverrideConfigurationForTests(config);
+        var handler = new FixtureHandler(uri =>
+        {
+            if (uri.Host == "api-shoulei-ssl.xunlei.com")
+                return Uri.UnescapeDataString(uri.Query) == "?name=WANZ-161.海南鸡字幕"
+                    ? JsonSerializer.Serialize(new { code = 0, data = new[] { new { name = "WANZ-161.海南鸡字幕.18.0KB.20261029.srt", url = "https://files.test/uploaded.srt", ext = "srt", duration = 7081240, languages = new[] { "简体" } } } })
+                    : "{\"code\":0,\"data\":[]}";
+            return Srt("这是已上传的中文字幕。", 100);
+        });
+        using var http = new PluginHttpClient(() => config, _ => handler);
+
+        var results = (await new ThunderSubtitleProvider(http).Search(Request("WANZ-161.mp4"), CancellationToken.None)).ToArray();
+
+        Assert.Contains(handler.Calls, x => Uri.UnescapeDataString(x.Query) == "?name=WANZ-161.海南鸡字幕");
+        Assert.StartsWith("[海南鸡字幕] WANZ-161.srt", Assert.Single(results).Name);
+    }
+
+    [Fact]
     public async Task TaggedThunderQueryPrioritizesFixedChickenRiceUploadAndKeepsOrdinaryUrlAsFallback()
     {
         var config = new PluginConfiguration();
@@ -199,7 +220,7 @@ public sealed class ChickenRiceThunderTests
 
         var codeQueries = handler.Calls.Where(x => x.Host == "api-shoulei-ssl.xunlei.com").Select(x => Uri.UnescapeDataString(x.Query)).ToArray();
         Assert.Contains(codeQueries, x => x == "?name=ABC-123");
-        Assert.Contains(codeQueries, x => x.Contains("海南鸡字幕 ABC-123"));
+        Assert.Contains(codeQueries, x => x.Contains("ABC-123.海南鸡字幕"));
         var identifier = MediaIdentifier.TryParse(path);
         Assert.Equal("ABC-123", identifier.CanonicalCode);
         Assert.Equal(System.IO.Path.GetFileNameWithoutExtension(filename), identifier.OriginalStem);

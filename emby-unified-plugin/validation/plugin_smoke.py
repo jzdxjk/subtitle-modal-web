@@ -58,8 +58,8 @@ def probe(case, candidate):
     settings = client.request("GET", "/SubtitleAssistant/settings")
     page = client.request("GET", "/web/ConfigurationPage?name=subtitleassistant")
     script = client.request("GET", "/web/ConfigurationPage?name=subtitleassistantjs")
-    if settings.get("Version") != "1.0.0.8":
-        raise RuntimeError("combined plugin did not load version 1.0.0.8")
+    if settings.get("Version") != "1.0.0.9":
+        raise RuntimeError("combined plugin did not load version 1.0.0.9")
     if not isinstance(page, str) or len(re.findall(r'role="tab"', page)) != 4:
         raise RuntimeError("native configuration page did not expose four tabs")
     if "海南鸡字幕已上传至迅雷字幕库" not in page or "搜索命中时优先展示海南鸡字幕" not in page:

@@ -60,7 +60,7 @@ namespace Emby.SubtitleAssistant.Providers
             // must not discard successful ordinary Thunder results.
             var codes = identifier.QueryVariants.ToArray();
             var responses = await Task.WhenAll(codes.Select(x => Query(x, ct))
-                .Concat(codes.Select(x => Query("海南鸡字幕 " + x, ct)))).ConfigureAwait(false);
+                .Concat(codes.Select(x => Query(x + ".海南鸡字幕", ct)))).ConfigureAwait(false);
             // A cached empty result must mean the source answered; a total transport failure is retried next time.
             if (responses.Length != 0 && responses.All(x => x.Failed)) throw new IOException("Thunder subtitle search failed.");
             var rows = responses.SelectMany(x => x.Items ?? Array.Empty<ThunderItem>()).Where(x => x != null && ProviderSupport.HttpUrl(x.Url)
