@@ -31,7 +31,7 @@ namespace Emby.SubtitleAssistant.Providers
         public IEnumerable<VideoContentType> SupportedMediaTypes => new[] { VideoContentType.Movie, VideoContentType.Episode };
         public async Task<IEnumerable<RemoteSubtitleInfo>> Search(SubtitleSearchRequest request, CancellationToken ct)
         {
-            ct.ThrowIfCancellationRequested();
+            if (ct.IsCancellationRequested) return Array.Empty<RemoteSubtitleInfo>();
             var identifier = MediaIdentifier.TryParse(request?.MediaPath);
             if (identifier == null) return Array.Empty<RemoteSubtitleInfo>();
             var config = Plugin.CurrentConfiguration;
@@ -41,7 +41,7 @@ namespace Emby.SubtitleAssistant.Providers
                 return await ProviderSearchCache.Shared.GetOrCreateAsync(key,
                     token => SearchCore(request, identifier, config, token), ct).ConfigureAwait(false);
             }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { return Array.Empty<RemoteSubtitleInfo>(); }
             catch (Exception ex)
             {
                 _logger?.Warn("Thunder subtitle search failed ({0}).", ex.GetType().Name);

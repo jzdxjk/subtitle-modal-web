@@ -230,14 +230,41 @@ public class ProviderSearchTests
     }
 
     [Fact]
-    public async Task SearchCancellationIsPropagated()
+    public async Task SearchCancellationReturnsEmptyWithoutFailingSharedWork()
     {
         var config = new PluginConfiguration();
         using var scope = Plugin.OverrideConfigurationForTests(config);
-        var handler = new AsyncFixtureHandler(async (_, token) => { await Task.Delay(10000, token); return ""; });
+        var started = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var handler = new AsyncFixtureHandler(async (_, _) =>
+        {
+            started.TrySetResult(true);
+            await release.Task;
+            return "";
+        });
         using var http = new PluginHttpClient(() => config, _ => handler);
-        using var cancel = new CancellationTokenSource(20);
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => new ThunderSubtitleProvider(http).Search(Request("SSIS-157.mp4"), cancel.Token));
+        var provider = new ThunderSubtitleProvider(http);
+        var request = Request("SSIS-157.mp4");
+        using var cancel = new CancellationTokenSource();
+        var cancelled = provider.Search(request, cancel.Token);
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        cancel.Cancel();
+        Assert.Empty(await cancelled);
+        release.SetResult(true);
+        Assert.Empty(await provider.Search(request, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task SearchAlreadyCancelledReturnsEmptyWithoutStartingNetworkWork()
+    {
+        var config = new PluginConfiguration();
+        using var scope = Plugin.OverrideConfigurationForTests(config);
+        var handler = new FixtureHandler(_ => throw new InvalidOperationException("Unexpected HTTP"));
+        using var http = new PluginHttpClient(() => config, _ => handler);
+        using var cancel = new CancellationTokenSource();
+        cancel.Cancel();
+        Assert.Empty(await new ThunderSubtitleProvider(http).Search(Request("SSIS-157.mp4"), cancel.Token));
+        Assert.Empty(handler.Calls);
     }
 
     [Fact]

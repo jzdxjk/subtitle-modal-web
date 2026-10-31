@@ -58,7 +58,7 @@ SSIS-157-c-无码破解.zh-CN.srt
 https://github.com/jzdxjk/subtitle-modal-web/releases/download/emby-subtitle-assistant-update/update.json
 ```
 
-当前插件程序集版本为 `1.0.0.9`。正式更新仍由独立更新清单发布，更新清单指向不可变版本DLL。详见 `Updates/README.md`。
+当前插件程序集版本为 `1.0.0.10`。正式更新仍由独立更新清单发布，更新清单指向不可变版本DLL。详见 `Updates/README.md`。
 
 ## 构建与验证
 
