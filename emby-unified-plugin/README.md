@@ -67,4 +67,4 @@ dotnet test emby-unified-plugin.Tests/Emby.SubtitleAssistant.Tests.csproj -c Rel
 dotnet build emby-unified-plugin/Emby.SubtitleAssistant.csproj -c Release
 ```
 
-编译基线为 netstandard2.1 和 SDK 4.8.11.0。`1.0.0.11` 的 Release 构建通过，223 个 .NET 测试、41 个 Python 辅助工具测试通过，1 个仅限 POSIX 的检查在 Windows 本机跳过。SHA-256 为 `0970366217a361e34540e0ee64337abbaaa9206a63534c2738efed1934ed3668` 的同一 DLL 已在隔离的官方 Emby 4.10.2.0 宿主完成加载、五标签页、三个下载器、两个计划任务、管理员设置接口、未认证拒绝和静态海南鸡来源注册检查。此前静态池候选还已在 4.8.11.0、4.9.1.80、4.9.5.0、4.10.0.40 和 4.10.2.0 五个官方隔离宿主通过插件加载冒烟。实际部署必须使用正式 Release 中的同一个 SHA-256。
+编译基线为 netstandard2.1 和 SDK 4.8.11.0。`1.0.0.11` 的 Release 构建通过，223 个 .NET 测试、41 个 Python 辅助工具测试通过，1 个仅限 POSIX 的检查在 Windows 本机跳过。SHA-256 为 `2655a2d66c8df571451b18f27c842aee1a826b34c468c77c591e5f9a106b1b5c` 的同一 DLL 已在隔离的官方 Emby 4.10.2.0 宿主完成加载、五标签页、三个下载器、两个计划任务、管理员设置接口、未认证拒绝和静态海南鸡来源注册检查。此前静态池候选还已在 4.8.11.0、4.9.1.80、4.9.5.0、4.10.0.40 和 4.10.2.0 五个官方隔离宿主通过插件加载冒烟。实际部署必须使用正式 Release 中的同一个 SHA-256。

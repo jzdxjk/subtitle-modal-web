@@ -4,7 +4,7 @@
 
 - Assembly, file and settings version: `1.0.0.11`
 - SHA-256:
-  `0970366217a361e34540e0ee64337abbaaa9206a63534c2738efed1934ed3668`
+  `2655a2d66c8df571451b18f27c842aee1a826b34c468c77c591e5f9a106b1b5c`
 - Release build: 0 warnings, 0 errors
 
 ## Automated verification
