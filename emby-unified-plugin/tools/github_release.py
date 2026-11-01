@@ -323,8 +323,8 @@ def publish_pointer(client, manifest, commit):
     release = client.request("GET", API + ROOT + "/releases/tags/" + POINTER_TAG, operation="read update pointer release", optional=True)
     if release is None:
         release = client.request("POST", API + ROOT + "/releases", operation="create update pointer release", data={
-            "tag_name": POINTER_TAG, "target_commitish": commit, "name": "Subtitle Assistant stable update metadata",
-            "body": "Update manifest only; DLLs remain on immutable version releases.", "draft": False, "prerelease": False, "make_latest": "false"})
+            "tag_name": POINTER_TAG, "target_commitish": commit, "name": "字幕助手稳定版更新清单",
+            "body": "这里只保存稳定版更新清单；插件 DLL 继续放在不可变的版本发版中。", "draft": False, "prerelease": False, "make_latest": "false"})
     if release.get("tag_name") != POINTER_TAG or release.get("draft") or release.get("immutable"):
         raise ReleaseError("Update pointer release is not a mutable published metadata release.")
     assets = list_assets(client, release)
@@ -386,7 +386,7 @@ def publish(client, dll, version, commit, body):
     _verify_tag_commit(client, tag, commit, draft=release)
     if release is None:
         release = client.request("POST", API + ROOT + "/releases", operation="create draft version release", data={
-            "tag_name": tag, "target_commitish": commit, "name": "Subtitle Assistant " + version,
+            "tag_name": tag, "target_commitish": commit, "name": "字幕助手 " + version,
             "body": body, "draft": True, "prerelease": False, "make_latest": "false"})
     if release.get("tag_name") != tag or release.get("prerelease"):
         raise ReleaseError("Existing version release is not the requested stable tag.")

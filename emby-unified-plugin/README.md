@@ -58,7 +58,7 @@ SSIS-157-c-无码破解.zh-CN.srt
 https://github.com/jzdxjk/subtitle-modal-web/releases/download/emby-subtitle-assistant-update/update.json
 ```
 
-当前插件程序集版本为 `1.0.0.10`。正式更新仍由独立更新清单发布，更新清单指向不可变版本DLL。详见 `Updates/README.md`。
+当前插件程序集版本为 `1.0.0.11`。正式更新仍由独立更新清单发布，更新清单指向不可变版本DLL。详见 `Updates/README.md`。
 
 ## 构建与验证
 
@@ -67,4 +67,4 @@ dotnet test emby-unified-plugin.Tests/Emby.SubtitleAssistant.Tests.csproj -c Rel
 dotnet build emby-unified-plugin/Emby.SubtitleAssistant.csproj -c Release
 ```
 
-编译基线为 netstandard2.1 和 SDK 4.8.11.0。候选 1.0.0.10 的 Release 构建通过，222 个 .NET 测试与 42 个静态池 Worker/发布器测试通过；SHA-256 为 `713f0f81d71932f9c9523f384c28724ac2325d0ddeb1f0be16f7d75cfdb61141` 的同一候选已在五个官方隔离 Emby 宿主（4.8.11.0、4.9.1.80、4.9.5.0、4.10.0.40、4.10.2.0）通过插件加载、五标签页、三个下载器注册、管理员设置接口和未认证拒绝检查。该冒烟检查未覆盖真实静态池服务、库级自动补全或浏览器操作；静态池生产盘点、5 分钟发布调度和 24 小时百万级负载仍是切流前置门槛。实际部署必须使用完成所有门槛验收后的同一个 SHA-256。
+编译基线为 netstandard2.1 和 SDK 4.8.11.0。`1.0.0.11` 的 Release 构建通过，223 个 .NET 测试、41 个 Python 辅助工具测试通过，1 个仅限 POSIX 的检查在 Windows 本机跳过。SHA-256 为 `0970366217a361e34540e0ee64337abbaaa9206a63534c2738efed1934ed3668` 的同一 DLL 已在隔离的官方 Emby 4.10.2.0 宿主完成加载、五标签页、三个下载器、两个计划任务、管理员设置接口、未认证拒绝和静态海南鸡来源注册检查。此前静态池候选还已在 4.8.11.0、4.9.1.80、4.9.5.0、4.10.0.40 和 4.10.2.0 五个官方隔离宿主通过插件加载冒烟。实际部署必须使用正式 Release 中的同一个 SHA-256。

@@ -20,7 +20,7 @@ from emby_validation import (
 PLUGIN_ID = "76cd4168-e0b3-4aac-8a52-5cb638121744"
 PROVIDERS = ["本地字幕", "迅雷字幕", "海南鸡字幕"]
 TASK_KEYS = ["SubtitleAssistantMissingSubtitles", "SubtitleAssistantUpdate"]
-PLUGIN_VERSION = "1.0.0.10"
+PLUGIN_VERSION = "1.0.0.11"
 
 
 def install(case, filename, expected_sha256):
@@ -60,8 +60,8 @@ def probe(case, candidate):
     settings = wait_for_settings_version(client)
     page = client.request("GET", "/web/ConfigurationPage?name=subtitleassistant")
     script = client.request("GET", "/web/ConfigurationPage?name=subtitleassistantjs")
-    if settings.get("Version") != "1.0.0.10":
-        raise RuntimeError("combined plugin did not load version 1.0.0.10")
+    if settings.get("Version") != "1.0.0.11":
+        raise RuntimeError("combined plugin did not load version 1.0.0.11")
     if not isinstance(page, str) or len(re.findall(r'role="tab"', page)) != 5:
         raise RuntimeError("native configuration page did not expose five tabs")
     if 'data-tab="pool"' not in page or "静态索引地址" not in page:
