@@ -23,25 +23,38 @@ internal sealed class MigrationLibrary
 
 internal static class ProviderKeyMigration
 {
-    private static readonly IReadOnlyDictionary<string, string> OldNames = new Dictionary<string, string>(StringComparer.Ordinal)
+    private static readonly IReadOnlyDictionary<string, string> OldNames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
     {
         ["MeiamSub.LocalPool"] = ProviderNames.Local,
-        ["ThunderSubtitle"] = ProviderNames.Thunder
+        ["ThunderSubtitle"] = ProviderNames.Thunder,
+        ["Pool"] = ProviderNames.Pool,
+        ["海南鸡字幕"] = ProviderNames.Pool,
+        ["海南鸡字幕池"] = ProviderNames.Pool,
+        ["ChickenRicePool"] = ProviderNames.Pool,
+        ["Emby.ChickenRicePool"] = ProviderNames.Pool
     };
-    private static readonly HashSet<string> RetiredPoolNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-    { "Pool", "海南鸡字幕", "海南鸡字幕池", "ChickenRicePool", "Emby.ChickenRicePool" };
     private const string ExtraThunder = "MeiamSub.Thunder";
-    private static bool IsRetiredPoolName(string key) => key != null && RetiredPoolNames.Contains(key);
     public static string[] ProjectProviderOrder(IEnumerable<string> order)
     {
-        var projected = (order ?? Array.Empty<string>()).Where(key => !IsRetiredPoolName(key)).ToArray();
-        return ProviderOrder.IsValid(projected) ? projected : ProviderOrder.Default;
+        var projected = (order ?? Array.Empty<string>()).Select(key =>
+        {
+            if (key == null || !OldNames.TryGetValue(key, out var name)) return key;
+            if (name == ProviderNames.Pool) return ProviderKeys.Pool;
+            if (name == ProviderNames.Local) return ProviderKeys.Local;
+            if (name == ProviderNames.Thunder) return ProviderKeys.Thunder;
+            return key;
+        }).ToArray();
+        if (ProviderOrder.IsValid(projected)) return projected;
+        if (projected.Length == 2 && projected.Contains(ProviderKeys.Local, StringComparer.Ordinal) &&
+            projected.Contains(ProviderKeys.Thunder, StringComparer.Ordinal))
+            return new[] { ProviderKeys.Pool }.Concat(projected).ToArray();
+        return ProviderOrder.Default;
     }
     public static bool HasProviderKeys(LibraryOptions source)
     {
         if (source == null) return false;
         return (source.SubtitleFetcherOrder ?? Array.Empty<string>()).Concat(source.DisabledSubtitleFetchers ?? Array.Empty<string>())
-            .Any(key => key != null && (OldNames.ContainsKey(key) || OldNames.Values.Contains(key, StringComparer.Ordinal) || IsRetiredPoolName(key)));
+            .Any(key => key != null && (OldNames.ContainsKey(key) || OldNames.Values.Contains(key, StringComparer.Ordinal)));
     }
     public static LibraryOptions Apply(LibraryOptions source, IJsonSerializer json, IReadOnlyDictionary<string, string> explicitNames = null)
     {
@@ -59,7 +72,6 @@ internal static class ProviderKeyMigration
             {
                 var name = Resolve(key);
                 if (name == ExtraThunder) continue;
-                if (IsRetiredPoolName(name)) continue;
                 if (name != null && OldNames.TryGetValue(name, out var target))
                 { if (seenSources.Add(target)) rewritten.Add(target); continue; }
                 var previous = OldNames.FirstOrDefault(x => x.Value == name).Key;
@@ -81,8 +93,8 @@ internal static class ProviderKeyMigration
 
 internal static class DefaultDisablePolicy
 {
-    private static readonly string[] Own = { ProviderNames.Local, ProviderNames.Thunder };
-    // Only a genuinely fresh install gets the sources turned off; upgrades keep whatever the operator chose.
+    private static readonly string[] Own = { ProviderNames.Pool, ProviderNames.Local, ProviderNames.Thunder };
+    // A fresh install disables every managed source. An upgrade also disables restored Pool when no saved choice exists.
     public static LibraryOptions Apply(LibraryOptions source, IJsonSerializer json)
     {
         var result = MigrationRunner.Clone(source, json);
@@ -96,7 +108,7 @@ internal static class DefaultDisablePolicy
 
 internal static class MigrationRunner
 {
-    internal const int CurrentMigrationVersion = 2;
+    internal const int CurrentMigrationVersion = 3;
     internal const string PendingFilename = "subtitle-assistant-migration.pending";
     private static readonly object Gate = new object();
     internal static T Clone<T>(T value, IJsonSerializer json) => json.DeserializeFromString<T>(json.SerializeToString(value));
@@ -183,7 +195,24 @@ internal static class MigrationRunner
     private static LibraryOptions Migrate(LibraryOptions source, IJsonSerializer json, IReadOnlyDictionary<string, string> explicitNames, bool freshInstall)
     {
         var migrated = ProviderKeyMigration.Apply(source, json, explicitNames);
-        return freshInstall ? DefaultDisablePolicy.Apply(migrated, json) : migrated;
+        if (freshInstall) return DefaultDisablePolicy.Apply(migrated, json);
+        var hadPoolChoice = (source.SubtitleFetcherOrder ?? Array.Empty<string>())
+            .Concat(source.DisabledSubtitleFetchers ?? Array.Empty<string>())
+            .Any(key => IsPoolChoice(key, explicitNames));
+        if (hadPoolChoice) return migrated;
+        var disabled = new List<string>(migrated.DisabledSubtitleFetchers ?? Array.Empty<string>());
+        if (!disabled.Contains(ProviderNames.Pool, StringComparer.OrdinalIgnoreCase)) disabled.Add(ProviderNames.Pool);
+        migrated.DisabledSubtitleFetchers = disabled.ToArray();
+        return migrated;
+    }
+    private static bool IsPoolChoice(string key, IReadOnlyDictionary<string, string> explicitNames)
+    {
+        if (key != null && explicitNames != null && explicitNames.TryGetValue(key, out var mapped)) key = mapped;
+        return string.Equals(key, ProviderKeys.Pool, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(key, ProviderNames.Pool, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(key, "海南鸡字幕池", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(key, "ChickenRicePool", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(key, "Emby.ChickenRicePool", StringComparison.OrdinalIgnoreCase);
     }
     private static bool Same(string[] left, string[] right) => left == null ? right == null : right != null && left.SequenceEqual(right, StringComparer.Ordinal);
     private sealed class PreparedLibrary { public MigrationLibrary Target; public LibraryOptions Original; public LibraryOptions Migrated; }

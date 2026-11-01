@@ -12,7 +12,7 @@ using System.Threading.Tasks;
 
 namespace Emby.SubtitleAssistant;
 
-public enum NetworkPurpose { Thunder, Cloud, Updates }
+public enum NetworkPurpose { Thunder, Pool, Cloud, Updates }
 
 public sealed class PluginHttpClient : IDisposable
 {
@@ -106,7 +106,7 @@ public sealed class PluginHttpClient : IDisposable
                         Proxy = useProxy ? new RoutingProxy(proxy) : null,
                         AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate,
                         // HttpClient forwards custom token headers on redirects; cloud endpoints must use their final URL.
-                        AllowAutoRedirect = purpose != NetworkPurpose.Cloud,
+                        AllowAutoRedirect = purpose != NetworkPurpose.Cloud && purpose != NetworkPurpose.Pool,
                         MaxAutomaticRedirections = 5
                     };
                 }
@@ -130,6 +130,7 @@ public sealed class PluginHttpClient : IDisposable
         switch (purpose)
         {
             case NetworkPurpose.Thunder: return proxy.Thunder;
+            case NetworkPurpose.Pool: return proxy.Pool;
             case NetworkPurpose.Cloud: return proxy.Cloud;
             case NetworkPurpose.Updates: return proxy.Updates;
             default: return false;
@@ -167,7 +168,7 @@ public sealed class PluginHttpClient : IDisposable
     {
         // Only retain a digest as a cache key; proxy credentials must never enter diagnostics.
         var value = string.Join("\n", proxy.Enabled, proxy.Address, proxy.Username, proxy.Password, proxy.BypassLocal,
-            proxy.BypassHosts, proxy.Thunder, proxy.Cloud, proxy.Updates);
+            proxy.BypassHosts, proxy.Thunder, proxy.Pool, proxy.Cloud, proxy.Updates);
         using var hash = SHA256.Create();
         return Convert.ToBase64String(hash.ComputeHash(Encoding.UTF8.GetBytes(value)));
     }

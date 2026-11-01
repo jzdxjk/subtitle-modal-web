@@ -9,6 +9,7 @@ from pathlib import Path
 import re
 import shutil
 import sys
+import time
 
 from emby_validation import (
     CASES, ROOT, EmbyClient, bootstrap, case_for, ensure_root, inspect,
@@ -17,8 +18,9 @@ from emby_validation import (
 
 
 PLUGIN_ID = "76cd4168-e0b3-4aac-8a52-5cb638121744"
-PROVIDERS = ["本地字幕", "迅雷字幕"]
+PROVIDERS = ["本地字幕", "迅雷字幕", "海南鸡字幕"]
 TASK_KEYS = ["SubtitleAssistantMissingSubtitles", "SubtitleAssistantUpdate"]
+PLUGIN_VERSION = "1.0.0.10"
 
 
 def install(case, filename, expected_sha256):
@@ -55,13 +57,15 @@ def probe(case, candidate):
     found = [item for item in plugins if str(item.get("Id", "")).lower() == PLUGIN_ID]
     if len(found) != 1:
         raise RuntimeError("combined plugin did not register exactly once in the actual host")
-    settings = client.request("GET", "/SubtitleAssistant/settings")
+    settings = wait_for_settings_version(client)
     page = client.request("GET", "/web/ConfigurationPage?name=subtitleassistant")
     script = client.request("GET", "/web/ConfigurationPage?name=subtitleassistantjs")
     if settings.get("Version") != "1.0.0.10":
         raise RuntimeError("combined plugin did not load version 1.0.0.10")
-    if not isinstance(page, str) or len(re.findall(r'role="tab"', page)) != 4:
-        raise RuntimeError("native configuration page did not expose four tabs")
+    if not isinstance(page, str) or len(re.findall(r'role="tab"', page)) != 5:
+        raise RuntimeError("native configuration page did not expose five tabs")
+    if 'data-tab="pool"' not in page or "静态索引地址" not in page:
+        raise RuntimeError("independent static ChickenRice settings tab is missing")
     if "海南鸡字幕已上传至迅雷字幕库" not in page or "搜索命中时优先展示海南鸡字幕" not in page:
         raise RuntimeError("Thunder settings page is missing the ChickenRice priority note")
     if not isinstance(script, str) or "SubtitleAssistant" not in script:
@@ -70,13 +74,15 @@ def probe(case, candidate):
     providers = available.get("SubtitleFetchers", [])
     names = [item.get("Name") for item in providers]
     if any(names.count(name) != 1 for name in PROVIDERS):
-        raise RuntimeError("native library options do not register the two subtitle providers once")
-    if "海南鸡字幕" in names:
-        raise RuntimeError("retired ChickenRice pool source is still registered by the combined plugin")
-    if any(key in settings for key in ["PoolUrl", "PoolMaxResults", "PoolTimeoutSeconds"]):
-        raise RuntimeError("retired public-pool configuration is still exposed")
+        raise RuntimeError("native library options do not register all three subtitle providers once")
+    if settings.get("PoolStaticUrl") != "":
+        raise RuntimeError("static pool endpoint must stay unset until a verified static deployment exists")
+    if any(key in settings for key in ["PoolUrl"]):
+        raise RuntimeError("legacy dynamic pool URL must not be exposed")
     if not 1 <= int(settings.get("ThunderMaxResults", 0)) <= 10:
         raise RuntimeError("Thunder display limit is outside the 1..10 range")
+    if not 1 <= int(settings.get("PoolMaxResults", 0)) <= 10:
+        raise RuntimeError("static pool display limit is outside the 1..10 range")
     tasks = client.request("GET", "/ScheduledTasks")
     selected_tasks = [item for item in tasks if item.get("Key") in TASK_KEYS]
     if len(selected_tasks) != 2:
@@ -98,18 +104,32 @@ def probe(case, candidate):
         "DllSha256": hashlib.sha256((ROOT / case.version / "config/plugins/Emby.SubtitleAssistant.dll").read_bytes()).hexdigest(),
         "AdminSettingsApi": True,
         "UnauthenticatedSettingsDenied": True,
-        "ConfigurationTabs": 4,
+        "ConfigurationTabs": 5,
         "ChickenRicePriorityNote": True,
-        "RetiredPoolSourceAbsent": "海南鸡字幕" not in names,
+        "StaticPoolProviderRegistered": names.count("海南鸡字幕") == 1,
+        "StaticEndpointUnsetUntilCutover": settings.get("PoolStaticUrl") == "",
         "ControllerLoaded": True,
         "Providers": [{key: item[key] for key in ["Id", "Name", "DisplayName"] if key in item}
                       for item in providers if item.get("Name") in PROVIDERS],
         "Tasks": [{key: item[key] for key in ["Id", "Key", "Name", "Triggers"] if key in item}
                   for item in selected_tasks],
-        "DisplayLimits": {key: settings[key] for key in ["LocalMaxResults", "ThunderMaxResults"]},
+        "DisplayLimits": {key: settings[key] for key in ["LocalMaxResults", "ThunderMaxResults", "PoolMaxResults"]},
     }
     write_private(ROOT / "reports" / (candidate + "-smoke-" + case.version + ".json"), report)
     return report
+
+
+def wait_for_settings_version(client, timeout=60):
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            settings = client.request("GET", "/SubtitleAssistant/settings")
+            if settings.get("Version") == PLUGIN_VERSION:
+                return settings
+        except RuntimeError:
+            pass
+        time.sleep(1)
+    raise RuntimeError("combined plugin did not expose expected settings version " + PLUGIN_VERSION)
 
 
 def main():

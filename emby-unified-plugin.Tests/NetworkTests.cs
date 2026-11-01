@@ -18,6 +18,7 @@ public sealed class NetworkTests
         config.Proxy.Enabled = true;
         config.Proxy.Address = "http://proxy.example:7890";
         Assert.True(PluginHttpClient.ShouldProxy(config.Proxy, NetworkPurpose.Thunder, new Uri("https://api.example/x")));
+        Assert.True(PluginHttpClient.ShouldProxy(config.Proxy, NetworkPurpose.Pool, new Uri("https://static.example/x")));
         Assert.True(PluginHttpClient.ShouldProxy(config.Proxy, NetworkPurpose.Updates, new Uri("https://github.com/x")));
         Assert.False(PluginHttpClient.ShouldProxy(config.Proxy, NetworkPurpose.Cloud, new Uri("https://cloud.example/x")));
         foreach (var host in new[] { "127.0.0.1", "10.0.0.235", "192.168.31.1", "172.16.1.1", "[::1]", "[fd00::1234]", "nas" })

@@ -51,18 +51,27 @@ public class WebSettingsTests
     }
 
     [Fact]
-    public void RetiredPoolSettingsAreAbsentAndThunderTimeoutRoundTrips()
+    public void StaticPoolSettingsAndThunderTimeoutRoundTrip()
     {
-        var current = new PluginConfiguration { ThunderTimeoutSeconds = 33 };
+        var current = new PluginConfiguration { ThunderTimeoutSeconds = 33, PoolMaxResults = 7, PoolTimeoutSeconds = 22,
+            PoolStaticUrl = "https://static.example", Proxy = new ProxyConfiguration { Pool = false } };
         var snapshot = SettingsEditor.Snapshot(current);
-        Assert.Null(typeof(SettingsSnapshot).GetProperty("PoolUrl"));
+        Assert.Equal("https://static.example", snapshot.PoolStaticUrl);
+        Assert.Equal(7, snapshot.PoolMaxResults);
+        Assert.Equal(22, snapshot.PoolTimeoutSeconds);
+        Assert.False(snapshot.Proxy.Pool);
         var unchanged = SettingsEditor.Apply(current, new SaveSettingsRequest { LocalMaxResults = 4 });
-        Assert.Null(typeof(PluginConfiguration).GetProperty("PoolUrl"));
-        Assert.Null(typeof(ProxySnapshot).GetProperty("Pool"));
-        Assert.Null(typeof(ProxySettingsUpdate).GetProperty("Pool"));
+        Assert.Equal("https://static.example", unchanged.PoolStaticUrl);
+        Assert.False(unchanged.Proxy.Pool);
         Assert.Equal(33, unchanged.ThunderTimeoutSeconds);
         var updated = SettingsEditor.Apply(current, new SaveSettingsRequest { ThunderTimeoutSeconds = 25 });
         Assert.Equal(25, updated.ThunderTimeoutSeconds);
+        var poolUpdated = SettingsEditor.Apply(current, new SaveSettingsRequest { PoolMaxResults = 9, PoolTimeoutSeconds = 30,
+            PoolStaticUrl = "https://static2.example", Proxy = new ProxySettingsUpdate { Pool = true } });
+        Assert.Equal(9, poolUpdated.PoolMaxResults);
+        Assert.Equal(30, poolUpdated.PoolTimeoutSeconds);
+        Assert.Equal("https://static2.example", poolUpdated.PoolStaticUrl);
+        Assert.True(poolUpdated.Proxy.Pool);
     }
 
     [Fact]
@@ -92,18 +101,17 @@ public class WebSettingsTests
     [Fact]
     public void ProviderDisplayOrderRoundTripsAndRejectsInvalidUpdate()
     {
-        var current = new PluginConfiguration { ProviderDisplayOrder = new[] { "Local", "Thunder" } };
+        var current = new PluginConfiguration { ProviderDisplayOrder = new[] { "Pool", "Local", "Thunder" } };
         var snapshot = SettingsEditor.Snapshot(current);
-        Assert.Equal(new[] { "Local", "Thunder" }, snapshot.ProviderDisplayOrder);
+        Assert.Equal(new[] { "Pool", "Local", "Thunder" }, snapshot.ProviderDisplayOrder);
         var unchanged = SettingsEditor.Apply(current, new SaveSettingsRequest { LocalMaxResults = 4 });
-        Assert.Equal(new[] { "Local", "Thunder" }, unchanged.ProviderDisplayOrder);
+        Assert.Equal(new[] { "Pool", "Local", "Thunder" }, unchanged.ProviderDisplayOrder);
         var emptyKeepsCurrent = SettingsEditor.Apply(current, new SaveSettingsRequest { ProviderDisplayOrder = new string[0] });
-        Assert.Equal(new[] { "Local", "Thunder" }, emptyKeepsCurrent.ProviderDisplayOrder);
-        Assert.Throws<System.ArgumentException>(() => SettingsEditor.Apply(current, new SaveSettingsRequest { ProviderDisplayOrder = new[] { "Thunder", "Local", "Pool" } }));
-        Assert.Equal(new[] { "Thunder", "Local" }, SettingsEditor.Apply(current, new SaveSettingsRequest { ProviderDisplayOrder = new[] { "Thunder", "Local" } }).ProviderDisplayOrder);
+        Assert.Equal(new[] { "Pool", "Local", "Thunder" }, emptyKeepsCurrent.ProviderDisplayOrder);
+        Assert.Equal(new[] { "Thunder", "Local", "Pool" }, SettingsEditor.Apply(current, new SaveSettingsRequest { ProviderDisplayOrder = new[] { "Thunder", "Local", "Pool" } }).ProviderDisplayOrder);
         Assert.Throws<System.ArgumentException>(() => SettingsEditor.Apply(current, new SaveSettingsRequest { ProviderDisplayOrder = new[] { "Local", "Local" } }));
         var nullSnapshot = SettingsEditor.Snapshot(new PluginConfiguration { ProviderDisplayOrder = null });
-        Assert.Equal(new[] { "Local", "Thunder" }, nullSnapshot.ProviderDisplayOrder);
+        Assert.Equal(new[] { "Pool", "Local", "Thunder" }, nullSnapshot.ProviderDisplayOrder);
     }
 
     [Fact]

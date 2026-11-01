@@ -34,6 +34,10 @@ internal static class LegacySettingsImporter
             }
             var result = MigrationRunner.Clone(current, json);
             if (local?.SubtitleLibraryPaths != null) result.LocalPaths = local.SubtitleLibraryPaths;
+            if (legacyChickenRice?.PoolMaxResults.HasValue == true) result.PoolMaxResults = legacyChickenRice.PoolMaxResults.Value;
+            else if (legacyChickenRice?.MaxResults.HasValue == true) result.PoolMaxResults = legacyChickenRice.MaxResults.Value;
+            if (legacyChickenRice?.PoolTimeoutSeconds.HasValue == true) result.PoolTimeoutSeconds = legacyChickenRice.PoolTimeoutSeconds.Value;
+            else if (legacyChickenRice?.RequestTimeoutSeconds.HasValue == true) result.PoolTimeoutSeconds = legacyChickenRice.RequestTimeoutSeconds.Value;
             if (thunder?.EnableAutoDownloadOnNewMedia != null || legacyChickenRice?.EnableAutoDownloadOnNewMedia != null)
                 result.AutoDownloadOnNewMedia = thunder?.EnableAutoDownloadOnNewMedia == true || legacyChickenRice?.EnableAutoDownloadOnNewMedia == true;
             if (cloud != null)
@@ -62,5 +66,9 @@ internal static class LegacySettingsImporter
     public sealed class LegacyChickenRiceSettings
     {
         public bool? EnableAutoDownloadOnNewMedia { get; set; }
+        public int? PoolMaxResults { get; set; }
+        public int? MaxResults { get; set; }
+        public int? PoolTimeoutSeconds { get; set; }
+        public int? RequestTimeoutSeconds { get; set; }
     }
 }

@@ -148,5 +148,5 @@ internal sealed class SubtitleCompletionService
     }
 
     internal bool IsOwnProvider(BaseItem item, string key) => Registrations(item).Any(p =>
-        (p.Name == ProviderNames.Local || p.Name == ProviderNames.Thunder) && CompletionPolicy.SameKey(key,p));
+        (p.Name == ProviderNames.Local || p.Name == ProviderNames.Thunder || p.Name == ProviderNames.Pool) && CompletionPolicy.SameKey(key,p));
 }

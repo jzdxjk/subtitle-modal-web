@@ -112,6 +112,7 @@
             <div class="sa-tabs" role="tablist" aria-label="字幕助手设置">
                 <button type="button" role="tab" id="sa-tab-local" aria-controls="sa-panel-local" aria-selected="true" data-tab="local">本地字幕</button>
                 <button type="button" role="tab" id="sa-tab-thunder" aria-controls="sa-panel-thunder" aria-selected="false" tabindex="-1" data-tab="thunder">迅雷字幕</button>
+                <button type="button" role="tab" id="sa-tab-pool" aria-controls="sa-panel-pool" aria-selected="false" tabindex="-1" data-tab="pool">海南鸡字幕</button>
                 <button type="button" role="tab" id="sa-tab-cloud" aria-controls="sa-panel-cloud" aria-selected="false" tabindex="-1" data-tab="cloud">字幕云</button>
                 <button type="button" role="tab" id="sa-tab-proxy" aria-controls="sa-panel-proxy" aria-selected="false" tabindex="-1" data-tab="proxy">全局设置</button>
             </div>
@@ -164,17 +165,34 @@
             <h3>最近完成</h3><table><thead><tr><th>媒体</th><th>状态</th><th>阶段</th><th>进度</th><th>消息</th></tr></thead><tbody data-jobs="done"></tbody></table>
             <h3>最近失败</h3><table><thead><tr><th>媒体</th><th>状态</th><th>阶段</th><th>进度</th><th>消息</th></tr></thead><tbody data-jobs="failed"></tbody></table>
         </section>
+        <section id="sa-panel-pool" role="tabpanel" aria-labelledby="sa-tab-pool" data-panel="pool" hidden>
+            <h2>海南鸡字幕</h2>
+            <div class="sa-field">
+                <label for="sa-pool-static-url">静态索引地址</label>
+                <input id="sa-pool-static-url" type="url" data-field="PoolStaticUrl" spellcheck="false" placeholder="https://静态字幕池域名">
+                <p class="sa-hint">只读取静态目录、番号索引和字幕文件。留空时停用；静态未命中会继续由 Emby 查询其他来源，不会调用旧动态 Worker。</p>
+            </div>
+            <div class="sa-field sa-field-narrow">
+                <label for="sa-pool-timeout">请求超时（秒）</label>
+                <input id="sa-pool-timeout" type="number" min="1" max="120" step="1" data-field="PoolTimeoutSeconds" required>
+            </div>
+            <div class="sa-field sa-field-narrow">
+                <label for="sa-pool-max">最多展示结果数</label>
+                <input id="sa-pool-max" type="number" min="1" step="1" data-field="PoolMaxResults" required>
+                <p class="sa-hint">自动补全仍可检查全部匹配候选，不受手动结果展示数量限制。</p>
+            </div>
+        </section>
         <section id="sa-panel-proxy" role="tabpanel" aria-labelledby="sa-tab-proxy" data-panel="proxy" hidden>
             <h2>全局设置</h2>
             <div class="sa-group">
                 <h3>搜索结果来源顺序</h3>
-                <p class="sa-hint">拖拽调整本地与迅雷字幕在手动搜索结果里的先后，排在上面的先显示。只影响来源之间的先后，不改变每个来源内部的排序；自动补全仍按各媒体库原生顺序。保存后需重启 Emby 才会改变搜索结果里的来源顺序。</p>
+                <p class="sa-hint">拖拽调整海南鸡、本地与迅雷字幕在手动搜索结果里的先后，排在上面的先显示。只影响来源之间的先后，不改变每个来源内部的排序；自动补全仍按各媒体库原生顺序。保存后需重启 Emby 才会改变搜索结果里的来源顺序。</p>
                 <div class="sa-order" data-provider-order role="list" aria-label="搜索结果来源顺序"></div>
             </div>
             <div class="sa-group">
                 <h3>新入库自动补全</h3>
                 <label class="sa-check"><input type="checkbox" data-field="AutoDownloadOnNewMedia"><span>新入库媒体延迟 60 秒自动补全缺失的中文字幕</span></label>
-                <p class="sa-hint">新入库和历史补全均按媒体库中本地、迅雷下载器的开关与顺序参与。已有中文字幕时跳过；没有结果时结束。历史补全和自动更新时间可在 Emby 计划任务中设置。</p>
+                <p class="sa-hint">海南鸡字幕只参与新入库补全，并按该媒体库的下载器开关与顺序执行；历史补全继续使用本地和迅雷来源。已有中文字幕时跳过；无匹配时继续查询后续来源。</p>
             </div>
             <div class="sa-group">
                 <h3>网络代理</h3>
@@ -194,6 +212,7 @@
                 </div>
                 <div class="sa-sublist">
                     <label class="sa-check"><input type="checkbox" data-field="Proxy.Thunder"><span>迅雷字幕搜索与下载走代理</span></label>
+                    <label class="sa-check"><input type="checkbox" data-field="Proxy.Pool"><span>海南鸡字幕搜索与下载走代理</span></label>
                     <label class="sa-check"><input type="checkbox" data-field="Proxy.Cloud"><span>字幕云服务请求走代理</span></label>
                     <label class="sa-check"><input type="checkbox" data-field="Proxy.Updates"><span>插件更新请求走代理</span></label>
                     <label class="sa-check"><input type="checkbox" data-field="Proxy.BypassLocal"><span>局域网与本机地址直连</span></label>
@@ -207,6 +226,7 @@
                     <div class="sa-test-controls">
                         <select data-proxy-purpose aria-label="测试流量用途">
                             <option value="Thunder">迅雷字幕</option>
+                            <option value="Pool">海南鸡字幕</option>
                             <option value="Cloud">字幕云</option>
                             <option value="Updates">插件更新</option>
                         </select>

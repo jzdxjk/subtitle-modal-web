@@ -68,7 +68,17 @@ public sealed class SettingsService : IService, IRequiresRequest
         if (request == null || !Enum.TryParse(request.Purpose, true, out NetworkPurpose purpose) ||
             !Enum.IsDefined(typeof(NetworkPurpose), purpose))
             return new SettingsResult { Ok = false, Error = "请选择有效的流量用途。" };
-        var target = string.IsNullOrWhiteSpace(request.Url) ? ProxyTestTargets[purpose] : request.Url;
+        var target = request.Url;
+        if (string.IsNullOrWhiteSpace(target))
+        {
+            if (purpose == NetworkPurpose.Pool)
+            {
+                var poolUrl = (Plugin.CurrentConfiguration.PoolStaticUrl ?? "").TrimEnd('/');
+                if (string.IsNullOrEmpty(poolUrl)) return new SettingsResult { Ok = false, Error = "请先配置海南鸡静态索引地址。" };
+                target = poolUrl + "/directory.json";
+            }
+            else target = ProxyTestTargets[purpose];
+        }
         if (!Uri.TryCreate(target, UriKind.Absolute, out var uri) ||
             (uri.Scheme != "https" && uri.Scheme != "http") || !string.IsNullOrEmpty(uri.UserInfo))
             return new SettingsResult { Ok = false, Error = "测试目标地址无效。" };

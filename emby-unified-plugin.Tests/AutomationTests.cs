@@ -20,29 +20,29 @@ public sealed class AutomationTests
     {
         new ProviderRegistration(ProviderNames.Local,"id-local"),
         new ProviderRegistration(ProviderNames.Thunder,"id-thunder"),
-        new ProviderRegistration("海南鸡字幕","id-old-pool"),
+        new ProviderRegistration(ProviderNames.Pool,"id-pool"),
         new ProviderRegistration("OpenSubtitles","id-other")
     };
 
     [Fact] public void DisabledSourcesNeverParticipateAndForeignPluginsAreExcluded()
     {
-        var options = new LibraryOptions { DisabledSubtitleFetchers = new[] { "id-thunder" },
-            SubtitleFetcherOrder = new[] { "id-other", "id-old-pool", "id-local", "id-thunder" } };
+        var options = new LibraryOptions { DisabledSubtitleFetchers = new[] { "id-thunder", "id-pool" },
+            SubtitleFetcherOrder = new[] { "id-other", "id-pool", "id-local", "id-thunder" } };
         Assert.Equal(new[] { ProviderNames.Local }, CompletionPolicy.EnabledProviders(options, Registered).Select(p => p.Name));
-        options.DisabledSubtitleFetchers = new[] { "id-local", ProviderNames.Thunder, "id-old-pool" };
+        options.DisabledSubtitleFetchers = new[] { "id-local", ProviderNames.Thunder, "id-pool" };
         Assert.Empty(CompletionPolicy.EnabledProviders(options, Registered));
         Assert.Empty(CompletionPolicy.EnabledProviders(null, Registered));
     }
 
-    [Fact] public void NewAndHistoricalCompletionUseOnlyLibraryEnabledLocalAndThunderSources()
+    [Fact] public void PoolParticipatesOnlyInNewMediaAndOnlyWhenLibraryEnabled()
     {
-        var options = new LibraryOptions { SubtitleFetcherOrder = new[] { "id-old-pool", "id-local", "id-thunder" } };
+        var options = new LibraryOptions { SubtitleFetcherOrder = new[] { "id-pool", "id-local", "id-thunder" } };
         Assert.Equal(new[] { ProviderNames.Local, ProviderNames.Thunder },
             CompletionPolicy.EnabledProviders(options, Registered, CompletionScope.Historical).Select(p => p.Name));
-        Assert.Equal(new[] { ProviderNames.Local, ProviderNames.Thunder },
+        Assert.Equal(new[] { ProviderNames.Pool, ProviderNames.Local, ProviderNames.Thunder },
             CompletionPolicy.EnabledProviders(options, Registered, CompletionScope.NewMedia).Select(p => p.Name));
 
-        options.DisabledSubtitleFetchers = new[] { "海南鸡字幕" };
+        options.DisabledSubtitleFetchers = new[] { ProviderNames.Pool };
         Assert.Equal(new[] { ProviderNames.Local, ProviderNames.Thunder },
             CompletionPolicy.EnabledProviders(options, Registered, CompletionScope.NewMedia).Select(p => p.Name));
         Assert.Equal(new[] { ProviderNames.Local, ProviderNames.Thunder },
@@ -96,7 +96,7 @@ public sealed class AutomationTests
         Assert.True(request.IsHearingImpaired);
         Assert.Contains("id-other", request.DisabledSubtitleFetchers);
         Assert.Contains("id-thunder", request.DisabledSubtitleFetchers);
-        Assert.Contains("id-old-pool", request.DisabledSubtitleFetchers);
+        Assert.Contains("id-pool", request.DisabledSubtitleFetchers);
         Assert.Contains("海南鸡字幕", request.DisabledSubtitleFetchers);
         Assert.DoesNotContain("id-local", request.DisabledSubtitleFetchers);
     }

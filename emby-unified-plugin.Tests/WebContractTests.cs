@@ -21,12 +21,12 @@ public class WebContractTests
     }
 
     [Fact]
-    public void ConfigurationHasFourAccessibleTabsAndNoRetiredPoolOrIframe()
+    public void ConfigurationHasFiveAccessibleTabsIncludingStaticPoolSettings()
     {
         var path = Path.Combine(Root, "emby-unified-plugin", "Web", "configuration.html");
         Assert.True(File.Exists(path), "Unified configuration page is missing");
         var html = File.ReadAllText(path);
-        foreach (var name in new[] { "local", "thunder", "cloud", "proxy" })
+        foreach (var name in new[] { "local", "thunder", "pool", "cloud", "proxy" })
             Assert.Contains("data-tab=\"" + name + "\"", html);
         Assert.Contains("role=\"tablist\"", html);
         Assert.Contains("type=\"password\"", html);
@@ -36,7 +36,8 @@ public class WebContractTests
         Assert.DoesNotContain("data-field=\"UpdateManifestUrl\"", html);
         Assert.Contains("海南鸡字幕已上传至迅雷字幕库", html);
         Assert.Contains("搜索命中时优先展示海南鸡字幕", html);
-        Assert.DoesNotContain("Pool", html, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("静态索引地址", html);
+        Assert.Contains("海南鸡字幕搜索与下载走代理", html);
         Assert.DoesNotContain("data-update", html);
         Assert.DoesNotContain("检查更新", html);
         Assert.Contains("完成搜索、匹配、去重与排序后，最多展示 N 条；不影响自动补全可用的候选。", html);
@@ -86,7 +87,7 @@ public class WebContractTests
         Assert.Contains("touchstart", js);
         Assert.Contains("pointermove", js);
         Assert.Contains("pointerup", js);
-        Assert.Contains("PROVIDER_DEFAULT_ORDER = [\"Local\", \"Thunder\"]", js);
+        Assert.Contains("PROVIDER_DEFAULT_ORDER = [\"Pool\", \"Local\", \"Thunder\"]", js);
         Assert.Contains("providerOrder", js);
         Assert.Contains("重启 Emby 后生效", js);
     }

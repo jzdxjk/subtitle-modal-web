@@ -14,6 +14,9 @@ public sealed class SaveSettingsRequest
     public int? LocalMaxResults { get; set; }
     public int? ThunderMaxResults { get; set; }
     public int? ThunderTimeoutSeconds { get; set; }
+    public string PoolStaticUrl { get; set; }
+    public int? PoolMaxResults { get; set; }
+    public int? PoolTimeoutSeconds { get; set; }
     public string CloudServiceUrl { get; set; }
     public string CloudApiToken { get; set; }
     public bool ClearCloudApiToken { get; set; }
@@ -36,6 +39,7 @@ public sealed class ProxySettingsUpdate
     public bool? BypassLocal { get; set; }
     public string BypassHosts { get; set; }
     public bool? Thunder { get; set; }
+    public bool? Pool { get; set; }
     public bool? Cloud { get; set; }
     public bool? Updates { get; set; }
 }
@@ -47,6 +51,9 @@ public sealed class SettingsSnapshot
     public int LocalMaxResults { get; set; }
     public int ThunderMaxResults { get; set; }
     public int ThunderTimeoutSeconds { get; set; }
+    public string PoolStaticUrl { get; set; }
+    public int PoolMaxResults { get; set; }
+    public int PoolTimeoutSeconds { get; set; }
     public string CloudServiceUrl { get; set; }
     public bool HasCloudApiToken { get; set; }
     public string CloudPathMappings { get; set; }
@@ -64,6 +71,7 @@ public sealed class ProxySnapshot
     public bool BypassLocal { get; set; }
     public string BypassHosts { get; set; }
     public bool Thunder { get; set; }
+    public bool Pool { get; set; }
     public bool Cloud { get; set; }
     public bool Updates { get; set; }
 }
@@ -79,6 +87,7 @@ public static class SettingsEditor
             Version = typeof(Plugin).Assembly.GetName().Version?.ToString() ?? "",
             LocalPaths = c.LocalPaths, LocalMaxResults = c.LocalMaxResults, ThunderMaxResults = c.ThunderMaxResults,
             ThunderTimeoutSeconds = c.ThunderTimeoutSeconds,
+            PoolStaticUrl = c.PoolStaticUrl, PoolMaxResults = c.PoolMaxResults, PoolTimeoutSeconds = c.PoolTimeoutSeconds,
             CloudServiceUrl = c.CloudServiceUrl, HasCloudApiToken = !string.IsNullOrEmpty(c.CloudApiToken),
             CloudPathMappings = c.CloudPathMappings, AutoDownloadOnNewMedia = c.AutoDownloadOnNewMedia,
             ProviderDisplayOrder = ProviderOrder.Normalize(c.ProviderDisplayOrder),
@@ -86,7 +95,7 @@ public static class SettingsEditor
             {
                 Enabled = p.Enabled, Address = p.Address, Username = p.Username, HasPassword = !string.IsNullOrEmpty(p.Password),
                 BypassLocal = p.BypassLocal, BypassHosts = p.BypassHosts,
-                Thunder = p.Thunder, Cloud = p.Cloud, Updates = p.Updates
+                Thunder = p.Thunder, Pool = p.Pool, Cloud = p.Cloud, Updates = p.Updates
             }
         };
     }
@@ -106,6 +115,9 @@ public static class SettingsEditor
             LocalMaxResults = update.LocalMaxResults ?? c.LocalMaxResults,
             ThunderMaxResults = update.ThunderMaxResults ?? c.ThunderMaxResults,
             ThunderTimeoutSeconds = update.ThunderTimeoutSeconds ?? c.ThunderTimeoutSeconds,
+            PoolStaticUrl = update.PoolStaticUrl ?? c.PoolStaticUrl,
+            PoolMaxResults = update.PoolMaxResults ?? c.PoolMaxResults,
+            PoolTimeoutSeconds = update.PoolTimeoutSeconds ?? c.PoolTimeoutSeconds,
             CloudServiceUrl = update.CloudServiceUrl ?? c.CloudServiceUrl,
             CloudApiToken = Secret(c.CloudApiToken, update.CloudApiToken, update.ClearCloudApiToken),
             CloudPathMappings = update.CloudPathMappings ?? c.CloudPathMappings,
@@ -123,6 +135,7 @@ public static class SettingsEditor
                 Username = u?.Username ?? p.Username, Password = Secret(p.Password, u?.Password, u?.ClearPassword ?? false),
                 BypassLocal = u?.BypassLocal ?? p.BypassLocal, BypassHosts = u?.BypassHosts ?? p.BypassHosts,
                 Thunder = u?.Thunder ?? p.Thunder,
+                Pool = u?.Pool ?? p.Pool,
                 Cloud = u?.Cloud ?? p.Cloud, Updates = u?.Updates ?? p.Updates
             }
         };

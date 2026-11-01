@@ -22,7 +22,7 @@ public sealed class ProviderRegistration
 
 public enum CompletionScope
 {
-    // Historical and newly added media use only enabled native Local and Thunder sources.
+    // The pool is reserved for newly added media; backfill stays on Local and Thunder.
     Historical,
     NewMedia
 }
@@ -33,7 +33,9 @@ public static class CompletionPolicy
         CompletionScope scope = CompletionScope.NewMedia)
     {
         if (options == null) return Array.Empty<ProviderRegistration>();
-        var own = new[] { ProviderNames.Local, ProviderNames.Thunder };
+        var own = scope == CompletionScope.NewMedia
+            ? new[] { ProviderNames.Pool, ProviderNames.Local, ProviderNames.Thunder }
+            : new[] { ProviderNames.Local, ProviderNames.Thunder };
         var disabled = new HashSet<string>(options.DisabledSubtitleFetchers ?? Array.Empty<string>(), StringComparer.OrdinalIgnoreCase);
         var order = options.SubtitleFetcherOrder ?? Array.Empty<string>();
         return (registered ?? Array.Empty<ProviderRegistration>())
