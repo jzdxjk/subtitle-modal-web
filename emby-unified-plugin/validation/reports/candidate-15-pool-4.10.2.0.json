@@ -1,0 +1,39 @@
+{
+  "ServerVersion": "4.10.2.0",
+  "Candidate": "candidate-15",
+  "Scenario": "BuiltInStaticPoolSearchAndDownload",
+  "BuiltInPoolStaticUrl": "https://chickenrice-subtitle-static-00.jzdxjk.workers.dev",
+  "BuiltInVisibleAfterBlankSave": true,
+  "NativeLibrarySources": {
+    "Enabled": [
+      "海南鸡字幕"
+    ],
+    "Disabled": [
+      "Open Subtitles",
+      "本地字幕",
+      "迅雷字幕"
+    ],
+    "Order": [
+      "本地字幕",
+      "迅雷字幕"
+    ]
+  },
+  "RequestedCode": "GAREA-763",
+  "NativeStaticPoolResults": 1,
+  "ProviderName": "海南鸡字幕",
+  "ResultName": "GAREA-763.srt | 时长:02:25:53(字幕轴) | 大小:66.0 KB | 语言:中文",
+  "SignedPayloadContentHash": "4fcf99fe62563f6d699b6d9866127894730d79ee8b1d6b130ce20ba5d5f0febe",
+  "SavedSubtitleNames": [
+    "GAREA-763-CD2-1080p.zh-CN.srt",
+    "GAREA-763-CD2-1080p.1.zh-CN.srt"
+  ],
+  "DownloadedBytes": [
+    67612
+  ],
+  "DownloadedSha256": [
+    "4fcf99fe62563f6d699b6d9866127894730d79ee8b1d6b130ce20ba5d5f0febe"
+  ],
+  "HashVerified": true,
+  "DynamicWorkerUsed": false,
+  "Passed": true
+}

@@ -1,0 +1,47 @@
+{
+  "ServerVersion": "4.9.1.80",
+  "Candidate": "candidate-10",
+  "PluginVersion": "1.0.0.4",
+  "PluginId": "76cd4168-e0b3-4aac-8a52-5cb638121744",
+  "ServiceUser": "0:0",
+  "DllSha256": "a83591539d97866003f9f4dfcc747d4bd339758a9e77dea8b878940119c74eb1",
+  "AdminSettingsApi": true,
+  "UnauthenticatedSettingsDenied": true,
+  "ConfigurationTabs": 5,
+  "ControllerLoaded": true,
+  "Providers": [
+    {
+      "Name": "迅雷字幕"
+    },
+    {
+      "Name": "本地字幕"
+    },
+    {
+      "Name": "海南鸡字幕"
+    }
+  ],
+  "Tasks": [
+    {
+      "Id": "af0f24f77177eaa6a808fcc8d18c0c29",
+      "Key": "SubtitleAssistantUpdate",
+      "Name": "字幕助手：检查并安装更新",
+      "Triggers": [
+        {
+          "Type": "IntervalTrigger",
+          "IntervalTicks": 864000000000
+        }
+      ]
+    },
+    {
+      "Id": "fb34c5d392035e43ad764be246665691",
+      "Key": "SubtitleAssistantMissingSubtitles",
+      "Name": "字幕助手：补全缺失中文字幕",
+      "Triggers": []
+    }
+  ],
+  "DisplayLimits": {
+    "LocalMaxResults": 5,
+    "ThunderMaxResults": 5,
+    "PoolMaxResults": 5
+  }
+}

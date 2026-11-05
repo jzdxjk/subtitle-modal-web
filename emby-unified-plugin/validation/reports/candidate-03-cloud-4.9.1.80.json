@@ -1,0 +1,22 @@
+{
+  "ServerVersion": "4.9.1.80",
+  "Candidate": "candidate-03",
+  "VideoStem": "FNS-192-CD2-1080p",
+  "SubmitHttpStatus": 200,
+  "JobsHttpStatus": 200,
+  "MockDoneRefreshState": "success",
+  "SubtitleWrittenWithCompleteStem": true,
+  "ExternalSubtitleStreamsVisible": true,
+  "NoFullLibraryScanDuringRefresh": true,
+  "BeforeScan": {
+    "StartTimeUtc": "2026-10-27T04:50:49.0891429Z",
+    "EndTimeUtc": "2026-10-27T04:50:49.1804484Z",
+    "Status": "Completed"
+  },
+  "AfterScan": {
+    "StartTimeUtc": "2026-10-27T04:50:49.0891429Z",
+    "EndTimeUtc": "2026-10-27T04:50:49.1804484Z",
+    "Status": "Completed"
+  },
+  "Passed": true
+}

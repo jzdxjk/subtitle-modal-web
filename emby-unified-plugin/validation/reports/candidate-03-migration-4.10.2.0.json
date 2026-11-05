@@ -1,0 +1,64 @@
+{
+  "ServerVersion": "4.10.2.0",
+  "Candidate": "candidate-03",
+  "Rounds": [
+    {
+      "Case": "pool-auto-or-and-all-disabled",
+      "MigrationVersion": 1,
+      "LocalPathsImported": true,
+      "CloudConnectionImported": true,
+      "CloudTokenImported": true,
+      "CloudMappingsImported": true,
+      "PoolUrlAndTimeoutImported": true,
+      "OwnedAutoOrCorrect": true,
+      "ExtraThunderDoesNotOverwriteDisplayLimit": true,
+      "NativeOrder": [
+        "本地字幕",
+        "Open Subtitles",
+        "海南鸡字幕",
+        "迅雷字幕"
+      ],
+      "NativeDisabled": [
+        "本地字幕",
+        "迅雷字幕",
+        "海南鸡字幕"
+      ],
+      "OrderMappedAndUnknownProviderPreserved": true,
+      "DisabledMappedWithoutReenabling": true,
+      "UnrelatedFlagsPreserved": true,
+      "PendingMarkerRemoved": true,
+      "ServerBackupsRetained": true,
+      "Passed": true
+    },
+    {
+      "Case": "extra-thunder-is-ignored-and-one-disabled",
+      "MigrationVersion": 1,
+      "LocalPathsImported": true,
+      "CloudConnectionImported": true,
+      "CloudTokenImported": true,
+      "CloudMappingsImported": true,
+      "PoolUrlAndTimeoutImported": true,
+      "OwnedAutoOrCorrect": true,
+      "ExtraThunderDoesNotOverwriteDisplayLimit": true,
+      "NativeOrder": [
+        "本地字幕",
+        "Open Subtitles",
+        "海南鸡字幕",
+        "迅雷字幕"
+      ],
+      "NativeDisabled": [
+        "迅雷字幕"
+      ],
+      "OrderMappedAndUnknownProviderPreserved": true,
+      "DisabledMappedWithoutReenabling": true,
+      "UnrelatedFlagsPreserved": true,
+      "PendingMarkerRemoved": true,
+      "ServerBackupsRetained": true,
+      "Passed": true
+    }
+  ],
+  "LegacyFilesRemain": true,
+  "UserOverridesSurviveRestartWithoutReimport": true,
+  "Passed": true,
+  "OriginalQaSettingsRestored": true
+}

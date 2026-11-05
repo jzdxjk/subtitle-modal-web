@@ -1,0 +1,34 @@
+{
+  "ServerVersion": "4.10.0.40",
+  "Candidate": "candidate-10",
+  "Scenario": "new",
+  "Provider": "本地字幕",
+  "VideoStem": "IPX-697-CD2-1080p",
+  "NativeLibrarySources": {
+    "Enabled": [
+      "本地字幕"
+    ],
+    "Disabled": [
+      "Open Subtitles",
+      "迅雷字幕",
+      "海南鸡字幕"
+    ],
+    "Order": [
+      "海南鸡字幕",
+      "本地字幕",
+      "迅雷字幕"
+    ]
+  },
+  "SavedSubtitleNames": [
+    "IPX-697-CD2-1080p.zh.srt"
+  ],
+  "CompleteStemPreserved": true,
+  "OriginalBytesPreserved": true,
+  "ExternalSubtitleStreamsVisible": true,
+  "ExternalSubtitleLanguages": [
+    "zh"
+  ],
+  "SecondsSinceFixtureCreated": 62.3,
+  "SixtySecondDelayObserved": true,
+  "Passed": true
+}

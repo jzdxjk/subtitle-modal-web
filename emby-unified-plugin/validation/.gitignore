@@ -1,0 +1,6 @@
+__pycache__/
+artifacts/
+metadata/
+browser-output/
+tools/**/bin/
+tools/**/obj/
