@@ -20,6 +20,25 @@ namespace Emby.SubtitleAssistant.Tests;
 
 public sealed class StaticPoolProviderTests
 {
+    private const string BuiltInPoolStaticUrl = "https://chickenrice-subtitle-static-00.jzdxjk.workers.dev";
+
+    [Fact]
+    public async Task BlankStaticPoolConfigurationRequestsTheBuiltInDirectory()
+    {
+        ProviderSearchCache.Shared = new ProviderSearchCache();
+        var handler = new FixtureHandler(_ => new HttpResponseMessage(HttpStatusCode.NotFound));
+        var config = new PluginConfiguration { PoolStaticUrl = "" };
+        using var configuration = Plugin.OverrideConfigurationForTests(config);
+        using var http = new PluginHttpClient(() => config, _ => handler);
+        var provider = CreateProvider(http);
+
+        Assert.Empty(await provider.Search(Request("/media/ABP-192.mkv"), CancellationToken.None));
+        Assert.NotEmpty(handler.Calls);
+        Assert.Equal(
+            BuiltInPoolStaticUrl + "/directory.json",
+            handler.Calls[0].AbsoluteUri);
+    }
+
     [Fact]
     public async Task StaticProviderUsesDirectoryAndCodeIndexThenVerifiesDownloadedSubtitle()
     {

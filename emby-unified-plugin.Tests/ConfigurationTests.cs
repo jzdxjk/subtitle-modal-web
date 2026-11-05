@@ -5,6 +5,8 @@ namespace Emby.SubtitleAssistant.Tests;
 
 public sealed class ConfigurationTests
 {
+    private const string BuiltInPoolStaticUrl = "https://chickenrice-subtitle-static-00.jzdxjk.workers.dev";
+
     [Fact] public void SourcesDefaultToFivePoolAndLocalAndTenThunderResults()
     {
         var config = new PluginConfiguration();
@@ -13,10 +15,45 @@ public sealed class ConfigurationTests
         Assert.Equal(15, config.ThunderTimeoutSeconds);
         Assert.Equal(5, config.PoolMaxResults);
         Assert.Equal(15, config.PoolTimeoutSeconds);
-        Assert.Equal("", config.PoolStaticUrl);
+        Assert.Equal(BuiltInPoolStaticUrl, config.PoolStaticUrl);
         Assert.Equal(new[] { "Pool", "Local", "Thunder" }, config.ProviderDisplayOrder);
         Assert.False(config.AutoDownloadOnNewMedia);
         config.Validate();
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData(null)]
+    public void BlankStaticPoolUrlFallsBackToBuiltIn(string value)
+    {
+        var config = new PluginConfiguration { PoolStaticUrl = value };
+
+        Assert.Equal(BuiltInPoolStaticUrl, config.PoolStaticUrl);
+        config.Validate();
+    }
+
+    [Fact]
+    public void CustomStaticPoolUrlOverridesBuiltIn()
+    {
+        var config = new PluginConfiguration
+        {
+            PoolStaticUrl = "https://custom-static.example",
+        };
+
+        Assert.Equal("https://custom-static.example", config.PoolStaticUrl);
+        config.Validate();
+    }
+
+    [Fact]
+    public void LegacyDynamicWorkerRemainsRejected()
+    {
+        var config = new PluginConfiguration
+        {
+            PoolStaticUrl = "https://chickenrice-subtitle-pool.jzdxjk.workers.dev",
+        };
+
+        Assert.Throws<ArgumentException>(() => config.Validate());
     }
 
     [Theory]

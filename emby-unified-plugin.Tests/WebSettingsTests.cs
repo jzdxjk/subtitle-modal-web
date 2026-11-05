@@ -5,6 +5,8 @@ namespace Emby.SubtitleAssistant.Tests;
 
 public class WebSettingsTests
 {
+    private const string BuiltInPoolStaticUrl = "https://chickenrice-subtitle-static-00.jzdxjk.workers.dev";
+
     [Fact]
     public void PartialSavePreservesOtherTabsAndSecretEmptyMeansKeep()
     {
@@ -72,6 +74,24 @@ public class WebSettingsTests
         Assert.Equal(30, poolUpdated.PoolTimeoutSeconds);
         Assert.Equal("https://static2.example", poolUpdated.PoolStaticUrl);
         Assert.True(poolUpdated.Proxy.Pool);
+    }
+
+    [Fact]
+    public void EmptyStaticPoolUrlIsVisibleAsBuiltInAndClearingRestoresIt()
+    {
+        var current = new PluginConfiguration
+        {
+            PoolStaticUrl = "https://custom-static.example",
+        };
+
+        var cleared = SettingsEditor.Apply(current, new SaveSettingsRequest
+        {
+            PoolStaticUrl = "",
+        });
+        var snapshot = SettingsEditor.Snapshot(cleared);
+
+        Assert.Equal(BuiltInPoolStaticUrl, cleared.PoolStaticUrl);
+        Assert.Equal(BuiltInPoolStaticUrl, snapshot.PoolStaticUrl);
     }
 
     [Fact]

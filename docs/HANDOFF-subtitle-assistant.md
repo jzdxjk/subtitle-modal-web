@@ -1,5 +1,25 @@
 # 字幕助手合并插件 — 交接与当前状态
 
+<!-- SA-HANDOFF-BEGIN SA-20261105-builtin-static-pool -->
+## 内置海南鸡静态索引地址（2026-11-05）
+
+- 工作树：`C:\Users\jzdxjk\.codex\worktrees\subtitle-assistant\字幕云翻译`
+- 分支：`codex/subtitle-assistant`
+- 版本：`1.0.0.12`
+- 内置地址：`https://chickenrice-subtitle-static-00.jzdxjk.workers.dev`
+- 行为：空白值回退内置地址；管理员可填写其他独立 HTTPS 根地址覆盖；
+  清空后保存恢复内置；旧动态 Worker 继续拒绝。
+- DLL SHA-256：
+  `2d9143eb648e330947834bc780bf18393473502696644169e718ebc766e5e9b5`
+- 验证：.NET 230、Worker 29、Python 42（1 个 POSIX 跳过）；五个官方
+  Emby 宿主全部通过；4.10.2.0 用 `GAREA-763` 完成真实静态池搜索和下载，
+  67,612 字节字幕哈希与索引一致。
+- 生产：NAS Emby 4.10.2.0 已重启并加载本版本；备份位于
+  `/volume1/docker/emby/backups/subtitle-assistant-20261105T122627Z-52caeef0`。
+- 后续：合入 `dev` 后发布 `emby-subtitle-assistant-v1.0.0.12`，最后切换
+  `emby-subtitle-assistant-update` 自动更新指针。
+<!-- SA-HANDOFF-END SA-20261105-builtin-static-pool -->
+
 <!-- SA-HANDOFF-BEGIN SA-20261028-auto-download-01 -->
 ## 入库自动下载字幕：诊断完成，转入修复（2026-10-28）
 

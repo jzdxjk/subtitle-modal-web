@@ -37,6 +37,8 @@ public class WebContractTests
         Assert.Contains("海南鸡字幕已上传至迅雷字幕库", html);
         Assert.Contains("搜索命中时优先展示海南鸡字幕", html);
         Assert.Contains("静态索引地址", html);
+        Assert.Contains("默认已内置", html);
+        Assert.Contains("清空后恢复内置", html);
         Assert.Contains("海南鸡字幕搜索与下载走代理", html);
         Assert.DoesNotContain("data-update", html);
         Assert.DoesNotContain("检查更新", html);

@@ -168,9 +168,9 @@
         <section id="sa-panel-pool" role="tabpanel" aria-labelledby="sa-tab-pool" data-panel="pool" hidden>
             <h2>海南鸡字幕</h2>
             <div class="sa-field">
-                <label for="sa-pool-static-url">静态索引地址</label>
+                <label for="sa-pool-static-url">静态索引地址（默认已内置，可覆盖）</label>
                 <input id="sa-pool-static-url" type="url" data-field="PoolStaticUrl" spellcheck="false" placeholder="https://静态字幕池域名">
-                <p class="sa-hint">只读取静态目录、番号索引和字幕文件。留空时停用；静态未命中会继续由 Emby 查询其他来源，不会调用旧动态 Worker。</p>
+                <p class="sa-hint">默认已内置官方静态索引；可填写其他独立 HTTPS 根地址覆盖，清空后恢复内置。静态未命中会继续由 Emby 查询其他来源，不会调用旧动态 Worker。</p>
             </div>
             <div class="sa-field sa-field-narrow">
                 <label for="sa-pool-timeout">请求超时（秒）</label>

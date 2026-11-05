@@ -5,12 +5,18 @@ namespace Emby.SubtitleAssistant;
 
 public sealed class PluginConfiguration : BasePluginConfiguration
 {
+    public const string BuiltInPoolStaticUrl = "https://chickenrice-subtitle-static-00.jzdxjk.workers.dev";
     public const string OfficialUpdateManifestUrl = "https://github.com/jzdxjk/subtitle-modal-web/releases/download/emby-subtitle-assistant-update/update.json";
+    private string _poolStaticUrl = BuiltInPoolStaticUrl;
     public string LocalPaths { get; set; } = "";
     public int LocalMaxResults { get; set; } = 5;
     public int ThunderMaxResults { get; set; } = 10;
     public int ThunderTimeoutSeconds { get; set; } = 15;
-    public string PoolStaticUrl { get; set; } = "";
+    public string PoolStaticUrl
+    {
+        get => string.IsNullOrWhiteSpace(_poolStaticUrl) ? BuiltInPoolStaticUrl : _poolStaticUrl.Trim();
+        set => _poolStaticUrl = value;
+    }
     public int PoolMaxResults { get; set; } = 5;
     public int PoolTimeoutSeconds { get; set; } = 15;
     public string CloudServiceUrl { get; set; } = "";

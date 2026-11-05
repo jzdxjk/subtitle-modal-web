@@ -20,7 +20,8 @@ from emby_validation import (
 PLUGIN_ID = "76cd4168-e0b3-4aac-8a52-5cb638121744"
 PROVIDERS = ["本地字幕", "迅雷字幕", "海南鸡字幕"]
 TASK_KEYS = ["SubtitleAssistantMissingSubtitles", "SubtitleAssistantUpdate"]
-PLUGIN_VERSION = "1.0.0.11"
+PLUGIN_VERSION = "1.0.0.12"
+BUILT_IN_POOL_STATIC_URL = "https://chickenrice-subtitle-static-00.jzdxjk.workers.dev"
 
 
 def install(case, filename, expected_sha256):
@@ -60,8 +61,8 @@ def probe(case, candidate):
     settings = wait_for_settings_version(client)
     page = client.request("GET", "/web/ConfigurationPage?name=subtitleassistant")
     script = client.request("GET", "/web/ConfigurationPage?name=subtitleassistantjs")
-    if settings.get("Version") != "1.0.0.11":
-        raise RuntimeError("combined plugin did not load version 1.0.0.11")
+    if settings.get("Version") != PLUGIN_VERSION:
+        raise RuntimeError("combined plugin did not load version " + PLUGIN_VERSION)
     if not isinstance(page, str) or len(re.findall(r'role="tab"', page)) != 5:
         raise RuntimeError("native configuration page did not expose five tabs")
     if 'data-tab="pool"' not in page or "静态索引地址" not in page:
@@ -75,8 +76,8 @@ def probe(case, candidate):
     names = [item.get("Name") for item in providers]
     if any(names.count(name) != 1 for name in PROVIDERS):
         raise RuntimeError("native library options do not register all three subtitle providers once")
-    if settings.get("PoolStaticUrl") != "":
-        raise RuntimeError("static pool endpoint must stay unset until a verified static deployment exists")
+    if settings.get("PoolStaticUrl") != BUILT_IN_POOL_STATIC_URL:
+        raise RuntimeError("static pool endpoint does not expose the built-in URL")
     if any(key in settings for key in ["PoolUrl"]):
         raise RuntimeError("legacy dynamic pool URL must not be exposed")
     if not 1 <= int(settings.get("ThunderMaxResults", 0)) <= 10:
@@ -107,7 +108,8 @@ def probe(case, candidate):
         "ConfigurationTabs": 5,
         "ChickenRicePriorityNote": True,
         "StaticPoolProviderRegistered": names.count("海南鸡字幕") == 1,
-        "StaticEndpointUnsetUntilCutover": settings.get("PoolStaticUrl") == "",
+        "BuiltInStaticPoolEndpoint": settings.get("PoolStaticUrl") == BUILT_IN_POOL_STATIC_URL,
+        "PoolStaticUrl": settings.get("PoolStaticUrl"),
         "ControllerLoaded": True,
         "Providers": [{key: item[key] for key in ["Id", "Name", "DisplayName"] if key in item}
                       for item in providers if item.get("Name") in PROVIDERS],

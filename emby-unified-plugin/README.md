@@ -48,7 +48,7 @@ SSIS-157-c-无码破解.zh-CN.srt
 
 ## 安装、迁移与更新
 
-迁移版本3恢复旧海南鸡来源别名并保留已有媒体库设置；若旧配置没有显式选择海南鸡，来源会按库关闭。旧手动顺序映射到新的三来源顺序，缺少海南鸡时按默认优先级补齐。旧动态 PoolUrl 不会导入静态地址，避免将静态请求误发到动态 Worker；必须在正式静态池验收后填写 HTTPS 静态目录地址。版本标记避免重启后覆盖管理员后续修改，迁移备份及回滚遵循既有设置存储流程。独立旧公共池 Worker 仍可由运维人员手动回退，但本插件静态 provider 不会逐请求调用它。
+迁移版本3恢复旧海南鸡来源别名并保留已有媒体库设置；若旧配置没有显式选择海南鸡，来源会按库关闭。旧手动顺序映射到新的三来源顺序，缺少海南鸡时按默认优先级补齐。插件内置 `https://chickenrice-subtitle-static-00.jzdxjk.workers.dev` 作为静态索引根地址；设置页明文显示该值，管理员可填写其他独立 HTTPS 根地址覆盖，清空后保存会恢复内置值。旧动态 PoolUrl 不会导入，避免将静态请求误发到动态 Worker。版本标记避免重启后覆盖管理员后续修改，迁移备份及回滚遵循既有设置存储流程。独立旧公共池 Worker 仍可由运维人员手动回退，但本插件静态 provider 不会逐请求调用它。
 
 生产部署使用 `tools/deploy_stage.py`：先确认指定Emby配置挂载，校验已验收DLL的SHA256，备份配置和SQLite一致性快照，再仅移出指定五个旧DLL并原子放入新DLL。脚本不重启Emby；安装后由管理员安排重启。不要将旧DLL继续保留在扫描的plugins目录。
 
@@ -58,7 +58,7 @@ SSIS-157-c-无码破解.zh-CN.srt
 https://github.com/jzdxjk/subtitle-modal-web/releases/download/emby-subtitle-assistant-update/update.json
 ```
 
-当前插件程序集版本为 `1.0.0.11`。正式更新仍由独立更新清单发布，更新清单指向不可变版本DLL。详见 `Updates/README.md`。
+当前插件程序集版本为 `1.0.0.12`。正式更新仍由独立更新清单发布，更新清单指向不可变版本DLL。详见 `Updates/README.md`。
 
 ## 构建与验证
 
@@ -67,4 +67,4 @@ dotnet test emby-unified-plugin.Tests/Emby.SubtitleAssistant.Tests.csproj -c Rel
 dotnet build emby-unified-plugin/Emby.SubtitleAssistant.csproj -c Release
 ```
 
-编译基线为 netstandard2.1 和 SDK 4.8.11.0。`1.0.0.11` 的 Release 构建通过，223 个 .NET 测试、41 个 Python 辅助工具测试通过，1 个仅限 POSIX 的检查在 Windows 本机跳过。SHA-256 为 `2655a2d66c8df571451b18f27c842aee1a826b34c468c77c591e5f9a106b1b5c` 的同一 DLL 已在隔离的官方 Emby 4.10.2.0 宿主完成加载、五标签页、三个下载器、两个计划任务、管理员设置接口、未认证拒绝和静态海南鸡来源注册检查。此前静态池候选还已在 4.8.11.0、4.9.1.80、4.9.5.0、4.10.0.40 和 4.10.2.0 五个官方隔离宿主通过插件加载冒烟。实际部署必须使用正式 Release 中的同一个 SHA-256。
+编译基线为 netstandard2.1 和 SDK 4.8.11.0。`1.0.0.12` 的 Release 构建为 0 警告、0 错误，仅产出 267,776 字节的 `Emby.SubtitleAssistant.dll`，SHA-256 为 `2d9143eb648e330947834bc780bf18393473502696644169e718ebc766e5e9b5`。本地通过 230 个 .NET 测试、29 个 Worker 测试和 42 个 Python 辅助工具测试，另有 1 个仅限 POSIX 的检查在 Windows 本机跳过。同一 DLL 已在 Emby 4.8.11.0、4.9.1.80、4.9.5.0、4.10.0.40 和 4.10.2.0 五个官方隔离宿主通过加载、五标签页、三个下载器、两个计划任务、管理员设置接口、未认证拒绝和内置静态地址检查；4.10.2.0 还使用 `GAREA-763` 完成真实静态池搜索、下载与 SHA-256 校验。生产 NAS 已部署并加载该 SHA；实际发布必须继续使用同一个 SHA-256。
